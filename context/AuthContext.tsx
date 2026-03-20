@@ -11,31 +11,56 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const readStoredRole = (): UserRole | null => {
+  try {
+    const savedRole = sessionStorage.getItem('podhupu_role');
+    if (savedRole && Object.values(UserRole).includes(savedRole as UserRole)) {
+      return savedRole as UserRole;
+    }
+  } catch (error) {
+    console.warn('Failed to read persisted auth state.', error);
+  }
+
+  return null;
+};
+
+const persistRole = (role: UserRole | null) => {
+  try {
+    if (role) {
+      sessionStorage.setItem('podhupu_role', role);
+    } else {
+      sessionStorage.removeItem('podhupu_role');
+    }
+  } catch (error) {
+    console.warn('Failed to persist auth state.', error);
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { settings } = useSettings();
   const [role, setRole] = useState<UserRole | null>(null);
 
   useEffect(() => {
-    const savedRole = sessionStorage.getItem('podhupu_role');
-    if (savedRole && Object.values(UserRole).includes(savedRole as UserRole)) {
-      setRole(savedRole as UserRole);
+    const savedRole = readStoredRole();
+    if (savedRole) {
+      setRole(savedRole);
     }
   }, []);
 
   const login = async (code: string): Promise<boolean> => {
     if (code === settings.adminPassword) {
       setRole(UserRole.ADMIN);
-      sessionStorage.setItem('podhupu_role', UserRole.ADMIN);
+      persistRole(UserRole.ADMIN);
       return true;
     }
     if (code === (settings.operatorCode || 'operator')) {
       setRole(UserRole.OPERATOR);
-      sessionStorage.setItem('podhupu_role', UserRole.OPERATOR);
+      persistRole(UserRole.OPERATOR);
       return true;
     }
     if (code === (settings.viewerCode || 'viewer')) {
       setRole(UserRole.VIEWER);
-      sessionStorage.setItem('podhupu_role', UserRole.VIEWER);
+      persistRole(UserRole.VIEWER);
       return true;
     }
     return false;
@@ -43,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setRole(null);
-    sessionStorage.removeItem('podhupu_role');
+    persistRole(null);
   };
 
   return (

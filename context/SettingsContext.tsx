@@ -13,6 +13,36 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 
 const SETTINGS_ROW_ID = 'main';
 
+const readStoredSettings = (): Partial<SocietySettings> | null => {
+  try {
+    const stored = localStorage.getItem('podhupu_settings');
+    if (!stored) return null;
+
+    const parsed = JSON.parse(stored);
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Stored settings payload is not an object');
+    }
+
+    return parsed as Partial<SocietySettings>;
+  } catch (error) {
+    console.warn('Ignoring invalid persisted settings and resetting local cache.', error);
+    try {
+      localStorage.removeItem('podhupu_settings');
+    } catch (removeError) {
+      console.warn('Failed to clear invalid persisted settings.', removeError);
+    }
+    return null;
+  }
+};
+
+const persistSettings = (settings: SocietySettings) => {
+  try {
+    localStorage.setItem('podhupu_settings', JSON.stringify(settings));
+  } catch (error) {
+    console.warn('Failed to persist settings to local storage.', error);
+  }
+};
+
 const mapDbRowToSettings = (row: any): Partial<SocietySettings> => ({
   societyName: row.society_name ?? DEFAULT_SETTINGS.societyName,
   monthlyFee: row.monthly_fee ?? DEFAULT_SETTINGS.monthlyFee,
@@ -61,21 +91,25 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     // 1. Try local storage first (for offline/instant load)
-    const stored = localStorage.getItem('podhupu_settings');
-    if (stored) {
-      setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
+    const storedSettings = readStoredSettings();
+    if (storedSettings) {
+      setSettings({ ...DEFAULT_SETTINGS, ...storedSettings });
     }
 
     // 2. Fetch from Supabase (to sync across devices)
     const fetchSupabaseSettings = async () => {
-      const { data, error } = await supabase
-        .from('app_settings')
-        .select('*')
-        .eq('id', SETTINGS_ROW_ID)
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('*')
+          .eq('id', SETTINGS_ROW_ID)
+          .maybeSingle();
 
-      if (data && !error) {
-        setSettings((prev: SocietySettings) => ({ ...prev, ...mapDbRowToSettings(data) }));
+        if (data && !error) {
+          setSettings((prev: SocietySettings) => ({ ...prev, ...mapDbRowToSettings(data) }));
+        }
+      } catch (error) {
+        console.warn('Failed to fetch settings from Supabase.', error);
       }
     };
     fetchSupabaseSettings();
@@ -85,7 +119,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Persist Settings to LocalStorage and Supabase
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem('podhupu_settings', JSON.stringify(settings));
+      persistSettings(settings);
 
       const syncToSupabase = async () => {
         await supabase.from('app_settings').upsert(mapSettingsToDbRow(settings));
