@@ -13,7 +13,9 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 // Lazy load pages for performance (Code Splitting)
 const SpecialLoans = lazy(() => import('./pages/SpecialLoans'));
 const AuditReport = lazy(() => import('./pages/AuditReport'));
-const SettingsPage = lazy(() => import('./pages/Settings'));
+const SettingsPage = lazy(() => import('./pages/Settings.tsx'));
+const Members = lazy(() => import('./pages/Members'));
+
 
 // Wrapper component to handle login state
 const AppRoutes: React.FC = () => {
@@ -30,8 +32,10 @@ const AppRoutes: React.FC = () => {
           <Route path="/" element={<Layout />}>
             <Route index element={<SpecialLoans />} />
             <Route path="special-loans" element={<SpecialLoans />} />
+            <Route path="members" element={<Members />} />
             <Route path="audit" element={<AuditReport />} />
             <Route path="settings" element={<SettingsPage />} />
+
           </Route>
         </Routes>
       </Suspense>

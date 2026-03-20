@@ -8,8 +8,10 @@ import {
   Star,
   LogOut,
   WifiOff,
-  ClipboardList
+  ClipboardList,
+  Users
 } from 'lucide-react';
+
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 
@@ -44,8 +46,10 @@ export const Layout = () => {
 
   const navigation = [
     { name: 'Special Loans', href: '/', icon: Star },
+    { name: 'Members', href: '/members', icon: Users },
     { name: 'Audit Report', href: '/audit', icon: ClipboardList },
     { name: 'Settings', href: '/settings', icon: Settings },
+
   ];
 
   const isActive = (path: string) => {

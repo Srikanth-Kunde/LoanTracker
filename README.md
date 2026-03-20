@@ -8,7 +8,7 @@ A specialized React/Vite application designed to digitize complex legacy loan le
 *   **Manual Interest Proration:** Supports overwriting standard monthly interest amounts to account for 15-day or 20-day partial borrowing periods.
 *   **No Auto-Late Fees:** Designed to perfectly match historical handwritten books, the system will never auto-calculate late fees. Late fees are only recorded if explicitly provided by the operator.
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
-*   **Reduced Scope UI:** The application now exposes only `Special Loans`, `Audit Report`, and `Settings`.
+*   **Reduced Scope UI:** The application now exposes only `Special Loans`, `Members`, `Audit Report`, and `Settings`.
 *   **Schema-Aligned Settings:** The settings screen now uses the actual `app_settings` columns defined in `migration.sql`.
 *   **Separate Backend Scripts:** Schema setup and sample data are now split into separate SQL Editor scripts.
 
@@ -105,9 +105,9 @@ DELETE FROM members WHERE id = 'sample_ajay';
 
 ### Latest Changes
 
-*   Generic cloned `Dashboard` and `Reports` pages were removed from the active app.
-*   The default route now opens the Special Loans ledger directly.
-*   A new `Settings` page was added and aligned to `app_settings.id = 'default_settings'`.
-*   The audit page now focuses only on historical special-loan data and no longer shows the fixed-window wording about balances as of `31/03/2027`.
-*   Late fees remain fully manual for historical ledger entry; nothing is auto-applied.
-*   Ajay and Srikanth sample data have been moved out of `migration.sql` into separate add/remove SQL scripts for backend-only control.
+*   **Restored Members Tab**: Re-added the Members page to the UI for better member tracking and updates.
+*   **Improved Type Safety**: Fixed `AuditAction` enum mismatches in the frontend.
+*   **IDE Resolution Fixes**: Added explicit file extensions to lazy-loaded imports in `App.tsx` for better IDE path resolution.
+*   **SQL Security**: Verified and updated RLS policies in `migration.sql` to resolve "UNRESTRICTED" warnings.
+*   **Audit Reports**: Extended the Audit Tally and CSV exports to handle historical data from 2012.
+

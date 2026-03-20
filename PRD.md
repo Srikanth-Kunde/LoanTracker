@@ -41,6 +41,12 @@ A specialized digital ledger system to manage complex "Special Loans" for groups
 *   A comprehensive Audit Report tracking every principal disbursement (Loans + Top-ups) and every collection (Interest + Principal + Late Fees) chronologically.
 *   Audit review must support all-time history from 2012 onward, not just a fixed current-year reporting window.
 
+#### 3.7. Member Management
+*   A centralized interface to manage the society's 40+ members.
+*   Operators can create, update, and deactivate member profiles (Name, Phone, Address, Join Date).
+*   *Rule*: Member IDs can be manual (to match legacy books) or auto-generated.
+
+
 ---
 
 ### 4. Technical Specifications & Architecture
@@ -83,10 +89,12 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Operational Note**: `migration.sql` is for schema setup only. Optional sample data is handled separately through dedicated SQL Editor scripts.
 
 #### 5.4. Product Scope Corrections
-*   The cloned generic `Dashboard` and `Reports` pages have been removed from the live app surface.
+*   The generic `Dashboard` has been removed from the live app surface to focus on the ledger system.
+*   The `Members` page has been restored to provide easier access to member profiles and status.
 *   The default route now opens the Special Loans page directly.
-*   A dedicated `Settings` page has been added and aligned to the actual `app_settings` schema.
-*   The Audit Report was simplified to special-loan history only and the fixed-period explanatory message was removed.
+*   A dedicated `Settings` page replaces the local storage preferences but syncs to Supabase.
+*   Audit reports correctly handle all-time history from 2012 onward.
+
 *   Ajay sample data handling was moved out of the main migration into separate add/remove SQL scripts.
 
 #### 5.5. Build & Deployment Portability
