@@ -131,7 +131,6 @@ export interface SocietySettings {
   operatorCode?: string;
   viewerCode?: string;
   defaultLoanInterestRate?: number; // Monthly interest rate % (legacy field)
-  defaultRegularLoanRate?: number;  // Monthly interest rate % for Regular Loans
   defaultSpecialLoanRate?: number;  // Monthly interest rate % for Special Loans
   themeMode?: ThemeMode;
   accentColor?: AccentColor;
