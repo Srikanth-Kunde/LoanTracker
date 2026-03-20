@@ -13,7 +13,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const readStoredRole = (): UserRole | null => {
   try {
-    const savedRole = sessionStorage.getItem('podhupu_role');
+    const savedRole = sessionStorage.getItem('loantracker_role');
     if (savedRole && Object.values(UserRole).includes(savedRole as UserRole)) {
       return savedRole as UserRole;
     }
@@ -27,9 +27,9 @@ const readStoredRole = (): UserRole | null => {
 const persistRole = (role: UserRole | null) => {
   try {
     if (role) {
-      sessionStorage.setItem('podhupu_role', role);
+      sessionStorage.setItem('loantracker_role', role);
     } else {
-      sessionStorage.removeItem('podhupu_role');
+      sessionStorage.removeItem('loantracker_role');
     }
   } catch (error) {
     console.warn('Failed to persist auth state.', error);

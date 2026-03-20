@@ -7,7 +7,6 @@ export enum PaymentMethod {
 
 export enum PaymentCategory {
   LOAN_REPAYMENT = 'LOAN_REPAYMENT',
-  JOINING_FEE = 'JOINING_FEE',
   OTHER = 'OTHER'
 }
 
@@ -116,37 +115,13 @@ export interface LoanRepayment {
 
 export interface SocietySettings {
   societyName: string;
-  monthlyFee: number;
-  joiningFee?: number;
   loanProcessingFee?: number;
-  annualMemberInterestRate?: number;
   currency: string;
-  address: string;
-  lastSyncDate: string | null;
-  googleDriveClientId?: string;
-  githubToken?: string;
-  githubRepo?: string;
-  githubBranch?: string;
   adminPassword?: string;
   operatorCode?: string;
   viewerCode?: string;
-  defaultLoanInterestRate?: number; // Monthly interest rate % (legacy field)
-  defaultSpecialLoanRate?: number;  // Monthly interest rate % for Special Loans
+  defaultLoanInterestRate?: number;
   themeMode?: ThemeMode;
   accentColor?: AccentColor;
   bannerImage?: string;
-}
-
-export interface AppState {
-  members: Member[];
-  payments: Payment[];
-  loans: Loan[];
-  loanRepayments: LoanRepayment[];
-  settings: SocietySettings;
-}
-
-export interface PaymentStatus {
-  member: Member;
-  isPaid: boolean;
-  payment?: Payment;
 }

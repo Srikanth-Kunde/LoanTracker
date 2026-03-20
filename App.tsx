@@ -11,10 +11,9 @@ import LoadingSpinner from './components/LoadingSpinner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Lazy load pages for performance (Code Splitting)
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Reports = lazy(() => import('./pages/Reports'));
 const SpecialLoans = lazy(() => import('./pages/SpecialLoans'));
 const AuditReport = lazy(() => import('./pages/AuditReport'));
+const SettingsPage = lazy(() => import('./pages/Settings'));
 
 // Wrapper component to handle login state
 const AppRoutes: React.FC = () => {
@@ -29,10 +28,10 @@ const AppRoutes: React.FC = () => {
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
+            <Route index element={<SpecialLoans />} />
             <Route path="special-loans" element={<SpecialLoans />} />
-            <Route path="reports" element={<Reports />} />
             <Route path="audit" element={<AuditReport />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </Suspense>

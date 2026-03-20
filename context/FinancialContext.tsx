@@ -21,7 +21,6 @@ interface FinancialContextType {
   deleteLoan: (id: string) => Promise<void>;
   recordLoanRepayment: (repayment: Omit<LoanRepayment, 'id'>) => Promise<void>;
   deleteLoanRepayment: (id: string) => Promise<void>;
-  getMemberSavings: (memberId: string) => number;
   closeLoan: (loanId: string) => Promise<void>;
 
   // Top-up actions (Special / Interest-Only loans)
@@ -307,12 +306,6 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     return Math.max(0, totalPrincipal);
   }, [loans, loanTopups, loanRepayments]);
 
-  const getMemberSavings = useCallback((memberId: string) => {
-    return payments
-      .filter((p: Payment) => p.memberId === memberId && p.category === PaymentCategory.LOAN_REPAYMENT)
-      .reduce((sum: number, p: Payment) => sum + p.amount, 0);
-  }, [payments]);
-
   const setFinancialData = useCallback(({ payments, loans, loanRepayments }: any) => {
     if (payments) setPayments(payments);
     if (loans) setLoans(loans);
@@ -358,7 +351,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       payments, loans, loanRepayments, loanTopups,
       recordPayment, deletePayment, getMemberPayments, getPaymentById,
       createLoan, updateLoan, deleteLoan, recordLoanRepayment, deleteLoanRepayment,
-      getMemberSavings, closeLoan,
+      closeLoan,
       addLoanTopup, deleteLoanTopup, getSpecialLoanOutstanding,
       setFinancialData, importFinancials, deleteAllFinancials, resetFinancials,
       isLoading

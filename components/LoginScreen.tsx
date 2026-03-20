@@ -37,7 +37,7 @@ export const LoginScreen = () => {
             <Shield className="text-white" size={32} />
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">{settings.societyName}</h1>
-          <p className="text-primary-100 text-sm">Secure Financial Management</p>
+          <p className="text-primary-100 text-sm">Special loan ledger and historical entry</p>
         </div>
 
         <div className="p-8">
@@ -76,7 +76,7 @@ export const LoginScreen = () => {
               {isLoading ? (
                 <Loader2 size={18} className="animate-spin" />
               ) : (
-                'Login to Dashboard'
+                'Open Loan Ledger'
               )}
             </button>
           </form>

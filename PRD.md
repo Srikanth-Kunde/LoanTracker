@@ -37,8 +37,9 @@ A specialized digital ledger system to manage complex "Special Loans" for groups
 *   Late fees are recorded *only* if explicitly entered by the Operator during a repayment collection.
 
 #### 3.6. Audit & Reporting
-*   A Dashboard to view total capital deployed via Special Loans and total interest collected.
+*   A compact audit workspace to review total capital deployed via Special Loans and total interest collected without a generic savings dashboard.
 *   A comprehensive Audit Report tracking every principal disbursement (Loans + Top-ups) and every collection (Interest + Principal + Late Fees) chronologically.
+*   Audit review must support all-time history from 2012 onward, not just a fixed current-year reporting window.
 
 ---
 
@@ -50,10 +51,10 @@ A specialized digital ledger system to manage complex "Special Loans" for groups
 *   **Database**: Supabase (PostgreSQL).
 
 #### Database Schema Highlights
-*   `loans`: Stores `member_id`, `principal`, `interest_rate`, `status` (Active/Closed), `created_at`, `loan_type`, `surety1_id`, `surety2_id` (foreign keys to members), and a `description`.
-*   `loan_topups`: Links to a `loan_id`. Stores `amount`, `date_taken`, and `rate`.
-*   `loan_repayments`: Links to a `loan_id`. Separates `amount_paid` (Total) into `principal_paid`, `interest_paid`, and `late_fee_paid`.
-*   `app_settings`: Stores global configurations, operator codes, and UI preferences (`themeMode`, `accentColor`, `bannerImage`).
+*   `loans`: Stores `member_id`, `principal_amount`, `interest_rate`, `status`, `loan_type`, `surety1_id`, `surety2_id`, `description`, `financial_year`, and `is_legacy`.
+*   `loan_topups`: Links to a `loan_id`. Stores `amount`, `date`, `rate`, and notes.
+*   `loan_repayments`: Links to a `loan_id`. Stores total `amount` plus separated `principal_paid`, `interest_paid`, and `late_fee`.
+*   `app_settings`: Stores the active UI-backed settings used by the app, including `society_name`, `currency`, `loan_processing_fee`, `default_loan_interest_rate`, access codes, and appearance preferences.
 
 #### Data Flow (FinancialContext)
 *   All calculations are derived dynamically on the client side from the Supabase tables.
@@ -75,12 +76,19 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Resilient Initialization**: The `supabaseClient.ts` has been refactored to log a console error instead of throwing a fatal exception during module import. This prevents white-screen crashes if environment variables are missing during the build phase.
 
 #### 5.3. Schema Migrations (Idempotent)
-*   **Source of Truth**: All required schema updates are consolidated in the [migration.sql](file:///mnt/d/VibeCodeProjects/LoanTracker/migration.sql) file.
-*   **Safety**: The script is designed to be **idempotent** (safe to run multiple times). It uses `IF NOT EXISTS` for tables and columns and automatically handles type conversions (e.g., `uuid` to `text` for member IDs).
+*   **Source of Truth**: All required schema setup is consolidated in `migration.sql`.
+*   **Safety**: The script is **idempotent** and safe to rerun. It uses `IF NOT EXISTS` for tables and indexes and guarded policy creation.
 *   **Access Control**: The script automatically enables Row Level Security (RLS) and adds global permissions for the `anon` role to ensure secure but functional access from the Vite app.
+*   **Operational Note**: No second SQL migration is required. Running `migration.sql` is sufficient for schema setup, settings initialization, and optional Ajay sample data.
 
-#### 5.4. Build & Deployment Portability
+#### 5.4. Product Scope Corrections
+*   The cloned generic `Dashboard` and `Reports` pages have been removed from the live app surface.
+*   The default route now opens the Special Loans page directly.
+*   A dedicated `Settings` page has been added and aligned to the actual `app_settings` schema.
+*   The Audit Report was simplified to special-loan history only and the fixed-period explanatory message was removed.
+
+#### 5.5. Build & Deployment Portability
 *   **Relative Pathing**: The project is configured with `base: './'` in `vite.config.ts`. This ensures that all JS/CSS assets load correctly even if the application is served from a subdirectory, a custom WSL route, or a PWA context.
 
-#### 5.5. Styling Note
+#### 5.6. Styling Note
 *   The project uses the Tailwind CSS v3 CDN (`<script src="https://cdn.tailwindcss.com"></script>`). Avoid using Tailwind v4 specific features like the `@theme` CSS directive to prevent syntax errors.

@@ -2,23 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Users,
-  Banknote,
-  FileText,
   Settings,
-  Cloud,
   Menu,
   X,
-  CreditCard,
   Star,
   LogOut,
   WifiOff,
-  Wallet,
-  ClipboardList,
-  BookOpen
+  ClipboardList
 } from 'lucide-react';
-import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 
@@ -26,14 +17,21 @@ export const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const location = useLocation();
-  const { settings } = useSettings();
   const { role, logout } = useAuth();
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+    const restEndpoint = supabaseUrl ? `${new URL(supabaseUrl).origin}/rest/v1/` : null;
+
     const checkConnection = async () => {
+      if (!restEndpoint) {
+        setIsOffline(false);
+        return;
+      }
+
       try {
-        const res = await fetch(`https://hsnbvmrznylmrskookwk.supabase.co/rest/v1/`, { method: 'HEAD', mode: 'no-cors' });
+        await fetch(restEndpoint, { method: 'HEAD', mode: 'no-cors' });
         setIsOffline(false);
       } catch {
         setIsOffline(true);
@@ -45,10 +43,9 @@ export const Layout = () => {
   }, []);
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Special Loans', href: '/special-loans', icon: Star },
-    { name: 'Reports', href: '/reports', icon: FileText },
+    { name: 'Special Loans', href: '/', icon: Star },
     { name: 'Audit Report', href: '/audit', icon: ClipboardList },
+    { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
   const isActive = (path: string) => {
@@ -175,4 +172,3 @@ export const Layout = () => {
 };
 
 export default Layout;
-

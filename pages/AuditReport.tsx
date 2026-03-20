@@ -3,8 +3,7 @@ import { Download, ClipboardList } from 'lucide-react';
 import { useMembers } from '../context/MemberContext';
 import { useFinancials } from '../context/FinancialContext';
 import { useSettings } from '../context/SettingsContext';
-import { FISCAL_YEARS, MONTHS, formatCurrency } from '../constants';
-import { PaymentCategory } from '../types';
+import { MONTHS, formatCurrency, getIndianFinancialYear } from '../constants';
 import {
   compareISODate,
   formatDisplayDate,
@@ -18,11 +17,12 @@ interface AuditRow {
   memberName: string;
   address: string;
   isActive: boolean;
-  legacySavings: number;
-  currentSavings: number;
-  totalSavings: number;
-  specialLoanBalance: number;
-  netPosition: number;
+  loanCount: number;
+  outstanding: number;
+  topupsDisbursed: number;
+  principalRecovered: number;
+  interestCollected: number;
+  lastActivity: string | null;
 }
 
 const escapeCsvValue = (value: string | number | null | undefined) => {
@@ -38,28 +38,39 @@ const isDateWithinRange = (date: string, start: string, end: string) =>
 
 const AuditReport: React.FC = () => {
   const { members } = useMembers();
-  const { payments, loans, loanRepayments, loanTopups } = useFinancials();
+  const { loans, loanRepayments, loanTopups } = useFinancials();
   const { settings } = useSettings();
 
-  const [filterFY, setFilterFY] = useState<string>('2026-2027');
+  const [filterFY, setFilterFY] = useState<string>('All');
   const [filterMonth, setFilterMonth] = useState<number>(0);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const latestDataDate = useMemo(() => {
-    const dates = [
-      ...payments.map(payment => payment.date),
+  const allDates = useMemo(() => {
+    return [
       ...loans.map(loan => loan.startDate),
       ...loanRepayments.map(repayment => repayment.date),
       ...loanTopups.map(topup => topup.date)
     ].filter(Boolean);
+  }, [loanRepayments, loanTopups, loans]);
 
-    if (dates.length === 0) {
+  const latestDataDate = useMemo(() => {
+    if (allDates.length === 0) {
       return new Date().toISOString().split('T')[0];
     }
 
-    return [...dates].sort(compareISODate).at(-1)!;
-  }, [loanRepayments, loanTopups, loans, payments]);
+    return [...allDates].sort(compareISODate).at(-1)!;
+  }, [allDates]);
+
+  const availableFinancialYears = useMemo(() => {
+    const years = new Set<string>(['All']);
+    allDates.forEach(date => years.add(getIndianFinancialYear(date)));
+    return Array.from(years).sort((a, b) => {
+      if (a === 'All') return -1;
+      if (b === 'All') return 1;
+      return compareISODate(`${b.split('-')[0]}-04-01`, `${a.split('-')[0]}-04-01`);
+    });
+  }, [allDates]);
 
   const periodConfig = useMemo(() => {
     if (filterFY === 'All') {
@@ -71,26 +82,13 @@ const AuditReport: React.FC = () => {
       };
     }
 
-    if (filterFY === 'PRE-2026') {
-      const cappedMonth = filterMonth >= 1 && filterMonth <= 3 ? filterMonth : 3;
-      const balanceEnd = filterMonth === 0 ? '2026-03-31' : getLastDayOfMonthISO(2026, cappedMonth);
-      return {
-        balanceEnd,
-        transactionStart: filterMonth === 0 ? '1900-01-01' : `2026-${String(cappedMonth).padStart(2, '0')}-01`,
-        transactionEnd: balanceEnd,
-        label: filterMonth === 0
-          ? 'Legacy balances through 31/03/2026'
-          : `Legacy balances through ${formatDisplayDate(balanceEnd)}`
-      };
-    }
-
     const fyBounds = getFinancialYearBounds(filterFY);
     if (filterMonth === 0) {
       return {
         balanceEnd: fyBounds.end,
         transactionStart: fyBounds.start,
         transactionEnd: fyBounds.end,
-        label: `${filterFY} (as of ${formatDisplayDate(fyBounds.end)})`
+        label: `${filterFY} (full financial year)`
       };
     }
 
@@ -103,7 +101,7 @@ const AuditReport: React.FC = () => {
       balanceEnd: transactionEnd,
       transactionStart,
       transactionEnd,
-      label: `${MONTHS[filterMonth - 1]} ${monthYear} (as of ${formatDisplayDate(transactionEnd)})`
+      label: `${MONTHS[filterMonth - 1]} ${monthYear}`
     };
   }, [filterFY, filterMonth, latestDataDate]);
 
@@ -124,79 +122,68 @@ const AuditReport: React.FC = () => {
         return matchesStatus && matchesSearch;
       })
       .map<AuditRow>(member => {
-        const memberPayments = payments.filter(payment =>
-          payment.memberId === member.id && isISODateOnOrBefore(payment.date, periodConfig.balanceEnd)
+        const memberLoans = loans.filter(loan =>
+          loan.memberId === member.id
+          && loan.type === 'SPECIAL'
+          && isISODateOnOrBefore(loan.startDate, periodConfig.balanceEnd)
         );
 
-        const legacySavings = memberPayments
-          .filter(payment => payment.isLegacy || payment.financialYear === 'PRE-2026')
-          .reduce((sum, payment) => sum + payment.amount, 0);
+        const loanIds = new Set(memberLoans.map(loan => loan.id));
+        const memberTopups = loanTopups.filter(topup =>
+          loanIds.has(topup.loanId) && isISODateOnOrBefore(topup.date, periodConfig.balanceEnd)
+        );
+        const memberRepayments = loanRepayments.filter(repayment =>
+          loanIds.has(repayment.loanId) && isISODateOnOrBefore(repayment.date, periodConfig.balanceEnd)
+        );
 
-        const currentSavings = memberPayments
-          .filter(payment =>
-            !(payment.isLegacy || payment.financialYear === 'PRE-2026')
-            && (payment.category || PaymentCategory.SAVINGS) === PaymentCategory.SAVINGS
-          )
-          .reduce((sum, payment) => sum + payment.amount, 0);
-
-        let specialLoanBalance = 0;
-
-        loans
-          .filter(loan =>
-            loan.memberId === member.id
-            && loan.type === 'SPECIAL'
-            && isISODateOnOrBefore(loan.startDate, periodConfig.balanceEnd)
-          )
-          .forEach(loan => {
-            const principalRepaid = loanRepayments
-              .filter(repayment =>
-                repayment.loanId === loan.id
-                && isISODateOnOrBefore(repayment.date, periodConfig.balanceEnd)
-              )
-              .reduce((sum, repayment) => sum + (repayment.principalPaid || 0), 0);
-
-            const topupTotal = loanTopups
-              .filter(topup =>
-                topup.loanId === loan.id
-                && isISODateOnOrBefore(topup.date, periodConfig.balanceEnd)
-              )
-              .reduce((sum, topup) => sum + topup.amount, 0);
-
-            const outstanding = Math.max(0, loan.principalAmount + topupTotal - principalRepaid);
-            specialLoanBalance += outstanding;
-          });
-
-        const totalSavings = legacySavings + currentSavings;
-        const netPosition = totalSavings - specialLoanBalance;
+        const topupsDisbursed = memberTopups.reduce((sum, topup) => sum + topup.amount, 0);
+        const principalRecovered = memberRepayments.reduce((sum, repayment) => sum + (repayment.principalPaid || 0), 0);
+        const interestCollected = memberRepayments.reduce((sum, repayment) => sum + (repayment.interestPaid || 0), 0);
+        const totalPrincipalDisbursed = memberLoans.reduce((sum, loan) => sum + loan.principalAmount, 0);
+        const outstanding = Math.max(0, totalPrincipalDisbursed + topupsDisbursed - principalRecovered);
+        const lastActivity = [
+          ...memberLoans.map(loan => loan.startDate),
+          ...memberTopups.map(topup => topup.date),
+          ...memberRepayments.map(repayment => repayment.date)
+        ].sort(compareISODate).at(-1) || null;
 
         return {
           memberId: member.id,
           memberName: member.name,
           address: member.address,
           isActive: member.isActive,
-          legacySavings,
-          currentSavings,
-          totalSavings,
-          specialLoanBalance,
-          netPosition
+          loanCount: memberLoans.length,
+          outstanding,
+          topupsDisbursed,
+          principalRecovered,
+          interestCollected,
+          lastActivity
         };
       })
-      .sort((a, b) => a.memberName.localeCompare(b.memberName));
-  }, [loanRepayments, loanTopups, loans, members, payments, periodConfig.balanceEnd, searchTerm, statusFilter]);
+      .filter(row =>
+        row.loanCount > 0 || row.outstanding > 0 || row.principalRecovered > 0 || row.interestCollected > 0
+      )
+      .sort((a, b) => {
+        if (b.outstanding !== a.outstanding) {
+          return b.outstanding - a.outstanding;
+        }
+        return a.memberName.localeCompare(b.memberName);
+      });
+  }, [loanRepayments, loanTopups, loans, members, periodConfig.balanceEnd, searchTerm, statusFilter]);
 
   const totals = useMemo(() => {
     return filteredData.reduce((acc, row) => ({
-      legacySavings: acc.legacySavings + row.legacySavings,
-      currentSavings: acc.currentSavings + row.currentSavings,
-      totalSavings: acc.totalSavings + row.totalSavings,
-      specialLoanBalance: acc.specialLoanBalance + row.specialLoanBalance,
-      netPosition: acc.netPosition + row.netPosition
+      loanCount: acc.loanCount + row.loanCount,
+      outstanding: acc.outstanding + row.outstanding,
+      topupsDisbursed: acc.topupsDisbursed + row.topupsDisbursed,
+      principalRecovered: acc.principalRecovered + row.principalRecovered,
+      interestCollected: acc.interestCollected + row.interestCollected
     }), {
-      legacySavings: 0,
-      currentSavings: 0,
-      totalSavings: 0,
-      specialLoanBalance: 0,
-      netPosition: 0
+      loanCount: 0,
+      outstanding: 0,
+      topupsDisbursed: 0,
+      principalRecovered: 0,
+      interestCollected: 0
     });
   }, [filteredData]);
 
@@ -218,35 +205,31 @@ const AuditReport: React.FC = () => {
   };
 
   const handleAuditCsvExport = () => {
-    const rows: (string | number)[][] = [
-      ...filteredData.map(row => [
-        'Member Summary',
-        periodConfig.balanceEnd,
-        row.memberId,
-        row.memberName,
-        row.isActive ? 'Active' : 'Inactive',
-        row.legacySavings,
-        row.currentSavings,
-        row.totalSavings,
-        row.specialLoanBalance,
-        row.netPosition
-      ])
-    ];
-
     downloadCsv(
       [
-        'Section',
         'Balance As Of',
         'Member ID',
         'Member Name',
         'Status',
-        'Legacy Savings',
-        'Current Savings',
-        'Total Savings',
-        'Special Loan Balance',
-        'Net Position'
+        'Loan Count',
+        'Outstanding Principal',
+        'Top-ups Disbursed',
+        'Principal Recovered',
+        'Interest Collected',
+        'Last Activity'
       ],
-      rows,
+      filteredData.map(row => [
+        periodConfig.balanceEnd,
+        row.memberId,
+        row.memberName,
+        row.isActive ? 'Active' : 'Inactive',
+        row.loanCount,
+        row.outstanding,
+        row.topupsDisbursed,
+        row.principalRecovered,
+        row.interestCollected,
+        row.lastActivity ? formatDisplayDate(row.lastActivity) : ''
+      ]),
       `Audit_Report_${filterFY}${filterMonth ? `_${String(filterMonth).padStart(2, '0')}` : ''}.csv`
     );
   };
@@ -256,74 +239,11 @@ const AuditReport: React.FC = () => {
     let voucherCounter = 1;
     const nextVoucher = () => `AUD-${String(voucherCounter++).padStart(5, '0')}`;
 
-    payments
-      .filter(payment => isDateWithinRange(payment.date, periodConfig.transactionStart, periodConfig.transactionEnd))
-      .sort((a, b) => compareISODate(a.date, b.date))
-      .forEach(payment => {
-        const member = members.find(entry => entry.id === payment.memberId);
-        const category = payment.category || PaymentCategory.SAVINGS;
-        const baseNarration = category === PaymentCategory.JOINING_FEE
-          ? 'Joining Fee'
-          : category === PaymentCategory.ANNUAL_MEMBER_INTEREST
-            ? 'Annual Member Interest Payout'
-            : `Savings Collection - ${MONTHS[payment.month - 1]} ${payment.year}`;
-
-        if (category === PaymentCategory.ANNUAL_MEMBER_INTEREST) {
-          rows.push({
-            date: payment.date,
-            values: [
-              nextVoucher(),
-              formatDisplayDate(payment.date),
-              member?.id || payment.memberId,
-              member?.name || payment.memberId,
-              member?.name || payment.memberId,
-              'Payment',
-              payment.amount,
-              '',
-              baseNarration
-            ]
-          });
-        } else {
-          rows.push({
-            date: payment.date,
-            values: [
-              nextVoucher(),
-              formatDisplayDate(payment.date),
-              member?.id || payment.memberId,
-              member?.name || payment.memberId,
-              member?.name || payment.memberId,
-              'Receipt',
-              '',
-              payment.amount,
-              baseNarration
-            ]
-          });
-        }
-
-        if ((payment.lateFee || 0) > 0) {
-          rows.push({
-            date: payment.date,
-            values: [
-              nextVoucher(),
-              formatDisplayDate(payment.date),
-              member?.id || payment.memberId,
-              member?.name || payment.memberId,
-              member?.name || payment.memberId,
-              'Receipt',
-              '',
-              payment.lateFee || 0,
-              'Savings Late Fee'
-            ]
-          });
-        }
-      });
-
     loans
       .filter(loan => loan.type === 'SPECIAL' && isDateWithinRange(loan.startDate, periodConfig.transactionStart, periodConfig.transactionEnd))
       .sort((a, b) => compareISODate(a.startDate, b.startDate))
       .forEach(loan => {
         const member = members.find(entry => entry.id === loan.memberId);
-        const loanType = loan.type || 'REGULAR';
 
         rows.push({
           date: loan.startDate,
@@ -336,7 +256,7 @@ const AuditReport: React.FC = () => {
             'Payment',
             loan.principalAmount,
             '',
-            `Loan Disbursal - ${loanType}`
+            'Special Loan Disbursal'
           ]
         });
 
@@ -352,7 +272,7 @@ const AuditReport: React.FC = () => {
               'Receipt',
               '',
               loan.processingFee || 0,
-              `Loan Processing Fee - ${loanType}`
+              'Loan Processing Fee'
             ]
           });
         }
@@ -390,7 +310,6 @@ const AuditReport: React.FC = () => {
       .forEach(repayment => {
         const loan = loans.find(entry => entry.id === repayment.loanId);
         const member = loan ? members.find(entry => entry.id === loan.memberId) : null;
-        const loanType = loan?.type || 'REGULAR';
 
         if ((repayment.principalPaid || 0) > 0) {
           rows.push({
@@ -404,7 +323,7 @@ const AuditReport: React.FC = () => {
               'Receipt',
               '',
               repayment.principalPaid || 0,
-              `Loan Principal Recovery - ${loanType}`
+              'Special Loan Principal Recovery'
             ]
           });
         }
@@ -421,7 +340,7 @@ const AuditReport: React.FC = () => {
               'Receipt',
               '',
               repayment.interestPaid || 0,
-              `Loan Interest Income - ${loanType}`
+              'Special Loan Interest'
             ]
           });
         }
@@ -438,51 +357,11 @@ const AuditReport: React.FC = () => {
               'Receipt',
               '',
               repayment.lateFee || 0,
-              `Loan Late Fee - ${loanType}`
+              'Manual Late Fee'
             ]
           });
         }
       });
-
-    if (filterFY === 'All' || filterFY === 'PRE-2026') {
-      filteredData.forEach(row => {
-        if (row.legacySavings > 0) {
-          rows.push({
-            date: '2026-03-31',
-            values: [
-              nextVoucher(),
-              formatDisplayDate('2026-03-31'),
-              row.memberId,
-              row.memberName,
-              row.memberName,
-              'Receipt',
-              '',
-              row.legacySavings,
-              'Legacy Opening Savings'
-            ]
-          });
-        }
-      });
-    }
-
-    filteredData.forEach(row => {
-      if (row.specialLoanBalance > 0) {
-        rows.push({
-          date: periodConfig.balanceEnd,
-          values: [
-            nextVoucher(),
-            formatDisplayDate(periodConfig.balanceEnd),
-            row.memberId,
-            row.memberName,
-            row.memberName,
-            'Payment',
-            row.specialLoanBalance,
-            '',
-            `Special Loan Outstanding as of ${formatDisplayDate(periodConfig.balanceEnd)}`
-          ]
-        });
-      }
-    });
 
     downloadCsv(
       ['Voucher No', 'Date', 'Member ID', 'Member Name', 'Ledger', 'Voucher Type', 'Debit', 'Credit', 'Narration'],
@@ -497,7 +376,7 @@ const AuditReport: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Audit Report</h1>
           <p className="text-slate-500 dark:text-slate-400">
-            Period-faithful member balances and CA-ready exports for {periodConfig.label}
+            Historical special-loan balances and transaction exports for {periodConfig.label}
           </p>
         </div>
 
@@ -520,17 +399,24 @@ const AuditReport: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
         <select
           value={filterFY}
-          onChange={e => setFilterFY(e.target.value)}
+          onChange={e => {
+            const value = e.target.value;
+            setFilterFY(value);
+            if (value === 'All') {
+              setFilterMonth(0);
+            }
+          }}
           className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200"
         >
-          {FISCAL_YEARS.map(year => (
+          {availableFinancialYears.map(year => (
             <option key={year} value={year}>{year}</option>
           ))}
         </select>
         <select
           value={filterMonth}
           onChange={e => setFilterMonth(Number(e.target.value))}
-          className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+          disabled={filterFY === 'All'}
+          className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
         >
           <option value={0}>Full Period</option>
           {MONTHS.map((month, index) => (
@@ -557,37 +443,42 @@ const AuditReport: React.FC = () => {
 
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-xl p-4">
         <p className="text-sm text-amber-800 dark:text-amber-200">
-          Member balances are calculated as of <strong>{formatDisplayDate(periodConfig.balanceEnd)}</strong>.
-          Transaction exports use actual in-period dates from {formatDisplayDate(periodConfig.transactionStart)} to {formatDisplayDate(periodConfig.transactionEnd)}.
+          Use <strong>All</strong> to review the full handwritten history from 2012 onward. Late fees only appear when they were manually entered in the ledger.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-xs font-semibold text-slate-500 uppercase">Total Savings</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(totals.totalSavings, settings.currency)}</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase">Loan Entries</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{totals.loanCount}</p>
         </div>
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-xs font-semibold text-slate-500 uppercase">Special Outstanding</p>
-          <p className="text-xl font-bold text-violet-700 dark:text-violet-300">{formatCurrency(totals.specialLoanBalance, settings.currency)}</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase">Outstanding</p>
+          <p className="text-xl font-bold text-violet-700 dark:text-violet-300">{formatCurrency(totals.outstanding, settings.currency)}</p>
         </div>
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-xs font-semibold text-slate-500 uppercase">Net Position</p>
-          <p className={`text-xl font-bold ${totals.netPosition >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
-            {formatCurrency(totals.netPosition, settings.currency)}
-          </p>
+          <p className="text-xs font-semibold text-slate-500 uppercase">Top-ups</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(totals.topupsDisbursed, settings.currency)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+          <p className="text-xs font-semibold text-slate-500 uppercase">Principal Recovered</p>
+          <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(totals.principalRecovered, settings.currency)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+          <p className="text-xs font-semibold text-slate-500 uppercase">Interest Collected</p>
+          <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(totals.interestCollected, settings.currency)}</p>
         </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Member Balances</h3>
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Member Loan Balances</h3>
         </div>
         <div className="overflow-x-auto max-h-[600px]">
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0">
               <tr>
-                {['ID', 'Member', 'Status', 'Legacy Savings', 'Current Savings', 'Total Savings', 'Special Loan', 'Net Position'].map(header => (
+                {['ID', 'Member', 'Status', 'Loans', 'Outstanding', 'Top-ups', 'Principal Recovered', 'Interest Collected', 'Last Activity'].map(header => (
                   <th key={header} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">{header}</th>
                 ))}
               </tr>
@@ -595,41 +486,25 @@ const AuditReport: React.FC = () => {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
               {filteredData.map(row => (
                 <tr key={row.memberId} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                  <td className="px-4 py-3 text-xs font-mono text-slate-500">{row.memberId}</td>
+                  <td className="px-4 py-3 text-xs font-mono text-slate-400">{row.memberId}</td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-slate-900 dark:text-white">{row.memberName}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">{row.address || '-'}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{row.address}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${row.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${row.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'}`}>
                       {row.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{formatCurrency(row.legacySavings, settings.currency)}</td>
-                  <td className="px-4 py-3 text-blue-700 dark:text-blue-300">{formatCurrency(row.currentSavings, settings.currency)}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">{formatCurrency(row.totalSavings, settings.currency)}</td>
-                  <td className="px-4 py-3 text-violet-700 dark:text-violet-300">{formatCurrency(row.specialLoanBalance, settings.currency)}</td>
-                  <td className={`px-4 py-3 font-semibold ${row.netPosition >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
-                    {formatCurrency(row.netPosition, settings.currency)}
-                  </td>
+                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{row.loanCount}</td>
+                  <td className="px-4 py-3 font-semibold text-violet-700 dark:text-violet-300">{formatCurrency(row.outstanding, settings.currency)}</td>
+                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatCurrency(row.topupsDisbursed, settings.currency)}</td>
+                  <td className="px-4 py-3 text-blue-700 dark:text-blue-300">{formatCurrency(row.principalRecovered, settings.currency)}</td>
+                  <td className="px-4 py-3 text-emerald-700 dark:text-emerald-300">{formatCurrency(row.interestCollected, settings.currency)}</td>
+                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{row.lastActivity ? formatDisplayDate(row.lastActivity) : '-'}</td>
                 </tr>
               ))}
-              {filteredData.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-slate-400">No members match the selected filters.</td>
-                </tr>
-              )}
             </tbody>
-            <tfoot className="bg-slate-50 dark:bg-slate-900/50 font-bold border-t border-slate-200 dark:border-slate-700">
-              <tr>
-                <td colSpan={3} className="px-4 py-3 text-slate-700 dark:text-slate-200">TOTALS</td>
-                <td className="px-4 py-3">{formatCurrency(totals.legacySavings, settings.currency)}</td>
-                <td className="px-4 py-3">{formatCurrency(totals.currentSavings, settings.currency)}</td>
-                <td className="px-4 py-3">{formatCurrency(totals.totalSavings, settings.currency)}</td>
-                <td className="px-4 py-3">{formatCurrency(totals.specialLoanBalance, settings.currency)}</td>
-                <td className="px-4 py-3">{formatCurrency(totals.netPosition, settings.currency)}</td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       </div>

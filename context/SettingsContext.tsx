@@ -11,11 +11,12 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-const SETTINGS_ROW_ID = 'main';
+const SETTINGS_ROW_ID = 'default_settings';
+const LOCAL_STORAGE_KEY = 'loantracker_settings';
 
 const readStoredSettings = (): Partial<SocietySettings> | null => {
   try {
-    const stored = localStorage.getItem('podhupu_settings');
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!stored) return null;
 
     const parsed = JSON.parse(stored);
@@ -27,7 +28,7 @@ const readStoredSettings = (): Partial<SocietySettings> | null => {
   } catch (error) {
     console.warn('Ignoring invalid persisted settings and resetting local cache.', error);
     try {
-      localStorage.removeItem('podhupu_settings');
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
     } catch (removeError) {
       console.warn('Failed to clear invalid persisted settings.', removeError);
     }
@@ -37,7 +38,7 @@ const readStoredSettings = (): Partial<SocietySettings> | null => {
 
 const persistSettings = (settings: SocietySettings) => {
   try {
-    localStorage.setItem('podhupu_settings', JSON.stringify(settings));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(settings));
   } catch (error) {
     console.warn('Failed to persist settings to local storage.', error);
   }
@@ -45,18 +46,12 @@ const persistSettings = (settings: SocietySettings) => {
 
 const mapDbRowToSettings = (row: any): Partial<SocietySettings> => ({
   societyName: row.society_name ?? DEFAULT_SETTINGS.societyName,
-  monthlyFee: row.monthly_fee ?? DEFAULT_SETTINGS.monthlyFee,
-  joiningFee: row.joining_fee ?? DEFAULT_SETTINGS.joiningFee,
   loanProcessingFee: row.loan_processing_fee ?? DEFAULT_SETTINGS.loanProcessingFee,
-  annualMemberInterestRate: row.annual_member_interest_rate ?? DEFAULT_SETTINGS.annualMemberInterestRate,
   currency: row.currency ?? DEFAULT_SETTINGS.currency,
-  address: row.address ?? DEFAULT_SETTINGS.address,
-  lastSyncDate: row.last_sync_date ?? DEFAULT_SETTINGS.lastSyncDate,
   adminPassword: row.admin_password ?? DEFAULT_SETTINGS.adminPassword,
   operatorCode: row.operator_code ?? DEFAULT_SETTINGS.operatorCode,
   viewerCode: row.viewer_code ?? DEFAULT_SETTINGS.viewerCode,
   defaultLoanInterestRate: row.default_loan_interest_rate ?? DEFAULT_SETTINGS.defaultLoanInterestRate,
-  defaultSpecialLoanRate: row.default_special_loan_rate ?? DEFAULT_SETTINGS.defaultSpecialLoanRate,
   themeMode: (row.theme_mode as ThemeMode) ?? DEFAULT_SETTINGS.themeMode,
   accentColor: (row.accent_color as AccentColor) ?? DEFAULT_SETTINGS.accentColor,
   bannerImage: row.banner_image ?? DEFAULT_SETTINGS.bannerImage,
@@ -65,21 +60,15 @@ const mapDbRowToSettings = (row: any): Partial<SocietySettings> => ({
 const mapSettingsToDbRow = (settings: SocietySettings) => ({
   id: SETTINGS_ROW_ID,
   society_name: settings.societyName,
-  monthly_fee: settings.monthlyFee,
-  joining_fee: settings.joiningFee,
   loan_processing_fee: settings.loanProcessingFee,
-  annual_member_interest_rate: settings.annualMemberInterestRate,
   currency: settings.currency,
-  address: settings.address,
   admin_password: settings.adminPassword,
   operator_code: settings.operatorCode,
   viewer_code: settings.viewerCode,
   default_loan_interest_rate: settings.defaultLoanInterestRate,
-  default_special_loan_rate: settings.defaultSpecialLoanRate,
   theme_mode: settings.themeMode,
   accent_color: settings.accentColor,
   banner_image: settings.bannerImage,
-  last_sync_date: settings.lastSyncDate,
   updated_at: new Date().toISOString()
 });
 

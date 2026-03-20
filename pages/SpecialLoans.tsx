@@ -6,7 +6,7 @@ import { useFinancials } from '../context/FinancialContext';
 import { useAuth } from '../context/AuthContext';
 import { useAuditLog } from '../context/AuditLogContext';
 import { Loan, LoanStatus, LoanRepayment, PaymentMethod, UserRole, LoanCalculationMethod, LoanType } from '../types';
-import { MONTHS, formatCurrency, formatDate } from '../constants';
+import { MONTHS, formatCurrency } from '../constants';
 import {
     ChevronLeft, ChevronRight, Calculator, Eye, Banknote, Filter, AlertTriangle, FileText, Star,
     Plus, Search, TrendingUp, CheckCircle, Clock,
@@ -44,7 +44,7 @@ const SpecialLoans: React.FC = () => {
     const { members } = useMembers();
     const {
         loans, loanRepayments, createLoan, updateLoan, deleteLoan,
-        recordLoanRepayment, closeLoan, getMemberSavings
+        recordLoanRepayment, closeLoan
     } = useFinancials();
     const { role } = useAuth();
     const { loanTopups, addLoanTopup, getSpecialLoanOutstanding } = useFinancials();
@@ -74,7 +74,7 @@ const SpecialLoans: React.FC = () => {
         memberId: '',
         amount: '',
         processingFee: (settings.loanProcessingFee ?? 0).toString(),
-        rate: (settings.defaultSpecialLoanRate ?? settings.defaultLoanInterestRate ?? 1.5).toString(),
+        rate: (settings.defaultLoanInterestRate ?? 1.5).toString(),
         date: new Date().toISOString().split('T')[0],
         // duration intentionally omitted — Special Loans are open-ended
         method: 'INTEREST_ONLY' as LoanCalculationMethod
@@ -309,7 +309,7 @@ const SpecialLoans: React.FC = () => {
             setModals({ ...modals, create: false });
             setCreateForm({
                 memberId: '', amount: '', processingFee: (settings.loanProcessingFee ?? 0).toString(),
-                rate: (settings.defaultSpecialLoanRate ?? settings.defaultLoanInterestRate ?? 1.5).toString(),
+                rate: (settings.defaultLoanInterestRate ?? 1.5).toString(),
                 date: new Date().toISOString().split('T')[0],
                 method: 'INTEREST_ONLY'
             });
