@@ -71,15 +71,16 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   Global default exports are bypassed with `import * as React from 'react'` in core files.
 
 #### 5.2. Strict Environment Requirements
-*   A valid `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` is required for the application to function. Missing credentials will trigger the `ErrorBoundary`.
+*   A valid `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` is required for the application to function. 
+*   **Resilient Initialization**: The `supabaseClient.ts` has been refactored to log a console error instead of throwing a fatal exception during module import. This prevents white-screen crashes if environment variables are missing during the build phase.
 
-#### 5.3. Schema Migrations
+#### 5.3. Schema Migrations (Idempotent)
 *   **Source of Truth**: All required schema updates are consolidated in the [migration.sql](file:///mnt/d/VibeCodeProjects/LoanTracker/migration.sql) file.
-*   **Key Updates**:
-    *   **Surety Logic**: `loans` table now supports `surety1_id`, `surety2_id` and a `description`.
-    *   **Top-Up Logic**: A dedicated `loan_topups` table tracks additional disbursements for Ajay's scenario.
-    *   **Late Fees**: `loan_repayments` explicitly tracks a dedicated `late_fee` and `notes` column for manual overrides.
-*   Operators **must** execute the `migration.sql` script in the Supabase SQL Editor to ensure the application functions correctly.
+*   **Safety**: The script is designed to be **idempotent** (safe to run multiple times). It uses `IF NOT EXISTS` for tables and columns and automatically handles type conversions (e.g., `uuid` to `text` for member IDs).
+*   **Access Control**: The script automatically enables Row Level Security (RLS) and adds global permissions for the `anon` role to ensure secure but functional access from the Vite app.
 
-#### 5.4. Styling Note
+#### 5.4. Build & Deployment Portability
+*   **Relative Pathing**: The project is configured with `base: './'` in `vite.config.ts`. This ensures that all JS/CSS assets load correctly even if the application is served from a subdirectory, a custom WSL route, or a PWA context.
+
+#### 5.5. Styling Note
 *   The project uses the Tailwind CSS v3 CDN (`<script src="https://cdn.tailwindcss.com"></script>`). Avoid using Tailwind v4 specific features like the `@theme` CSS directive to prevent syntax errors.

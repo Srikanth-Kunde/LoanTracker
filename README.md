@@ -45,26 +45,32 @@ Navigate to `http://localhost:5173`. The default operator login code is managed 
 *   **Build Tool:** Vite 6
 *   **Database & Auth:** Supabase (Client-side)
 
-## 🐛 Troubleshooting IDE Errors (VS Code / WSL)
+## 🐛 Troubleshooting Common Issues
 
-If your IDE reports TypeScript errors like `Cannot find module 'react'` or `JSX element implicitly has type 'any'` **even though `npm run dev` and `npx tsc --noEmit` build successfully**, your IDE's built-in TypeScript language server is caching a failed module resolution schema.
+### 1. IDE Errors (VS Code / WSL)
+If your IDE reports TypeScript errors like `Cannot find module 'react'` even though builds succeed:
+- Open VS Code Command Palette (`Ctrl + Shift + P`).
+- Search for and execute **"TypeScript: Restart TS server"**.
 
-**To permanently resolve this:**
-1. Open VS Code Command Palette (`Ctrl + Shift + P` or `Cmd + Shift + P`).
-2. Search for and execute **"TypeScript: Restart TS server"**.
-3. (Alternatively) Completely close and reopen the VS Code window attached to your WSL instance.
-
-*Note: The project's `tsconfig.json` has been specifically tailored with `moduleResolution: node` and explicit `typeRoots` to maximize compatibility with legacy TS servers.*
+### 2. Blank UI Post-Deployment
+If the UI is blank after building:
+- Ensure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` were present in your environment **during** `npm run build`.
+- Check the browser console. The app is designed to log initialization errors rather than crashing.
+- **WSL Route Issues**: The app uses relative pathing (`./`). If you are serving from a path, ensure your server is configured to resolve assets relatively.
 
 ## 📄 Documentation
 For detailed business logic and architectural decisions, refer to the [Product Requirements Document (PRD.md)](./PRD.md).
 
-## 🗄️ Database Migrations
+## 🗄️ Database Setup & Security
 
-Before using the application, you **must** update your Supabase schema to support Special Loan tracking, Top-ups, and Manual Overrides.
+The application requires a specific schema and security configuration to function with Supabase.
 
 1.  Open your [Supabase Dashboard](https://supabase.com/dashboard).
 2.  Navigate to the **SQL Editor**.
 3.  Copy and run the contents of [migration.sql](file:///mnt/d/VibeCodeProjects/LoanTracker/migration.sql).
 
-This script adds support for surety tracking, multiple top-ups (Ajay scenario), and detailed interest/principal breakdown for repayments.
+**What this script does:**
+- **Recreates Tables**: Sets up `members`, `loans`, `payments`, etc., with the correct types.
+- **Enables Security**: Activates Row Level Security (RLS) to remove the "UNRESTRICTED" warning.
+- **Grants Access**: Adds policies to allow your web app (via the `anon` key) to read and write data.
+- **Idempotency**: Safe to run multiple times; it will only add missing pieces.
