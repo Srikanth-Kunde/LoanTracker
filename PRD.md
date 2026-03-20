@@ -50,9 +50,10 @@ A specialized digital ledger system to manage complex "Special Loans" for groups
 *   **Database**: Supabase (PostgreSQL).
 
 #### Database Schema Highlights
-*   `loans`: Stores `member_id`, `principal`, `interest_rate`, `status` (Active/Closed), `created_at`.
-*   `loan_topups`: Links to a `loan_id`. Stores `amount`, `date_taken`.
+*   `loans`: Stores `member_id`, `principal`, `interest_rate`, `status` (Active/Closed), `created_at`, `loan_type`, `surety1_id`, `surety2_id` (foreign keys to members), and a `description`.
+*   `loan_topups`: Links to a `loan_id`. Stores `amount`, `date_taken`, and `rate`.
 *   `loan_repayments`: Links to a `loan_id`. Separates `amount_paid` (Total) into `principal_paid`, `interest_paid`, and `late_fee_paid`.
+*   `app_settings`: Stores global configurations, operator codes, and UI preferences (`themeMode`, `accentColor`, `bannerImage`).
 
 #### Data Flow (FinancialContext)
 *   All calculations are derived dynamically on the client side from the Supabase tables.
@@ -71,3 +72,12 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 
 #### 5.2. Strict Environment Requirements
 *   A valid `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` is required for the application to function. Missing credentials will trigger the `ErrorBoundary`.
+
+#### 5.3. Recent Schema Enhancements
+*   **Surety Logic**: `loans` table now supports `surety1_id`, `surety2_id` and a `description`.
+*   **Late Fees**: `loan_repayments` explicitly tracks a dedicated `late_fee` column for manual overrides.
+*   **UI Settings**: `app_settings` now persists `themeMode`, `accentColor`, and `bannerImage`.
+*   Operators must ensure these columns are added via Supabase SQL Editor for the app to function correctly.
+
+#### 5.4. Styling Note
+*   The project uses the Tailwind CSS v3 CDN (`<script src="https://cdn.tailwindcss.com"></script>`). Avoid using Tailwind v4 specific features like the `@theme` CSS directive to prevent syntax errors.

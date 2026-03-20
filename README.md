@@ -58,3 +58,6 @@ If your IDE reports TypeScript errors like `Cannot find module 'react'` or `JSX 
 
 ## 📄 Documentation
 For detailed business logic and architectural decisions, refer to the [Product Requirements Document (PRD.md)](./PRD.md).
+
+## 🗄️ Database Migrations
+If you are pulling recent updates (such as Surety Loans or UI Themes), ensure you execute the necessary `ALTER TABLE` commands in your Supabase SQL Editor to match the latest TypeScript interfaces (e.g., adding `surety1_id` to `loans`). See the PRD for specific schema requirements.
