@@ -94,6 +94,8 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   The default route now opens the Special Loans page directly.
 *   A dedicated `Settings` page replaces the local storage preferences but syncs to Supabase.
 *   Audit reports correctly handle all-time history from 2012 onward.
+*   Audit CSV exports now maintain perfect consistency with UI cards by utilizing unified filtering and chronological voucher sequencing.
+
 
 *   Ajay sample data handling was moved out of the main migration into separate add/remove SQL scripts.
 
