@@ -55,6 +55,7 @@ A specialized digital ledger system to manage complex "Special Loans" for groups
 *   `loan_topups`: Links to a `loan_id`. Stores `amount`, `date`, `rate`, and notes.
 *   `loan_repayments`: Links to a `loan_id`. Stores total `amount` plus separated `principal_paid`, `interest_paid`, and `late_fee`.
 *   `app_settings`: Stores the active UI-backed settings used by the app, including `society_name`, `currency`, `loan_processing_fee`, `default_loan_interest_rate`, access codes, and appearance preferences.
+*   Sample data is intentionally separated from schema setup so operators can add or remove it directly from the Supabase backend when needed.
 
 #### Data Flow (FinancialContext)
 *   All calculations are derived dynamically on the client side from the Supabase tables.
@@ -79,13 +80,14 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Source of Truth**: All required schema setup is consolidated in `migration.sql`.
 *   **Safety**: The script is **idempotent** and safe to rerun. It uses `IF NOT EXISTS` for tables and indexes and guarded policy creation.
 *   **Access Control**: The script automatically enables Row Level Security (RLS) and adds global permissions for the `anon` role to ensure secure but functional access from the Vite app.
-*   **Operational Note**: No second SQL migration is required. Running `migration.sql` is sufficient for schema setup, settings initialization, and optional Ajay sample data.
+*   **Operational Note**: `migration.sql` is for schema setup only. Optional sample data is handled separately through dedicated SQL Editor scripts.
 
 #### 5.4. Product Scope Corrections
 *   The cloned generic `Dashboard` and `Reports` pages have been removed from the live app surface.
 *   The default route now opens the Special Loans page directly.
 *   A dedicated `Settings` page has been added and aligned to the actual `app_settings` schema.
 *   The Audit Report was simplified to special-loan history only and the fixed-period explanatory message was removed.
+*   Ajay sample data handling was moved out of the main migration into separate add/remove SQL scripts.
 
 #### 5.5. Build & Deployment Portability
 *   **Relative Pathing**: The project is configured with `base: './'` in `vite.config.ts`. This ensures that all JS/CSS assets load correctly even if the application is served from a subdirectory, a custom WSL route, or a PWA context.

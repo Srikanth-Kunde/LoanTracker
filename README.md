@@ -10,6 +10,7 @@ A specialized React/Vite application designed to digitize complex legacy loan le
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
 *   **Reduced Scope UI:** The application now exposes only `Special Loans`, `Audit Report`, and `Settings`.
 *   **Schema-Aligned Settings:** The settings screen now uses the actual `app_settings` columns defined in `migration.sql`.
+*   **Separate Backend Scripts:** Schema setup and sample data are now split into separate SQL Editor scripts.
 
 ## 🚀 Quick Start
 
@@ -70,25 +71,26 @@ The application requires a specific schema and security configuration to functio
 
 1.  Open your [Supabase Dashboard](https://supabase.com/dashboard).
 2.  Navigate to the **SQL Editor**.
-3.  Copy and run the contents of `migration.sql`.
+3.  Run `migration.sql` for schema setup.
+4.  Run `sql/sample-ajay-add.sql` only when you want Ajay sample data.
+5.  Run `sql/sample-ajay-remove.sql` whenever you want to remove the sample rows.
 
 ### Do You Need To Run SQL Again?
 
 *   **Run `migration.sql` now** if this Supabase project has not yet been initialized for the current Special Loans only version.
 *   **Rerunning `migration.sql` is safe** if you want to ensure the required tables, indexes, RLS policies, and `default_settings` row exist.
-*   **No separate extra migration is required.** There is no second SQL file you must execute.
-*   **Important:** section `11. Optional Sample Legacy Data` inserts Ajay sample rows. Comment out that section before running if you want a completely empty starting database.
+*   **Ajay sample data is not inserted by `migration.sql` anymore.** You must run `sql/sample-ajay-add.sql` separately if you want to see it in the app.
+*   **No extra schema migration exists** beyond `migration.sql`.
 
 **What this script does:**
 - **Recreates Tables**: Sets up `members`, `loans`, `payments`, etc., with the correct types.
-- **Adds Sample Legacy Data**: Includes a removable Ajay example showing one special loan, multiple top-ups, and partial principal reductions.
 - **Enables Security**: Activates Row Level Security (RLS) to remove the "UNRESTRICTED" warning.
 - **Grants Access**: Adds policies to allow your web app (via the `anon` key) to read and write data.
 - **Idempotency**: Safe to run multiple times; it will only add missing pieces.
 
 ### Sample Data Cleanup Queries
 
-If Ajay sample data was already inserted and you want to remove it before entering real handwritten records, run:
+If Ajay sample data was already inserted and you want to remove it before entering real handwritten records, run `sql/sample-ajay-remove.sql`, or paste:
 
 ```sql
 DELETE FROM loan_repayments WHERE id LIKE 'sample_ajay_%';
@@ -104,3 +106,4 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   A new `Settings` page was added and aligned to `app_settings.id = 'default_settings'`.
 *   The audit page now focuses only on historical special-loan data and no longer shows the fixed-window wording about balances as of `31/03/2027`.
 *   Late fees remain fully manual for historical ledger entry; nothing is auto-applied.
+*   Ajay sample data has been moved out of `migration.sql` into separate add/remove SQL scripts for backend-only control.
