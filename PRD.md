@@ -73,11 +73,13 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 #### 5.2. Strict Environment Requirements
 *   A valid `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` is required for the application to function. Missing credentials will trigger the `ErrorBoundary`.
 
-#### 5.3. Recent Schema Enhancements
-*   **Surety Logic**: `loans` table now supports `surety1_id`, `surety2_id` and a `description`.
-*   **Late Fees**: `loan_repayments` explicitly tracks a dedicated `late_fee` column for manual overrides.
-*   **UI Settings**: `app_settings` now persists `themeMode`, `accentColor`, and `bannerImage`.
-*   Operators must ensure these columns are added via Supabase SQL Editor for the app to function correctly.
+#### 5.3. Schema Migrations
+*   **Source of Truth**: All required schema updates are consolidated in the [migration.sql](file:///mnt/d/VibeCodeProjects/LoanTracker/migration.sql) file.
+*   **Key Updates**:
+    *   **Surety Logic**: `loans` table now supports `surety1_id`, `surety2_id` and a `description`.
+    *   **Top-Up Logic**: A dedicated `loan_topups` table tracks additional disbursements for Ajay's scenario.
+    *   **Late Fees**: `loan_repayments` explicitly tracks a dedicated `late_fee` and `notes` column for manual overrides.
+*   Operators **must** execute the `migration.sql` script in the Supabase SQL Editor to ensure the application functions correctly.
 
 #### 5.4. Styling Note
 *   The project uses the Tailwind CSS v3 CDN (`<script src="https://cdn.tailwindcss.com"></script>`). Avoid using Tailwind v4 specific features like the `@theme` CSS directive to prevent syntax errors.

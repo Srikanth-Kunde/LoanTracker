@@ -6,9 +6,9 @@ export enum PaymentMethod {
 }
 
 export enum PaymentCategory {
-  SAVINGS = 'SAVINGS',
+  LOAN_REPAYMENT = 'LOAN_REPAYMENT',
   JOINING_FEE = 'JOINING_FEE',
-  ANNUAL_MEMBER_INTEREST = 'ANNUAL_MEMBER_INTEREST'
+  OTHER = 'OTHER'
 }
 
 export enum UserRole {
@@ -53,11 +53,10 @@ export enum LoanStatus {
 }
 
 export enum LoanType {
-  REGULAR = 'REGULAR',
   SPECIAL = 'SPECIAL'
 }
 
-export type LoanCalculationMethod = 'REDUCING_VARIABLE' | 'EMI_FLAT' | 'INTEREST_ONLY';
+export type LoanCalculationMethod = 'INTEREST_ONLY';
 
 export interface LoanTopup {
   id: string;

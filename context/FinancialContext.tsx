@@ -68,7 +68,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
           memberId: p.member_id,
           amount: p.amount,
           lateFee: p.late_fee,
-          category: (p.category || PaymentCategory.SAVINGS) as PaymentCategory,
+          category: (p.category || PaymentCategory.LOAN_REPAYMENT) as PaymentCategory,
           date: p.date,
           month: p.month,
           year: p.year,
@@ -90,7 +90,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
           startDate: l.start_date,
           endDate: l.end_date,
           status: l.status as LoanStatus,
-          type: (l.loan_type || 'REGULAR') as LoanType,
+          type: (l.loan_type || 'SPECIAL') as LoanType,
           durationMonths: l.duration_months,
           calculationMethod: l.calculation_method as LoanCalculationMethod,
           remarks: l.purpose,
@@ -145,7 +145,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       member_id: p.memberId,
       amount: p.amount,
       late_fee: p.lateFee || 0,
-      category: p.category || PaymentCategory.SAVINGS,
+      category: p.category || PaymentCategory.LOAN_REPAYMENT,
       date: p.date,
       month: p.month,
       year: p.year,
@@ -309,7 +309,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
 
   const getMemberSavings = useCallback((memberId: string) => {
     return payments
-      .filter((p: Payment) => p.memberId === memberId && p.category === PaymentCategory.SAVINGS)
+      .filter((p: Payment) => p.memberId === memberId && p.category === PaymentCategory.LOAN_REPAYMENT)
       .reduce((sum: number, p: Payment) => sum + p.amount, 0);
   }, [payments]);
 
@@ -329,7 +329,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       month: p.month,
       year: p.year,
       method: p.method,
-      category: p.category || PaymentCategory.SAVINGS,
+      category: p.category || PaymentCategory.LOAN_REPAYMENT,
       financial_year: p.financialYear || getIndianFinancialYear(p.date)
     })));
 

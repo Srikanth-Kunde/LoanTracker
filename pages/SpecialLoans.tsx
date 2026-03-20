@@ -93,7 +93,8 @@ const SpecialLoans: React.FC = () => {
         interest: '',
         lateFee: '0',
         date: '',
-        method: PaymentMethod.CASH as PaymentMethod
+        method: PaymentMethod.CASH as PaymentMethod,
+        notes: ''
     });
 
     const [activeLoan, setActiveLoan] = useState<EnrichedLoan | null>(null); // For Repay/History
@@ -104,8 +105,6 @@ const SpecialLoans: React.FC = () => {
         amount: '',
         rate: '',
         date: '',
-        duration: '',
-        method: 'EMI_FLAT' as LoanCalculationMethod,
         status: LoanStatus.ACTIVE
     });
 
@@ -383,7 +382,8 @@ const SpecialLoans: React.FC = () => {
             interest: (loan.interestComp * multiplier).toString(),
             lateFee: '0',
             date: defaultDate,
-            method: PaymentMethod.CASH
+            method: PaymentMethod.CASH,
+            notes: ''
         });
         setErrorMsg('');
         setModals({ ...modals, repay: true });
@@ -440,7 +440,8 @@ const SpecialLoans: React.FC = () => {
                     principalPaid: pAmt,
                     interestPaid: iAmt,
                     lateFee: lFee,
-                    method: repayForm.method
+                    method: repayForm.method,
+                    notes: repayForm.notes
                 });
             }
 
@@ -552,14 +553,11 @@ const SpecialLoans: React.FC = () => {
     };
 
     const openEditModal = (loan: EnrichedLoan) => {
-        setActiveLoan(loan);
         setEditForm({
             id: loan.id,
             amount: loan.principalAmount.toString(),
             rate: loan.interestRate.toString(),
             date: loan.startDate,
-            duration: (loan.durationMonths || 12).toString(),
-            method: loan.calculationMethod || 'EMI_FLAT',
             status: loan.status
         });
         setModals({ ...modals, edit: true });
@@ -573,9 +571,9 @@ const SpecialLoans: React.FC = () => {
                 principalAmount: parseFloat(editForm.amount),
                 interestRate: parseFloat(editForm.rate),
                 startDate: editForm.date,
-                durationMonths: parseInt(editForm.duration),
-                calculationMethod: editForm.method,
-                status: editForm.status
+                status: editForm.status,
+                durationMonths: 0,
+                calculationMethod: 'INTEREST_ONLY'
             });
             setModals({ ...modals, edit: false });
         } catch (error) {
@@ -976,6 +974,13 @@ const SpecialLoans: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
+                        
+                        <Input
+                            label="Internal Notes"
+                            placeholder="Optional reference notes..."
+                            value={repayForm.notes}
+                            onChange={e => setRepayForm({ ...repayForm, notes: e.target.value })}
+                        />
                         </div>
 
                         <div className="flex justify-between items-center pt-4 border-t border-slate-200 dark:border-slate-700">
@@ -1155,21 +1160,6 @@ const SpecialLoans: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <Input
-                            label="Tenure (Months)"
-                            type="number"
-                            value={editForm.duration}
-                            onChange={e => setEditForm({ ...editForm, duration: e.target.value })}
-                        />
-                        <Input
-                            label="Disbursal Date"
-                            type="date"
-                            value={editForm.date}
-                            onChange={e => setEditForm({ ...editForm, date: e.target.value })}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
                             <select
@@ -1180,17 +1170,6 @@ const SpecialLoans: React.FC = () => {
                                 <option value={LoanStatus.ACTIVE}>Active</option>
                                 <option value={LoanStatus.CLOSED}>Closed</option>
                                 <option value={LoanStatus.REJECTED}>Rejected</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Method</label>
-                            <select
-                                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                                value={editForm.method}
-                                onChange={(e) => setEditForm({ ...editForm, method: e.target.value as LoanCalculationMethod })}
-                            >
-                                <option value="EMI_FLAT">Flat EMI</option>
-                                <option value="REDUCING_VARIABLE">Reducing</option>
                             </select>
                         </div>
                     </div>

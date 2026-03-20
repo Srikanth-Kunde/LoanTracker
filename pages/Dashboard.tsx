@@ -6,6 +6,7 @@ import { useSettings } from '../context/SettingsContext';
 import { Users, IndianRupee, AlertCircle, CheckCircle2, History, CalendarClock, TrendingUp, Calendar } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MONTHS, formatCurrency } from '../constants';
+import { getISODateMonthYear } from '../utils/date';
 
 interface StatCardProps {
   title: string;
@@ -44,42 +45,32 @@ const Dashboard: React.FC = () => {
     const activeMembers = members.filter(m => m.isActive).length;
     const inactiveMembers = totalMembers - activeMembers;
 
-    const thisMonthPayments = payments.filter(p => p.month === currentMonth && p.year === currentYear);
+    const thisMonthRepayments = loanRepayments.filter(r => {
+      const { month, year } = getISODateMonthYear(r.date);
+      return month === currentMonth && year === currentYear;
+    });
 
-    // Expected collection is strictly based on active members * fee
-    const expectedCollection = activeMembers * settings.monthlyFee;
+    const activeSpecialLoans = loans.filter(l => l.status === 'ACTIVE' && l.type === 'SPECIAL');
+    const totalDisbursed = activeSpecialLoans.reduce((sum, l) => {
+        const topups = loanTopups.filter(t => t.loanId === l.id).reduce((s, t) => s + t.amount, 0);
+        return sum + l.principalAmount + topups;
+    }, 0);
 
-    // Base amount collected (excluding late fees) to calculate pending correctly
-    const baseCollectedAmount = thisMonthPayments.reduce((sum, p) => sum + p.amount, 0);
-
-    // Total collected including late fees (for the display card)
-    const totalCollectedWithLateFees = thisMonthPayments.reduce((sum, p) => sum + p.amount + (p.lateFee || 0), 0);
-
-    const pendingAmount = Math.max(0, expectedCollection - baseCollectedAmount);
-    const paidCount = thisMonthPayments.length;
-    const pendingCount = Math.max(0, activeMembers - paidCount);
-
-    // Loan portfolio
-    const activeLoans = loans.filter(l => l.status === 'ACTIVE' && !l.isLegacy);
-    const specialLoans = activeLoans.filter(l => l.type === 'SPECIAL' || l.calculationMethod === 'INTEREST_ONLY');
-
-    const specialOutstanding = specialLoans.reduce((s, l) => s + getSpecialLoanOutstanding(l.id), 0);
-    const totalLoanOutstanding = specialOutstanding;
-    const totalLoansActive = activeLoans.length;
+    const specialOutstanding = activeSpecialLoans.reduce((s, l) => s + getSpecialLoanOutstanding(l.id), 0);
+    const totalInterestCollected = loanRepayments.reduce((sum, r) => sum + (r.interestPaid || 0), 0);
+    const thisMonthInterest = thisMonthRepayments.reduce((sum, r) => sum + (r.interestPaid || 0), 0);
+    const thisMonthPrincipal = thisMonthRepayments.reduce((sum, r) => sum + (r.principalPaid || 0), 0);
 
     return {
       totalMembers,
       activeMembers,
-      inactiveMembers,
-      collectedAmount: totalCollectedWithLateFees,
-      pendingAmount,
-      paidCount,
-      pendingCount,
-      collectionRate: activeMembers > 0 ? Math.round((paidCount / activeMembers) * 100) : 0,
-      totalLoanOutstanding,
-      totalLoansActive,
+      totalDisbursed,
       specialOutstanding,
-      totalSavings: payments.reduce((sum, p) => sum + p.amount, 0)
+      totalInterestCollected,
+      thisMonthInterest,
+      thisMonthPrincipal,
+      totalLoansActive: activeSpecialLoans.length,
+      thisMonthTotalCollected: thisMonthInterest + thisMonthPrincipal + thisMonthRepayments.reduce((s, r) => s + (r.lateFee || 0), 0)
     };
   }, [members, payments, loans, loanRepayments, loanTopups, getSpecialLoanOutstanding, settings, currentMonth, currentYear]);
 
@@ -91,9 +82,12 @@ const Dashboard: React.FC = () => {
       const m = d.getMonth() + 1;
       const y = d.getFullYear();
 
-      const total = payments
-        .filter(p => p.month === m && p.year === y)
-        .reduce((sum, p) => sum + p.amount + (p.lateFee || 0), 0);
+      const total = loanRepayments
+        .filter(r => {
+            const { month, year } = getISODateMonthYear(r.date);
+            return month === m && year === y;
+        })
+        .reduce((sum, r) => sum + r.amount + (r.lateFee || 0), 0);
 
       data.push({
         name: MONTHS[m - 1].substring(0, 3),
@@ -101,7 +95,7 @@ const Dashboard: React.FC = () => {
       });
     }
     return data;
-  }, [payments]);
+  }, [loanRepayments]);
 
   // Logic for Past Dues Collected This Month
   const pastDuesCollected = useMemo(() => {
@@ -123,9 +117,10 @@ const Dashboard: React.FC = () => {
     const summary = new Map<number, number>();
     let grandTotal = 0;
 
-    payments.forEach(p => {
-      const total = p.amount + (p.lateFee || 0);
-      summary.set(p.year, (summary.get(p.year) || 0) + total);
+    loanRepayments.forEach(r => {
+      const { year } = getISODateMonthYear(r.date);
+      const total = r.amount + (r.lateFee || 0);
+      summary.set(year, (summary.get(year) || 0) + total);
       grandTotal += total;
     });
 
@@ -134,7 +129,7 @@ const Dashboard: React.FC = () => {
       years: years.map(year => ({ year, total: summary.get(year) || 0 })),
       grandTotal
     };
-  }, [payments]);
+  }, [loanRepayments]);
 
   return (
     <div className="space-y-6 pb-8">
@@ -216,25 +211,25 @@ const Dashboard: React.FC = () => {
               subtext={`${stats.totalMembers} Total · ${stats.inactiveMembers} Inactive`}
             />
             <StatCard
-              title="Total Member Savings"
-              value={formatCurrency(stats.totalSavings, settings.currency)}
+              title="Total Disbursed"
+              value={formatCurrency(stats.totalDisbursed, settings.currency)}
               icon={TrendingUp}
               color="bg-indigo-500"
-              subtext="Lifetime Capital"
+              subtext="Principal + Top-ups"
             />
             <StatCard
-              title="Collected This Month"
-              value={formatCurrency(stats.collectedAmount, settings.currency)}
+              title="Interest Collected"
+              value={formatCurrency(stats.totalInterestCollected, settings.currency)}
               icon={IndianRupee}
               color="bg-emerald-500"
-              subtext={`${stats.collectionRate}% Completion`}
+              subtext="Lifetime Interest"
             />
             <StatCard
-              title="Pending Amount"
-              value={formatCurrency(stats.pendingAmount, settings.currency)}
-              icon={AlertCircle}
-              color="bg-amber-500"
-              subtext={`${stats.pendingCount} Members Pending`}
+              title="This Month Revenue"
+              value={formatCurrency(stats.thisMonthTotalCollected, settings.currency)}
+              icon={CheckCircle2}
+              color="bg-primary-600"
+              subtext={`₹${stats.thisMonthInterest} Int · ₹${stats.thisMonthPrincipal} Prin`}
             />
           </div>
 
@@ -266,30 +261,29 @@ const Dashboard: React.FC = () => {
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
               <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Recent Activity</h3>
               <div className="space-y-4 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
-                {payments.slice(-8).reverse().map(payment => {
-                  const member = members.find(m => m.id === payment.memberId);
+                {loanRepayments.slice(-8).reverse().map(repayment => {
+                  const loan = loans.find(l => l.id === repayment.loanId);
+                  const member = members.find(m => m.id === loan?.memberId);
                   return (
-                    <div key={payment.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-750 rounded-lg">
+                    <div key={repayment.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-750 rounded-lg">
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                           <IndianRupee size={14} className="text-green-600 dark:text-green-400" />
                         </div>
                         <div>
                           <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{member?.name || 'Unknown'}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{new Date(payment.date).toLocaleDateString()}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{new Date(repayment.date).toLocaleDateString()}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="block text-sm font-semibold text-green-600 dark:text-green-400">+{settings.currency}{payment.amount + (payment.lateFee || 0)}</span>
-                        {payment.lateFee && payment.lateFee > 0 && (
-                          <span className="block text-[10px] text-amber-600 dark:text-amber-400">Inc. Late Fee</span>
-                        )}
+                        <span className="block text-sm font-semibold text-green-600 dark:text-green-400">+{settings.currency}{repayment.amount}</span>
+                        <span className="block text-[10px] text-slate-500 dark:text-slate-400">Repayment</span>
                       </div>
                     </div>
                   );
                 })}
-                {payments.length === 0 && (
-                  <p className="text-sm text-slate-400 text-center py-4">No recent transactions</p>
+                {loanRepayments.length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-4">No recent repayments</p>
                 )}
               </div>
             </div>
@@ -373,11 +367,11 @@ const Dashboard: React.FC = () => {
       <div className="mt-8">
         <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center">
           <CheckCircle2 size={20} className="mr-2 text-indigo-600" />
-          Financial Summary & Savings
+          Financial Summary & Portfolio
         </h2>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Total Savings Card */}
+          {/* Total Revenue Card */}
           <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white p-8 rounded-2xl shadow-lg flex flex-col justify-between relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-10">
               <CheckCircle2 size={120} />
@@ -386,12 +380,12 @@ const Dashboard: React.FC = () => {
               <p className="text-indigo-100 font-medium mb-1">Total Lifetime Collection</p>
               <h3 className="text-4xl font-bold">{formatCurrency(annualSummary.grandTotal, settings.currency)}</h3>
               <p className="text-xs text-indigo-200 mt-4 opacity-80">
-                Accumulated savings from all member contributions and late fees since inception.
+                Accumulated repayments (Interest + Principal) and late fees since inception.
               </p>
             </div>
             <div className="mt-8 pt-6 border-t border-indigo-500/30 flex items-center justify-between">
               <div>
-                <span className="text-2xl font-bold block">{payments.length}</span>
+                <span className="text-2xl font-bold block">{loanRepayments.length}</span>
                 <span className="text-xs text-indigo-200">Total Transactions</span>
               </div>
               <div className="text-right">

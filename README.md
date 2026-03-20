@@ -60,4 +60,11 @@ If your IDE reports TypeScript errors like `Cannot find module 'react'` or `JSX 
 For detailed business logic and architectural decisions, refer to the [Product Requirements Document (PRD.md)](./PRD.md).
 
 ## 🗄️ Database Migrations
-If you are pulling recent updates (such as Surety Loans or UI Themes), ensure you execute the necessary `ALTER TABLE` commands in your Supabase SQL Editor to match the latest TypeScript interfaces (e.g., adding `surety1_id` to `loans`). See the PRD for specific schema requirements.
+
+Before using the application, you **must** update your Supabase schema to support Special Loan tracking, Top-ups, and Manual Overrides.
+
+1.  Open your [Supabase Dashboard](https://supabase.com/dashboard).
+2.  Navigate to the **SQL Editor**.
+3.  Copy and run the contents of [migration.sql](file:///mnt/d/VibeCodeProjects/LoanTracker/migration.sql).
+
+This script adds support for surety tracking, multiple top-ups (Ajay scenario), and detailed interest/principal breakdown for repayments.

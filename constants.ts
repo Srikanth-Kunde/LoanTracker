@@ -8,7 +8,7 @@ export const MONTHS = [
 ];
 
 export const DEFAULT_SETTINGS = {
-  societyName: "Balapur Kuruma Sangam Podhupu",
+  societyName: "LoanTracker (Special Edition)",
   monthlyFee: 200,
   joiningFee: 100,
   loanProcessingFee: 50,
@@ -24,7 +24,6 @@ export const DEFAULT_SETTINGS = {
   operatorCode: "operator",
   viewerCode: "viewer",
   defaultLoanInterestRate: 2,   // 2% per month (legacy / fallback)
-  defaultRegularLoanRate: 0.8,  // 0.8% per month for Regular Loans
   defaultSpecialLoanRate: 1.5,  // 1.5% per month for Special Loans
   themeMode: 'light' as const,
   accentColor: 'blue' as const,
