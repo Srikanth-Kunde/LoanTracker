@@ -72,14 +72,14 @@ The application requires a specific schema and security configuration to functio
 1.  Open your [Supabase Dashboard](https://supabase.com/dashboard).
 2.  Navigate to the **SQL Editor**.
 3.  Run `migration.sql` for schema setup.
-4.  Run `sql/sample-ajay-add.sql` only when you want Ajay sample data.
+4.  Run `sql/sample-ajay-add.sql` only when you want sample data for Ajay and Srikanth.
 5.  Run `sql/sample-ajay-remove.sql` whenever you want to remove the sample rows.
 
 ### Do You Need To Run SQL Again?
 
 *   **Run `migration.sql` now** if this Supabase project has not yet been initialized for the current Special Loans only version.
 *   **Rerunning `migration.sql` is safe** if you want to ensure the required tables, indexes, RLS policies, and `default_settings` row exist.
-*   **Ajay sample data is not inserted by `migration.sql` anymore.** You must run `sql/sample-ajay-add.sql` separately if you want to see it in the app.
+*   **Sample data is not inserted by `migration.sql` anymore.** You must run `sql/sample-ajay-add.sql` separately if you want to see Ajay and Srikanth in the app.
 *   **No extra schema migration exists** beyond `migration.sql`.
 
 **What this script does:**
@@ -90,9 +90,13 @@ The application requires a specific schema and security configuration to functio
 
 ### Sample Data Cleanup Queries
 
-If Ajay sample data was already inserted and you want to remove it before entering real handwritten records, run `sql/sample-ajay-remove.sql`, or paste:
+If sample data was already inserted and you want to remove it before entering real handwritten records, run `sql/sample-ajay-remove.sql`, or paste:
 
 ```sql
+DELETE FROM loan_repayments WHERE id LIKE 'sample_srikanth_%';
+DELETE FROM loan_topups WHERE id LIKE 'sample_srikanth_%';
+DELETE FROM loans WHERE id LIKE 'sample_srikanth_%';
+DELETE FROM members WHERE id = 'sample_srikanth';
 DELETE FROM loan_repayments WHERE id LIKE 'sample_ajay_%';
 DELETE FROM loan_topups WHERE id LIKE 'sample_ajay_%';
 DELETE FROM loans WHERE id LIKE 'sample_ajay_%';
@@ -106,4 +110,4 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   A new `Settings` page was added and aligned to `app_settings.id = 'default_settings'`.
 *   The audit page now focuses only on historical special-loan data and no longer shows the fixed-window wording about balances as of `31/03/2027`.
 *   Late fees remain fully manual for historical ledger entry; nothing is auto-applied.
-*   Ajay sample data has been moved out of `migration.sql` into separate add/remove SQL scripts for backend-only control.
+*   Ajay and Srikanth sample data have been moved out of `migration.sql` into separate add/remove SQL scripts for backend-only control.

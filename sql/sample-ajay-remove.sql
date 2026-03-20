@@ -1,5 +1,10 @@
--- Remove optional Ajay sample data from Supabase
+-- Remove optional sample data from Supabase
 -- Run this in SQL Editor whenever you want a clean database
+
+DELETE FROM loan_repayments WHERE id LIKE 'sample_srikanth_%';
+DELETE FROM loan_topups WHERE id LIKE 'sample_srikanth_%';
+DELETE FROM loans WHERE id LIKE 'sample_srikanth_%';
+DELETE FROM members WHERE id = 'sample_srikanth';
 
 DELETE FROM loan_repayments WHERE id LIKE 'sample_ajay_%';
 DELETE FROM loan_topups WHERE id LIKE 'sample_ajay_%';
