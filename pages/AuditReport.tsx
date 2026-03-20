@@ -171,6 +171,151 @@ const AuditReport: React.FC = () => {
       });
   }, [loanRepayments, loanTopups, loans, members, periodConfig.balanceEnd, searchTerm, statusFilter]);
 
+  const tallyTransactions = useMemo(() => {
+    const txs: { date: string; values: (string | number)[] }[] = [];
+    const visibleMemberIds = new Set(filteredData.map(r => r.memberId));
+
+    // 1. Loans
+    loans
+      .filter(loan =>
+        visibleMemberIds.has(loan.memberId) &&
+        loan.type === 'SPECIAL' &&
+        isDateWithinRange(loan.startDate, periodConfig.transactionStart, periodConfig.transactionEnd)
+      )
+      .forEach(loan => {
+        const member = members.find(m => m.id === loan.memberId);
+        txs.push({
+          date: loan.startDate,
+          values: [
+            '', // voucher placeholder
+            formatDisplayDate(loan.startDate),
+            member?.id || loan.memberId,
+            member?.name || loan.memberId,
+            member?.name || loan.memberId,
+            'Payment',
+            loan.principalAmount,
+            '',
+            'Special Loan Disbursal'
+          ]
+        });
+
+        if ((loan.processingFee || 0) > 0) {
+          txs.push({
+            date: loan.startDate,
+            values: [
+              '',
+              formatDisplayDate(loan.startDate),
+              member?.id || loan.memberId,
+              member?.name || loan.memberId,
+              member?.name || loan.memberId,
+              'Receipt',
+              '',
+              loan.processingFee || 0,
+              'Loan Processing Fee'
+            ]
+          });
+        }
+      });
+
+    // 2. Top-ups
+    loanTopups
+      .filter(topup => {
+        const loan = loans.find(l => l.id === topup.loanId);
+        return loan && visibleMemberIds.has(loan.memberId) &&
+          isDateWithinRange(topup.date, periodConfig.transactionStart, periodConfig.transactionEnd);
+      })
+      .forEach(topup => {
+        const loan = loans.find(l => l.id === topup.loanId)!;
+        const member = members.find(m => m.id === loan.memberId);
+        txs.push({
+          date: topup.date,
+          values: [
+            '',
+            formatDisplayDate(topup.date),
+            member?.id || loan.memberId,
+            member?.name || loan.memberId,
+            member?.name || loan.memberId,
+            'Payment',
+            topup.amount,
+            '',
+            'Special Loan Top-up'
+          ]
+        });
+      });
+
+    // 3. Repayments
+    loanRepayments
+      .filter(repayment => {
+        const loan = loans.find(l => l.id === repayment.loanId);
+        return loan && visibleMemberIds.has(loan.memberId) &&
+          loan.type === 'SPECIAL' &&
+          isDateWithinRange(repayment.date, periodConfig.transactionStart, periodConfig.transactionEnd);
+      })
+      .forEach(repayment => {
+        const loan = loans.find(l => l.id === repayment.loanId)!;
+        const member = members.find(m => m.id === loan.memberId);
+
+        if ((repayment.principalPaid || 0) > 0) {
+          txs.push({
+            date: repayment.date,
+            values: [
+              '',
+              formatDisplayDate(repayment.date),
+              member?.id || loan.memberId,
+              member?.name || loan.memberId,
+              member?.name || loan.memberId,
+              'Receipt',
+              '',
+              repayment.principalPaid || 0,
+              'Special Loan Principal Recovery'
+            ]
+          });
+        }
+
+        if ((repayment.interestPaid || 0) > 0) {
+          txs.push({
+            date: repayment.date,
+            values: [
+              '',
+              formatDisplayDate(repayment.date),
+              member?.id || loan.memberId,
+              member?.name || loan.memberId,
+              member?.name || loan.memberId,
+              'Receipt',
+              '',
+              repayment.interestPaid || 0,
+              'Special Loan Interest'
+            ]
+          });
+        }
+
+        if ((repayment.lateFee || 0) > 0) {
+          txs.push({
+            date: repayment.date,
+            values: [
+              '',
+              formatDisplayDate(repayment.date),
+              member?.id || loan.memberId,
+              member?.name || loan.memberId,
+              member?.name || loan.memberId,
+              'Receipt',
+              '',
+              repayment.lateFee || 0,
+              'Manual Late Fee'
+            ]
+          });
+        }
+      });
+
+    // Sort chronologically then assign vouchers
+    const sorted = txs.sort((a, b) => compareISODate(a.date, b.date));
+    let counter = 1;
+    return sorted.map(tx => {
+      tx.values[0] = `AUD-${String(counter++).padStart(5, '0')}`;
+      return tx.values;
+    });
+  }, [loans, loanRepayments, loanTopups, filteredData, periodConfig.transactionStart, periodConfig.transactionEnd, members]);
+
   const totals = useMemo(() => {
     return filteredData.reduce((acc, row) => ({
       loanCount: acc.loanCount + row.loanCount,
@@ -235,140 +380,13 @@ const AuditReport: React.FC = () => {
   };
 
   const handleTallyExport = () => {
-    const rows: { date: string; values: (string | number)[] }[] = [];
-    let voucherCounter = 1;
-    const nextVoucher = () => `AUD-${String(voucherCounter++).padStart(5, '0')}`;
-
-    loans
-      .filter(loan => loan.type === 'SPECIAL' && isDateWithinRange(loan.startDate, periodConfig.transactionStart, periodConfig.transactionEnd))
-      .sort((a, b) => compareISODate(a.startDate, b.startDate))
-      .forEach(loan => {
-        const member = members.find(entry => entry.id === loan.memberId);
-
-        rows.push({
-          date: loan.startDate,
-          values: [
-            nextVoucher(),
-            formatDisplayDate(loan.startDate),
-            member?.id || loan.memberId,
-            member?.name || loan.memberId,
-            member?.name || loan.memberId,
-            'Payment',
-            loan.principalAmount,
-            '',
-            'Special Loan Disbursal'
-          ]
-        });
-
-        if ((loan.processingFee || 0) > 0) {
-          rows.push({
-            date: loan.startDate,
-            values: [
-              nextVoucher(),
-              formatDisplayDate(loan.startDate),
-              member?.id || loan.memberId,
-              member?.name || loan.memberId,
-              member?.name || loan.memberId,
-              'Receipt',
-              '',
-              loan.processingFee || 0,
-              'Loan Processing Fee'
-            ]
-          });
-        }
-      });
-
-    loanTopups
-      .filter(topup => isDateWithinRange(topup.date, periodConfig.transactionStart, periodConfig.transactionEnd))
-      .sort((a, b) => compareISODate(a.date, b.date))
-      .forEach(topup => {
-        const loan = loans.find(entry => entry.id === topup.loanId);
-        const member = loan ? members.find(entry => entry.id === loan.memberId) : null;
-
-        rows.push({
-          date: topup.date,
-          values: [
-            nextVoucher(),
-            formatDisplayDate(topup.date),
-            member?.id || (loan?.memberId || topup.loanId),
-            member?.name || (loan?.memberId || topup.loanId),
-            member?.name || (loan?.memberId || topup.loanId),
-            'Payment',
-            topup.amount,
-            '',
-            'Special Loan Top-up'
-          ]
-        });
-      });
-
-    loanRepayments
-      .filter(repayment => {
-        const loan = loans.find(entry => entry.id === repayment.loanId);
-        return loan?.type === 'SPECIAL' && isDateWithinRange(repayment.date, periodConfig.transactionStart, periodConfig.transactionEnd);
-      })
-      .sort((a, b) => compareISODate(a.date, b.date))
-      .forEach(repayment => {
-        const loan = loans.find(entry => entry.id === repayment.loanId);
-        const member = loan ? members.find(entry => entry.id === loan.memberId) : null;
-
-        if ((repayment.principalPaid || 0) > 0) {
-          rows.push({
-            date: repayment.date,
-            values: [
-              nextVoucher(),
-              formatDisplayDate(repayment.date),
-              member?.id || (loan?.memberId || repayment.loanId),
-              member?.name || (loan?.memberId || repayment.loanId),
-              member?.name || (loan?.memberId || repayment.loanId),
-              'Receipt',
-              '',
-              repayment.principalPaid || 0,
-              'Special Loan Principal Recovery'
-            ]
-          });
-        }
-
-        if ((repayment.interestPaid || 0) > 0) {
-          rows.push({
-            date: repayment.date,
-            values: [
-              nextVoucher(),
-              formatDisplayDate(repayment.date),
-              member?.id || (loan?.memberId || repayment.loanId),
-              member?.name || (loan?.memberId || repayment.loanId),
-              member?.name || (loan?.memberId || repayment.loanId),
-              'Receipt',
-              '',
-              repayment.interestPaid || 0,
-              'Special Loan Interest'
-            ]
-          });
-        }
-
-        if ((repayment.lateFee || 0) > 0) {
-          rows.push({
-            date: repayment.date,
-            values: [
-              nextVoucher(),
-              formatDisplayDate(repayment.date),
-              member?.id || (loan?.memberId || repayment.loanId),
-              member?.name || (loan?.memberId || repayment.loanId),
-              member?.name || (loan?.memberId || repayment.loanId),
-              'Receipt',
-              '',
-              repayment.lateFee || 0,
-              'Manual Late Fee'
-            ]
-          });
-        }
-      });
-
     downloadCsv(
       ['Voucher No', 'Date', 'Member ID', 'Member Name', 'Ledger', 'Voucher Type', 'Debit', 'Credit', 'Narration'],
-      rows.sort((a, b) => compareISODate(a.date, b.date)).map(row => row.values),
+      tallyTransactions,
       `Audit_Tally_${filterFY}${filterMonth ? `_${String(filterMonth).padStart(2, '0')}` : ''}.csv`
     );
   };
+
 
   return (
     <div className="space-y-6">
