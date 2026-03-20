@@ -64,6 +64,7 @@ const Dashboard: React.FC = () => {
     return {
       totalMembers,
       activeMembers,
+      inactiveMembers,
       totalDisbursed,
       specialOutstanding,
       totalInterestCollected,
