@@ -95,6 +95,9 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   A dedicated `Settings` page replaces the local storage preferences but syncs to Supabase.
 *   Audit reports correctly handle all-time history from 2012 onward.
 *   Audit CSV exports now maintain perfect consistency with UI cards by utilizing unified filtering and chronological voucher sequencing.
+*   **Member Details View**: Integrated a specialized profile modal in the Members tab, providing a deep-dive into individual financial standing and historical loan summaries.
+*   **Enhanced Date Navigation**: Replaced linear month-switchers with direct Month/Year dropdown selectors in the Special Loans view, enabling instant jumps to historical data (e.g., 2012).
+
 
 
 *   Ajay sample data handling was moved out of the main migration into separate add/remove SQL scripts.

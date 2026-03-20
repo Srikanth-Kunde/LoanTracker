@@ -109,7 +109,10 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Improved Type Safety**: Fixed `AuditAction` enum mismatches in the frontend.
 *   **IDE Resolution Fixes**: Added explicit file extensions to lazy-loaded imports in `App.tsx` for better IDE path resolution.
 *   **SQL Security**: Verified and updated RLS policies in `migration.sql` to resolve "UNRESTRICTED" warnings.
+*   **Member Details Profile**: Added a comprehensive profile view for members, showing total outstanding, top-ups, and interest collected at a glance.
+*   **Quick Date Selection**: Implemented direct Year and Month dropdowns in the Special Loans tab for significantly faster historical record navigation.
 *   **Audit Report Consistency**: Refactored filtering logic to ensure that UI cards and CSV exports (Tally/Full Audit) are always in sync, even when search filters are applied.
+
 *   **Audit Reports**: Extended the Audit Tally and CSV exports to handle historical data from 2012.
 
 

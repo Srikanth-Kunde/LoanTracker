@@ -631,16 +631,25 @@ const SpecialLoans: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                    <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-1">
-                        <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300">
-                            <ChevronLeft size={20} />
-                        </button>
-                        <span className="w-40 text-center font-semibold text-slate-800 dark:text-white">
-                            {MONTHS[selectedMonth - 1]} {selectedYear}
-                        </span>
-                        <button onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300">
-                            <ChevronRight size={20} />
-                        </button>
+                    <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 px-3 py-1 gap-2">
+                        <select
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                            className="bg-transparent font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer"
+                        >
+                            {MONTHS.map((month, idx) => (
+                                <option key={month} value={idx + 1}>{month}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                            className="bg-transparent font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer border-l border-slate-200 dark:border-slate-700 pl-2"
+                        >
+                            {Array.from({ length: new Date().getFullYear() - 2011 + 1 }, (_, i) => 2012 + i).reverse().map(year => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="flex gap-2">

@@ -1,22 +1,28 @@
 
 import React, { useState, useMemo } from 'react';
 import { useMembers } from '../context/MemberContext';
+import { useFinancials } from '../context/FinancialContext';
 import { useAuth } from '../context/AuthContext';
 import { useAuditLog } from '../context/AuditLogContext';
-import { Member, UserRole } from '../types';
+import { useSettings } from '../context/SettingsContext';
+import { Member, UserRole, LoanType } from '../types';
 import { 
-    Users, Plus, Search, Edit, Trash2, 
-    UserPlus, CheckCircle, XCircle, Phone, Mail, MapPin, Calendar
+    Users, Plus, Search, Edit, Trash2, Eye,
+    UserPlus, CheckCircle, XCircle, Phone, Mail, MapPin, Calendar,
+    TrendingUp, Banknote, Clock, Award
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Card } from '../components/ui/Card';
-import { formatDisplayDate } from '../utils/date';
+import { formatDisplayDate, isISODateOnOrBefore, compareISODate } from '../utils/date';
+import { formatCurrency } from '../constants';
 import { logger } from '../utils/logger';
 
 const Members: React.FC = () => {
     const { members, addMember, updateMember, deleteMember, isLoading } = useMembers();
+    const { loans, loanRepayments, loanTopups, getSpecialLoanOutstanding } = useFinancials();
+    const { settings } = useSettings();
     const { role } = useAuth();
     const { log } = useAuditLog();
 
@@ -25,7 +31,8 @@ const Members: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
     const [modals, setModals] = useState({
         create: false,
-        edit: false
+        edit: false,
+        view: false
     });
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -41,6 +48,7 @@ const Members: React.FC = () => {
     });
 
     const [editingMember, setEditingMember] = useState<Member | null>(null);
+    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
     // Permissions
     const canManageMembers = role === UserRole.ADMIN || role === UserRole.OPERATOR;
@@ -113,7 +121,12 @@ const Members: React.FC = () => {
             isActive: member.isActive
         });
         setErrorMsg('');
-        setModals({ ...modals, edit: true });
+        setModals({ ...modals, edit: true, view: false });
+    };
+
+    const handleOpenView = (member: Member) => {
+        setSelectedMember(member);
+        setModals({ ...modals, view: true });
     };
 
     const handleUpdateMember = async () => {
@@ -261,6 +274,7 @@ const Members: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right">
                                             <div className="flex justify-end gap-2">
+                                                <Button size="sm" variant="ghost" icon={Eye} onClick={() => handleOpenView(member)} title="View Member Details" className="text-primary-600 dark:text-primary-400" />
                                                 {canManageMembers && (
                                                     <>
                                                         <Button size="sm" variant="ghost" icon={Edit} onClick={() => handleOpenEdit(member)} title="Edit Member" />
@@ -277,10 +291,169 @@ const Members: React.FC = () => {
                 </div>
             </Card>
 
+            {/* View Member Details Modal */}
+            <Modal
+                isOpen={modals.view && !!selectedMember}
+                onClose={() => setModals({ ...modals, view: false })}
+                title="Member Profile & Financial Summary"
+                maxWidth="max-w-3xl"
+            >
+                {selectedMember && (() => {
+                    const memberLoans = loans.filter(l => l.memberId === selectedMember.id && l.type === LoanType.SPECIAL);
+                    const loanIds = new Set(memberLoans.map(l => l.id));
+                    
+                    const memberTopups = loanTopups.filter(t => loanIds.has(t.loanId));
+                    const memberRepayments = loanRepayments.filter(r => loanIds.has(r.loanId));
+                    
+                    const totalTopups = memberTopups.reduce((sum, t) => sum + t.amount, 0);
+                    const totalPrincipalRecovered = memberRepayments.reduce((sum, r) => sum + (r.principalPaid || 0), 0);
+                    const totalInterestCollected = memberRepayments.reduce((sum, r) => sum + (r.interestPaid || 0), 0);
+                    const currentOutstanding = memberLoans.reduce((sum, l) => sum + getSpecialLoanOutstanding(l.id), 0);
+                    
+                    const activeLoans = memberLoans.filter(l => l.status === 'ACTIVE');
+
+                    return (
+                        <div className="space-y-6 py-2">
+                            {/* Member Header */}
+                            <div className="flex items-start justify-between bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-16 h-16 rounded-full bg-primary-600 text-white flex items-center justify-center font-bold text-2xl shadow-lg shadow-primary-500/20">
+                                        {selectedMember.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight">{selectedMember.name}</h3>
+                                        <p className="text-sm font-mono text-slate-500">ID: {selectedMember.id}</p>
+                                        <div className="mt-2 flex gap-2">
+                                            {selectedMember.isActive ? (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                                    Active Member
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400">
+                                                    Inactive
+                                                </span>
+                                            )}
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                Joined {formatDisplayDate(selectedMember.joinDate)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right hidden sm:block">
+                                    <Button variant="outline" size="sm" icon={Edit} onClick={() => handleOpenEdit(selectedMember)}>Edit Info</Button>
+                                </div>
+                            </div>
+
+                            {/* Financial Cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                                    <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 mb-1">
+                                        <TrendingUp size={14} />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Outstanding</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatCurrency(currentOutstanding, settings.currency)}</p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                                    <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400 mb-1">
+                                        <Plus size={14} />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Top-ups</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatCurrency(totalTopups, settings.currency)}</p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 mb-1">
+                                        <Banknote size={14} />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Recovered</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatCurrency(totalPrincipalRecovered, settings.currency)}</p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 border-l-4 border-l-primary-500">
+                                    <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 mb-1">
+                                        <Award size={14} />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Interest</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-primary-600 dark:text-primary-400">{formatCurrency(totalInterestCollected, settings.currency)}</p>
+                                </div>
+                            </div>
+
+                            {/* Two-Column Details */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">
+                                        <Phone size={16} className="text-slate-400" /> Contact Information
+                                    </h4>
+                                    <div className="space-y-3">
+                                        <div className="flex items-start gap-3">
+                                            <div className="mt-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded">
+                                                <Phone size={14} className="text-slate-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phone Number</p>
+                                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{selectedMember.phone || 'Not provided'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                            <div className="mt-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded">
+                                                <Mail size={14} className="text-slate-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email Address</p>
+                                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{selectedMember.email || 'Not provided'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                            <div className="mt-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded">
+                                                <MapPin size={14} className="text-slate-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Residential Address</p>
+                                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">{selectedMember.address || 'Not provided'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">
+                                        <Clock size={16} className="text-slate-400" /> Special Loans Summary
+                                    </h4>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg">
+                                            <span className="text-sm text-slate-600 dark:text-slate-400">Active Special Loans</span>
+                                            <span className="text-sm font-bold text-slate-900 dark:text-white">{activeLoans.length}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg">
+                                            <span className="text-sm text-slate-600 dark:text-slate-400">Total Loans (All-time)</span>
+                                            <span className="text-sm font-bold text-slate-900 dark:text-white">{memberLoans.length}</span>
+                                        </div>
+                                        
+                                        {activeLoans.length > 0 && (
+                                            <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-lg">
+                                                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-2">Active Loan Breakdown</p>
+                                                {activeLoans.map(l => (
+                                                    <div key={l.id} className="flex justify-between items-center py-1 border-t border-amber-100/50 dark:border-amber-900/20 first:border-t-0">
+                                                        <span className="text-xs text-amber-700 dark:text-amber-400 font-mono italic">{formatDisplayDate(l.startDate)}</span>
+                                                        <span className="text-xs font-bold text-amber-900 dark:text-amber-200">{formatCurrency(getSpecialLoanOutstanding(l.id), settings.currency)} @ {l.interestRate}%</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+                                <Button variant="outline" onClick={() => setModals({ ...modals, view: false })}>Close Profile</Button>
+                            </div>
+                        </div>
+                    );
+                })()}
+            </Modal>
+
             {/* Create/Edit Member Modal */}
             <Modal
                 isOpen={modals.create || modals.edit}
-                onClose={() => setModals({ create: false, edit: false })}
+                onClose={() => setModals({ create: false, edit: false, view: modals.view })}
                 title={modals.create ? "Add New Member" : "Edit Member"}
             >
                 <div className="space-y-4 pt-2">
@@ -354,7 +527,7 @@ const Members: React.FC = () => {
                     </div>
 
                     <div className="flex justify-end gap-3 mt-6">
-                        <Button variant="outline" onClick={() => setModals({ create: false, edit: false })}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setModals({ ...modals, create: false, edit: false })}>Cancel</Button>
                         <Button
                             icon={modals.create ? UserPlus : CheckCircle}
                             onClick={modals.create ? handleCreateMember : handleUpdateMember}
