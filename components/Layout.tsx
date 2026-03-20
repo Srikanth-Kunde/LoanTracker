@@ -22,7 +22,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 
-const Layout: React.FC = () => {
+export const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const location = useLocation();
@@ -46,12 +46,9 @@ const Layout: React.FC = () => {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Members', href: '/members', icon: Users },
     { name: 'Special Loans', href: '/special-loans', icon: Star },
     { name: 'Reports', href: '/reports', icon: FileText },
     { name: 'Audit Report', href: '/audit', icon: ClipboardList },
-    { name: 'Sync', href: '/sync', icon: Cloud },
-    { name: 'Settings', href: '/settings', icon: Settings, hidden: role !== UserRole.ADMIN },
   ];
 
   const isActive = (path: string) => {
@@ -87,10 +84,10 @@ const Layout: React.FC = () => {
         <div className="flex items-center justify-between h-16 px-6 border-b border-slate-100 dark:border-slate-700">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">P</span>
+              <span className="text-white font-bold text-lg">L</span>
             </div>
             <span className="text-xl font-bold text-slate-800 dark:text-white truncate max-w-[150px]">
-              {settings.societyName.split(' ')[0]}
+              LoanTracker
             </span>
           </div>
           <button
@@ -102,7 +99,7 @@ const Layout: React.FC = () => {
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1">
-          {navigation.filter(item => !item.hidden).map((item) => {
+          {navigation.map((item) => {
             const active = isActive(item.href);
             return (
               <Link
@@ -159,7 +156,7 @@ const Layout: React.FC = () => {
           >
             <Menu size={24} />
           </button>
-          <span className="font-semibold text-slate-800 dark:text-white">Podhupu</span>
+          <span className="font-semibold text-slate-800 dark:text-white">LoanTracker</span>
           <div className="w-6" /> {/* Spacer */}
         </header>
 
@@ -178,3 +175,4 @@ const Layout: React.FC = () => {
 };
 
 export default Layout;
+

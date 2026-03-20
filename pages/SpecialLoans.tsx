@@ -831,10 +831,13 @@ const SpecialLoans: React.FC = () => {
                             icon={Star}
                             title="No special loans found"
                             description={`There are no active or historical special loans recorded for ${MONTHS[selectedMonth - 1]} ${selectedYear}.`}
-                            action={canCreateLoan ? {
-                                label: "Disburse Loan",
-                                onClick: () => setModals({ ...modals, create: true })
-                            } : undefined}
+                            action={canCreateLoan ? (
+                                <Button
+                                    onClick={() => setModals({ ...modals, create: true })}
+                                >
+                                    Disburse Loan
+                                </Button>
+                            ) : undefined}
                         />
                     </div>
                 )}

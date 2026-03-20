@@ -12,11 +12,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Lazy load pages for performance (Code Splitting)
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Members = lazy(() => import('./pages/Members'));
-const MemberDetails = lazy(() => import('./pages/MemberDetails'));
 const Reports = lazy(() => import('./pages/Reports'));
-const Sync = lazy(() => import('./pages/Sync'));
-const Settings = lazy(() => import('./pages/Settings'));
 const SpecialLoans = lazy(() => import('./pages/SpecialLoans'));
 const AuditReport = lazy(() => import('./pages/AuditReport'));
 
@@ -34,12 +30,8 @@ const AppRoutes: React.FC = () => {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
-            <Route path="members" element={<Members />} />
-            <Route path="members/:id" element={<MemberDetails />} />
             <Route path="special-loans" element={<SpecialLoans />} />
             <Route path="reports" element={<Reports />} />
-            <Route path="sync" element={<Sync />} />
-            <Route path="settings" element={<Settings />} />
             <Route path="audit" element={<AuditReport />} />
           </Route>
         </Routes>

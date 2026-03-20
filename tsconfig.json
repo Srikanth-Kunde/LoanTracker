@@ -1,10 +1,7 @@
 {
   "include": [
-    "src",
-    "vite.config.ts",
-    "vite-env.d.ts",
-    "*.ts",
-    "*.tsx"
+    "**/*.ts",
+    "**/*.tsx"
   ],
   "compilerOptions": {
     "target": "ES2022",
@@ -17,11 +14,10 @@
       "DOM.Iterable"
     ],
     "skipLibCheck": true,
-    "types": [
-      "node",
-      "vite/client"
-    ],
-    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node",
+    "baseUrl": ".",
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
@@ -33,5 +29,9 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
-}
+  },
+  "exclude": [
+    "node_modules",
+    "vite.config.ts"
+  ]
+}
