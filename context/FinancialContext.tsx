@@ -104,17 +104,22 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       }
 
       if (repaymentsRes.data) {
-        setLoanRepayments((repaymentsRes.data as any[]).map(r => ({
-          id: r.id,
-          loanId: r.loan_id,
-          date: r.date,
-          amount: Number(r.amount),
-          interestPaid: Number(r.interest_paid || 0),
-          principalPaid: Number(r.principal_paid || (Number(r.interest_paid) === 0 ? Number(r.amount) : 0)),
-          lateFee: Number(r.late_fee || 0),
-          method: r.method as PaymentMethod,
-          notes: r.notes
-        })));
+        setLoanRepayments((repaymentsRes.data as any[]).map(r => {
+          const amt = Number(r.amount || 0);
+          const iPaid = Number(r.interest_paid || 0);
+          const pPaid = Number(r.principal_paid || (iPaid === 0 ? amt : 0));
+          return {
+            id: r.id,
+            loanId: r.loan_id,
+            date: r.date,
+            amount: amt,
+            interestPaid: iPaid,
+            principalPaid: pPaid,
+            lateFee: Number(r.late_fee || 0),
+            method: r.method as PaymentMethod,
+            notes: r.notes
+          };
+        }));
       }
 
       if (topupsRes.data) {
@@ -321,23 +326,31 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     const loan = loans.find((l: Loan) => l.id === loanId);
     if (!loan) return 0;
 
-    let totalPrincipal = loan.principalAmount;
+    // Safety: If asOfDate is provided and it is BEFORE the loan's own start date, 
+    // the outstanding principal for THIS loan must be zero at that time.
+    if (asOfDate && compareISODate(asOfDate, loan.startDate) < 0) {
+      return 0;
+    }
+
+    let totalPrincipal = Number(loan.principalAmount || 0);
     
     // Add top-ups up to asOfDate
     loanTopups.filter((t: LoanTopup) => t.loanId === loanId).forEach((t: LoanTopup) => {
       if (!asOfDate || compareISODate(t.date, asOfDate) <= 0) {
-        totalPrincipal += t.amount;
+        totalPrincipal += Number(t.amount || 0);
       }
     });
 
     // Subtract repayments up to asOfDate
     loanRepayments.filter((r: LoanRepayment) => r.loanId === loanId).forEach((r: LoanRepayment) => {
       if (!asOfDate || compareISODate(r.date, asOfDate) <= 0) {
-        totalPrincipal -= (r.principalPaid || 0);
+        totalPrincipal -= Number(r.principalPaid || 0);
       }
     });
 
-    return Math.max(0, totalPrincipal);
+    // We use a small epsilon (> 1) to ignore rounding dust (paisa differences)
+    // which shouldn't trigger interest calculations.
+    return totalPrincipal > 1 ? totalPrincipal : 0;
   }, [loans, loanTopups, loanRepayments]);
 
   const setFinancialData = useCallback(({ payments, loans, loanRepayments }: any) => {

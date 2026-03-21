@@ -288,11 +288,11 @@ const SpecialLoans: React.FC = () => {
         while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
             const monthKey = `${currentY}-${currentM}`;
             if (!paidMonths.has(monthKey)) {
-                const prevMDate = new Date(currentY, currentM - 1, 0); // Last day of previous month
-                const asOf = `${prevMDate.getFullYear()}-${String(prevMDate.getMonth() + 1).padStart(2, '0')}-${String(prevMDate.getDate()).padStart(2, '0')}`;
+                // Calculation of interest for 'current month' depends on outstanding at 'end of previous month'
+                const asOf = getLastDayOfMonthISO(currentY, currentM - 1);
                 const outstanding = getSpecialLoanOutstanding(autoGenLoan.id, asOf);
                 
-                if (outstanding > 1) { // Balance > 1 to ignore rounding dust
+                if (outstanding > 1) { 
                     const interestDue = Math.round(outstanding * (autoGenLoan.interestRate / 100));
                     totalInterest += interestDue;
                     
