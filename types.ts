@@ -35,6 +35,7 @@ export enum LoanType {
 }
 
 export type LoanCalculationMethod = 'INTEREST_ONLY';
+export type InterestCalculationType = 'MONTHLY' | 'PRORATED_DAYS';
 
 export interface LoanTopup {
   id: string;
@@ -90,6 +91,8 @@ export interface LoanRepayment {
   lateFee?: number;
   interestForMonth?: number;
   interestForYear?: number;
+  interestDays?: number;
+  interestCalculationType?: InterestCalculationType;
   method: PaymentMethod;
   notes?: string;
   createdAt?: string;

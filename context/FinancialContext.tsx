@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Loan, LoanRepayment, LoanStatus, PaymentMethod, LoanType, LoanCalculationMethod, LoanTopup } from '../types';
+import { Loan, LoanRepayment, LoanStatus, PaymentMethod, LoanType, LoanCalculationMethod, LoanTopup, InterestCalculationType } from '../types';
 import { getIndianFinancialYear } from '../constants';
 import { supabase } from '../supabaseClient';
 import { logger } from '../utils/logger';
@@ -45,9 +45,11 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
 
   const roundCurrency = useCallback((value: number) => Math.round(value * 100) / 100, []);
 
-  const fetchFinancials = useCallback(async () => {
+  const fetchFinancials = useCallback(async (showLoader = true) => {
     try {
-      setIsLoading(true);
+      if (showLoader) {
+        setIsLoading(true);
+      }
       logger.info('Fetching initial financial data from Supabase');
 
       const [loansRes, repaymentsRes, topupsRes] = await Promise.all([
@@ -94,12 +96,14 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
             amount: amt,
             interestPaid: iPaid,
             principalPaid: pPaid,
-            lateFee: Number(r.late_fee || 0),
-            interestForMonth: r.interest_for_month ? Number(r.interest_for_month) : undefined,
-            interestForYear: r.interest_for_year ? Number(r.interest_for_year) : undefined,
-            method: r.method as PaymentMethod,
-            notes: r.notes,
-            createdAt: r.created_at
+          lateFee: Number(r.late_fee || 0),
+          interestForMonth: r.interest_for_month ? Number(r.interest_for_month) : undefined,
+          interestForYear: r.interest_for_year ? Number(r.interest_for_year) : undefined,
+          interestDays: r.interest_days ? Number(r.interest_days) : undefined,
+          interestCalculationType: (r.interest_calculation_type || 'MONTHLY') as InterestCalculationType,
+          method: r.method as PaymentMethod,
+          notes: r.notes,
+          createdAt: r.created_at
           };
         }));
       }
@@ -118,12 +122,25 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     } catch (error) {
       logger.error('Error fetching socials:', error);
     } finally {
-      setIsLoading(false);
+      if (showLoader) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     fetchFinancials();
+
+    const channel = supabase
+      .channel('financials_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, () => fetchFinancials(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_repayments' }, () => fetchFinancials(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_topups' }, () => fetchFinancials(false))
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchFinancials]);
 
   // Loans
@@ -149,7 +166,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     }]);
 
     if (error) throw error;
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials]);
 
   const updateLoan = useCallback(async (l: Loan) => {
@@ -172,13 +189,13 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     }).eq('id', l.id);
 
     if (error) throw error;
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials]);
 
   const deleteLoan = useCallback(async (id: string) => {
     const { error } = await supabase.from('loans').delete().eq('id', id);
     if (error) throw error;
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials]);
 
   const validateRepayment = useCallback((repayment: Omit<LoanRepayment, 'id'>) => {
@@ -204,6 +221,14 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     if (repayment.interestForMonth && (repayment.interestForMonth < 1 || repayment.interestForMonth > 12)) {
       throw new Error('Interest period month must be between 1 and 12.');
     }
+
+    if (repayment.interestDays != null && (!Number.isInteger(repayment.interestDays) || repayment.interestDays <= 0)) {
+      throw new Error('Interest days must be a positive whole number.');
+    }
+
+    if (repayment.interestCalculationType === 'PRORATED_DAYS' && !repayment.interestDays) {
+      throw new Error('Prorated interest entries must include the number of days held.');
+    }
   }, [roundCurrency]);
 
   const recordLoanRepayment = useCallback(async (r: Omit<LoanRepayment, 'id'>) => {
@@ -218,12 +243,14 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       late_fee: r.lateFee || 0,
       interest_for_month: r.interestForMonth ?? null,
       interest_for_year: r.interestForYear ?? null,
+      interest_days: r.interestDays ?? null,
+      interest_calculation_type: r.interestCalculationType ?? 'MONTHLY',
       method: r.method,
       notes: r.notes
     }]);
 
     if (error) throw error;
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials, validateRepayment]);
 
   const bulkRecordLoanRepayments = useCallback(async (repayments: Omit<LoanRepayment, 'id'>[]) => {
@@ -240,6 +267,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       late_fee: r.lateFee || 0,
       interest_for_month: r.interestForMonth ?? null,
       interest_for_year: r.interestForYear ?? null,
+      interest_days: r.interestDays ?? null,
+      interest_calculation_type: r.interestCalculationType ?? 'MONTHLY',
       method: r.method,
       notes: r.notes
     }));
@@ -249,13 +278,13 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     const { error } = await supabase.from('loan_repayments').insert(payload);
 
     if (error) throw error;
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials, validateRepayment]);
 
   const deleteLoanRepayment = useCallback(async (id: string) => {
     const { error } = await supabase.from('loan_repayments').delete().eq('id', id);
     if (error) throw error;
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials]);
 
   const cleanupInvalidInterestRowsForLoan = useCallback(async (loan: Loan) => {
@@ -316,7 +345,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       });
     }
 
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [cleanupInvalidInterestRowsForLoan, fetchFinancials, loans]);
 
   // Top-ups
@@ -331,13 +360,13 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     }]);
 
     if (error) throw error;
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials]);
 
   const deleteLoanTopup = useCallback(async (id: string) => {
     const { error } = await supabase.from('loan_topups').delete().eq('id', id);
     if (error) throw error;
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials]);
 
   const wipeLoanInterest = useCallback(async (loanId: string) => {
@@ -366,7 +395,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       if (error) throw error;
     }
 
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials, loanRepayments, roundCurrency]);
 
   const cleanupInvalidLoanInterest = useCallback(async (loanId: string) => {
@@ -375,7 +404,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
 
     const cleanedCount = await cleanupInvalidInterestRowsForLoan(loan);
     if (cleanedCount > 0) {
-      fetchFinancials();
+      await fetchFinancials(false);
     }
 
     return cleanedCount;
@@ -400,7 +429,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   }, []);
 
   const importFinancials = useCallback(async (data: any) => {
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials]);
 
   const deleteAllFinancials = useCallback(async () => {
@@ -409,7 +438,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       supabase.from('loan_repayments').delete().neq('id', '0'),
       supabase.from('loan_topups').delete().neq('id', '0')
     ]);
-    fetchFinancials();
+    await fetchFinancials(false);
   }, [fetchFinancials]);
 
   const resetFinancials = useCallback(() => {

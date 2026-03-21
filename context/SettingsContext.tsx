@@ -76,6 +76,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [settings, setSettings] = useState<SocietySettings>(DEFAULT_SETTINGS);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const fetchSupabaseSettings = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('id', SETTINGS_ROW_ID)
+        .maybeSingle();
+
+      if (data && !error) {
+        setSettings((prev: SocietySettings) => ({ ...prev, ...mapDbRowToSettings(data) }));
+      }
+    } catch (error) {
+      console.warn('Failed to fetch settings from Supabase.', error);
+    }
+  }, []);
+
   useEffect(() => {
     // 1. Try local storage first (for offline/instant load)
     const storedSettings = readStoredSettings();
@@ -84,24 +100,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     // 2. Fetch from Supabase (to sync across devices)
-    const fetchSupabaseSettings = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('*')
-          .eq('id', SETTINGS_ROW_ID)
-          .maybeSingle();
-
-        if (data && !error) {
-          setSettings((prev: SocietySettings) => ({ ...prev, ...mapDbRowToSettings(data) }));
-        }
-      } catch (error) {
-        console.warn('Failed to fetch settings from Supabase.', error);
-      }
-    };
     fetchSupabaseSettings();
+
+    const channel = supabase
+      .channel('settings_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+        fetchSupabaseSettings();
+      })
+      .subscribe();
+
     setIsLoaded(true);
-  }, []);
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchSupabaseSettings]);
 
   // Persist Settings to LocalStorage and Supabase
   useEffect(() => {

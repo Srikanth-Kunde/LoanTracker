@@ -35,6 +35,7 @@ const Members: React.FC = () => {
         view: false
     });
     const [errorMsg, setErrorMsg] = useState('');
+    const [pendingAction, setPendingAction] = useState<string | null>(null);
 
     // Form states
     const [memberForm, setMemberForm] = useState({
@@ -70,6 +71,14 @@ const Members: React.FC = () => {
         });
     }, [members, searchTerm, statusFilter]);
 
+    const activeMembersCount = members.filter(member => member.isActive).length;
+    const activeBorrowersCount = members.filter(member =>
+        loans.some(loan => loan.memberId === member.id && loan.type === LoanType.SPECIAL && loan.status === 'ACTIVE')
+    ).length;
+    const totalOutstanding = loans
+        .filter(loan => loan.type === LoanType.SPECIAL)
+        .reduce((sum, loan) => sum + getSpecialLoanOutstanding(loan.id), 0);
+
     // Handlers
     const handleOpenCreate = () => {
         setMemberForm({
@@ -91,6 +100,7 @@ const Members: React.FC = () => {
             return;
         }
         try {
+            setPendingAction('create');
             await addMember({
                 id: memberForm.id || undefined,
                 name: memberForm.name,
@@ -106,6 +116,8 @@ const Members: React.FC = () => {
         } catch (error) {
             logger.error('Error adding member:', error);
             setErrorMsg('Failed to add member');
+        } finally {
+            setPendingAction(null);
         }
     };
 
@@ -136,6 +148,7 @@ const Members: React.FC = () => {
             return;
         }
         try {
+            setPendingAction(`edit:${editingMember.id}`);
             await updateMember(editingMember.id, {
                 name: memberForm.name,
                 phone: memberForm.phone,
@@ -149,17 +162,22 @@ const Members: React.FC = () => {
         } catch (error) {
             logger.error('Error updating member:', error);
             setErrorMsg('Failed to update member');
+        } finally {
+            setPendingAction(null);
         }
     };
 
     const handleDelete = async (member: Member) => {
         if (!window.confirm(`Are you sure you want to delete ${member.name}? This may affect linked loans.`)) return;
         try {
+            setPendingAction(`delete:${member.id}`);
             await deleteMember(member.id);
             log('DELETE_MEMBER', 'members', member.id, { name: member.name });
         } catch (error) {
             logger.error('Error deleting member:', error);
             alert('Failed to delete member');
+        } finally {
+            setPendingAction(null);
         }
     };
 
@@ -167,15 +185,51 @@ const Members: React.FC = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        <Users className="text-primary-600" /> Members
-                    </h1>
-                    <p className="text-slate-500 dark:text-slate-400">Manage your society members and their contact details.</p>
+                    <div className="inline-flex items-center gap-2 rounded-full border border-primary-100 bg-primary-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-primary-700 dark:border-primary-900/50 dark:bg-primary-900/20 dark:text-primary-300">
+                        <Users size={14} /> Member Registry
+                    </div>
+                    <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white">Members</h1>
+                    <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Manage society profiles with immediate UI updates, live portfolio visibility, and a cleaner audit-first workspace.</p>
                 </div>
 
                 {canManageMembers && (
                     <Button icon={Plus} onClick={handleOpenCreate}>Add New Member</Button>
                 )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div className="rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/80">
+                    <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400">
+                        <Users size={16} />
+                        <span className="text-[11px] font-bold uppercase tracking-[0.22em]">Total Members</span>
+                    </div>
+                    <div className="mt-3 text-3xl font-black text-slate-900 dark:text-white">{members.length}</div>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Full registry count</p>
+                </div>
+                <div className="rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/80">
+                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle size={16} />
+                        <span className="text-[11px] font-bold uppercase tracking-[0.22em]">Active Members</span>
+                    </div>
+                    <div className="mt-3 text-3xl font-black text-slate-900 dark:text-white">{activeMembersCount}</div>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Eligible for current operations</p>
+                </div>
+                <div className="rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/80">
+                    <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
+                        <UserPlus size={16} />
+                        <span className="text-[11px] font-bold uppercase tracking-[0.22em]">Active Borrowers</span>
+                    </div>
+                    <div className="mt-3 text-3xl font-black text-slate-900 dark:text-white">{activeBorrowersCount}</div>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Members with active special loans</p>
+                </div>
+                <div className="rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/80">
+                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                        <Banknote size={16} />
+                        <span className="text-[11px] font-bold uppercase tracking-[0.22em]">Portfolio Outstanding</span>
+                    </div>
+                    <div className="mt-3 text-2xl font-black text-slate-900 dark:text-white">{formatCurrency(totalOutstanding, settings.currency)}</div>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Live across all special loans</p>
+                </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
@@ -278,7 +332,7 @@ const Members: React.FC = () => {
                                                 {canManageMembers && (
                                                     <>
                                                         <Button size="sm" variant="ghost" icon={Edit} onClick={() => handleOpenEdit(member)} title="Edit Member" />
-                                                        <Button size="sm" variant="ghost" icon={Trash2} onClick={() => handleDelete(member)} title="Delete Member" className="text-red-500 hover:text-red-700" />
+                                                        <Button size="sm" variant="ghost" icon={Trash2} onClick={() => handleDelete(member)} title="Delete Member" className="text-red-500 hover:text-red-700" isLoading={pendingAction === `delete:${member.id}`} />
                                                     </>
                                                 )}
                                             </div>
@@ -531,6 +585,7 @@ const Members: React.FC = () => {
                         <Button
                             icon={modals.create ? UserPlus : CheckCircle}
                             onClick={modals.create ? handleCreateMember : handleUpdateMember}
+                            isLoading={modals.create ? pendingAction === 'create' : pendingAction === `edit:${editingMember?.id || ''}`}
                         >
                             {modals.create ? "Create Member" : "Save Changes"}
                         </Button>

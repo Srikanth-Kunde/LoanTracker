@@ -14,13 +14,28 @@ interface MemberContextType {
 
 const MemberContext = createContext<MemberContextType | undefined>(undefined);
 
+const mapDbMember = (m: any): Member => ({
+  id: m.id,
+  name: m.name,
+  phone: m.phone,
+  address: m.address,
+  email: m.email,
+  joinDate: m.join_date,
+  isActive: m.is_active
+});
+
+const sortMembersByName = (list: Member[]) =>
+  [...list].sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+
 export const MemberProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchMembers = useCallback(async () => {
+  const fetchMembers = useCallback(async (showLoader = true) => {
     try {
-      setIsLoading(true);
+      if (showLoader) {
+        setIsLoading(true);
+      }
       const { data, error } = await supabase
         .from('members')
         .select('*')
@@ -29,20 +44,14 @@ export const MemberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (error) throw error;
 
       if (data) {
-        setMembers((data as any[]).map(m => ({
-          id: m.id,
-          name: m.name,
-          phone: m.phone,
-          address: m.address,
-          email: m.email,
-          joinDate: m.join_date,
-          isActive: m.is_active
-        })));
+        setMembers(sortMembersByName((data as any[]).map(mapDbMember)));
       }
     } catch (error) {
       logger.error('Error fetching members:', error);
     } finally {
-      setIsLoading(false);
+      if (showLoader) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -56,7 +65,7 @@ export const MemberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         { event: '*', schema: 'public', table: 'members' },
         () => {
           logger.info('Database change: members');
-          fetchMembers();
+          fetchMembers(false);
         }
       )
       .subscribe();
@@ -81,9 +90,24 @@ export const MemberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (error) {
       logger.error('Error adding member:', error);
-      alert('Failed to add member to database');
+      throw error;
     }
-  }, []);
+
+    setMembers(prev => sortMembersByName([
+      ...prev,
+      {
+        id: newId,
+        name: memberData.name,
+        phone: memberData.phone || '',
+        address: memberData.address || '',
+        email: memberData.email || '',
+        joinDate: memberData.joinDate,
+        isActive: memberData.isActive ?? true
+      }
+    ]));
+
+    await fetchMembers(false);
+  }, [fetchMembers]);
 
   const updateMember = useCallback(async (id: string, data: Partial<Member>) => {
     const updates: any = {};
@@ -97,17 +121,28 @@ export const MemberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { error } = await supabase.from('members').update(updates).eq('id', id);
     if (error) {
       logger.error('Error updating member:', error);
-      alert('Failed to update member');
+      throw error;
     }
-  }, []);
+
+    setMembers(prev => sortMembersByName(prev.map(member =>
+      member.id === id
+        ? { ...member, ...data }
+        : member
+    )));
+
+    await fetchMembers(false);
+  }, [fetchMembers]);
 
   const deleteMember = useCallback(async (id: string) => {
     const { error } = await supabase.from('members').delete().eq('id', id);
     if (error) {
       logger.error('Error deleting member:', error);
-      alert('Failed to delete member');
+      throw error;
     }
-  }, []);
+
+    setMembers(prev => prev.filter(member => member.id !== id));
+    await fetchMembers(false);
+  }, [fetchMembers]);
 
   const getMember = useCallback((id: string) => {
     return members.find((m: Member) => m.id === id);

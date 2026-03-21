@@ -66,7 +66,12 @@ export const Layout = () => {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+    <div className="relative min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.1),_transparent_24%)] transition-colors duration-200 dark:bg-slate-950">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 left-12 h-56 w-56 rounded-full bg-primary-500/10 blur-3xl" />
+        <div className="absolute bottom-10 right-0 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl" />
+      </div>
+      <div className="relative min-h-screen flex">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div
@@ -77,29 +82,49 @@ export const Layout = () => {
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 
-        transform transition-all duration-200 ease-in-out shadow-lg lg:shadow-none
+        fixed inset-y-0 left-0 z-50 w-72 border-r border-white/60 bg-white/80 shadow-2xl backdrop-blur-xl
+        dark:border-slate-700/70 dark:bg-slate-900/85
+        transform transition-all duration-200 ease-in-out lg:shadow-none
         lg:translate-x-0 lg:static lg:inset-auto lg:flex lg:flex-col
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className="flex items-center justify-between h-16 px-6 border-b border-slate-100 dark:border-slate-700">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">L</span>
+        <div className="border-b border-slate-100/80 px-6 py-5 dark:border-slate-800">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-600 shadow-lg shadow-primary-500/20">
+                <span className="text-white font-bold text-lg">L</span>
+              </div>
+              <div>
+                <span className="block text-lg font-bold text-slate-800 dark:text-white">
+                  Legacy Loan
+                </span>
+                <span className="text-[11px] uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">
+                  Audit Ledger
+                </span>
+              </div>
             </div>
-            <span className="text-xl font-bold text-slate-800 dark:text-white truncate max-w-[150px]">
-              Legacy Loan
-            </span>
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              <X size={20} />
+            </button>
           </div>
-          <button
-            onClick={() => setIsSidebarOpen(false)}
-            className="lg:hidden text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            <X size={20} />
-          </button>
+
+          <div className="rounded-2xl border border-slate-100 bg-slate-50/90 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/70 dark:text-slate-300">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold">Workspace</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isOffline ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'}`}>
+                {isOffline ? 'Offline' : 'Live Sync'}
+              </span>
+            </div>
+            <div className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+              Enter legacy books, verify principal history, and audit interest logic without page refreshes.
+            </div>
+          </div>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1">
+        <nav className="flex-1 px-4 py-6 space-y-2">
           {navigation.map((item) => {
             const active = isActive(item.href);
             return (
@@ -108,10 +133,10 @@ export const Layout = () => {
                 to={item.href}
                 onClick={() => setIsSidebarOpen(false)}
                 className={`
-                  flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors
+                  flex items-center rounded-2xl px-4 py-3 text-sm font-semibold transition-all
                   ${active
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-600/10 dark:text-primary-400'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'}
+                    ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-100 dark:bg-primary-600/10 dark:text-primary-400 dark:ring-primary-900/40'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-white/70 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white'}
                 `}
               >
                 <item.icon
@@ -123,10 +148,10 @@ export const Layout = () => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-700">
+        <div className="border-t border-slate-100/80 p-4 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-xs">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-200/90 text-slate-600 dark:bg-slate-700 dark:text-slate-300 font-bold text-xs">
                 {role?.charAt(0)}
               </div>
               <div className="ml-3">
@@ -150,7 +175,7 @@ export const Layout = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header */}
-        <header className="lg:hidden flex items-center justify-between h-16 px-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+        <header className="lg:hidden flex items-center justify-between h-16 px-4 bg-white/85 backdrop-blur-xl dark:bg-slate-900/85 border-b border-slate-200/80 dark:border-slate-700">
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 focus:outline-none"
@@ -168,8 +193,11 @@ export const Layout = () => {
               <span><strong>Database connection lost</strong> — data may be outdated. Check your network or VPN.</span>
             </div>
           )}
-          <Outlet />
+          <div className="mx-auto max-w-[1500px]">
+            <Outlet />
+          </div>
         </main>
+      </div>
       </div>
     </div>
   );

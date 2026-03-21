@@ -8,6 +8,7 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 
 *   **Dynamic Principal Tracking:** Outstanding balances are calculated on-the-fly based on original principal + top-ups - principal repayments.
 *   **Manual Interest Proration:** Supports overwriting standard monthly interest amounts to account for 15-day or 20-day partial borrowing periods.
+*   **Exact-Day Interest Assistant:** The repayment modal can now calculate prorated interest for exact held-day counts and preserve that basis on the repayment entry for audit review.
 *   **Interest-Period Aware Ledger:** Interest collections are now allocated to an explicit settlement month/year, so back-dated entries, arrears, and principal-only recoveries no longer corrupt monthly status.
 *   **No Auto-Late Fees:** Designed to perfectly match historical handwritten books, the system will never auto-calculate late fees. Late fees are only recorded if explicitly provided by the operator.
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
@@ -82,10 +83,12 @@ The application requires a specific schema and security configuration to functio
 ### Do You Need To Run SQL Again?
 - **Yes, if your database was created before the latest ledger hardening update, rerun `migration.sql`.**
 - `migration.sql` now adds new repayment allocation columns, audit-log compatibility columns, repayment validation constraints, and date-validation triggers.
+- The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
 - The script remains **idempotent** and is safe to rerun from the Supabase SQL Editor.
 - **Legacy table removal**: `migration.sql` now drops the obsolete `payments` table because it is no longer part of the live product.
 - **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
 - **Current closure auto-cleanup fix**: No additional SQL is required for the latest post-closure / zero-balance interest cleanup. That behavior is handled entirely in the application logic.
+- **Exact-days proration update**: Rerun `migration.sql` once on existing databases to add the new exact-day repayment metadata columns.
 
 ### Full Reset
 
@@ -176,6 +179,7 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Principal-Only Repayment Fix**: Principal recoveries no longer mark a month as “interest collected”, which fixes a major historical-entry bug for voluntary part-payments.
 *   **Arrears Split Fix**: Backlog interest is now allocated to the correct historical months instead of back-dating artificial cash movements or generating negative current-month rows.
 *   **Collection-Date Driven Interest Preview**: The repayment modal now recalculates arrears and current-period interest from the entered collection date itself, fixing back-dated entries such as `10-03-2013` needing `Feb 2013 + Mar 2013`.
+*   **Prorated Day-Based Interest**: Operators can switch the current-period calculation to `Exact Days`, enter 15 or 20 days, and let the system calculate/store the prorated interest basis directly on the repayment row.
 *   **Large History UX**: For long-running loans from 2012 onward, the repayment modal now shows a compact arrears summary with month count, date range, and total instead of rendering an unreadable month-by-month list.
 *   **Running Balance Accuracy**: The Special Loan audit ledger now uses deterministic row-by-row balance progression instead of date-only balance reconstruction.
 *   **Interest Wipe Safety**: “Wipe Interest” now preserves principal and mixed repayment rows instead of deleting them wholesale.
@@ -184,6 +188,7 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Schema Integrity Guards**: Added database checks and triggers to reject negative repayment values, invalid interest period metadata, loan events before loan start, and start-date edits after later transactions exist.
 *   **Admin-Only Settings Mutations**: Non-admin users are now blocked from changing system settings and access codes through the UI.
 *   **Regression Coverage**: Added `npm test` with deterministic loan-math scenarios covering top-ups, partial principal repayments, arrears allocation, and running balances.
+*   **Live Refresh Without Manual Reloads**: Member, loan, repayment, top-up, and settings data now refetch and subscribe in real time so CRUD and backend changes appear immediately.
 *   **Restored Members Tab**: Re-added the Members page to the UI for better member tracking and updates.
 *   **Improved Type Safety**: Fixed `AuditAction` enum mismatches in the frontend.
 *   **IDE Resolution Fixes**: Added explicit file extensions to lazy-loaded imports in `App.tsx` for better IDE path resolution.

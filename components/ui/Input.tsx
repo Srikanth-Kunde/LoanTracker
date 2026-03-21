@@ -20,7 +20,8 @@ export const Input: React.FC<InputProps> = ({
   id,
   ...props 
 }: InputProps) => {
-  const inputId = id || `input-${Math.random().toString(36).slice(2, 8)}`;
+  const generatedId = React.useId();
+  const inputId = id || generatedId;
   
   return (
     <div className="w-full">
@@ -43,10 +44,10 @@ export const Input: React.FC<InputProps> = ({
         <input
           id={inputId}
           className={`
-            block w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 
-            text-slate-900 dark:text-white placeholder:text-slate-400
-            focus:border-primary-500 focus:ring-primary-500 sm:text-sm transition-all
-            disabled:bg-slate-50 dark:disabled:bg-slate-900 disabled:text-slate-500
+            block w-full rounded-2xl border border-slate-200/90 bg-white/90 px-4 py-3 shadow-sm
+            text-slate-900 placeholder:text-slate-400
+            focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 sm:text-sm transition-all
+            disabled:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/90 dark:text-white dark:disabled:bg-slate-900 disabled:text-slate-500
             ${(Icon || leftIcon) ? 'pl-10' : 'pl-4'}
             ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}
             ${className}

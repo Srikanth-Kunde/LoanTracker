@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS loan_repayments (
     late_fee NUMERIC DEFAULT 0,
     interest_for_month INTEGER,
     interest_for_year INTEGER,
+    interest_days INTEGER,
+    interest_calculation_type TEXT DEFAULT 'MONTHLY',
     method TEXT,
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -95,7 +97,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 ALTER TABLE loan_repayments
     ADD COLUMN IF NOT EXISTS interest_for_month INTEGER,
-    ADD COLUMN IF NOT EXISTS interest_for_year INTEGER;
+    ADD COLUMN IF NOT EXISTS interest_for_year INTEGER,
+    ADD COLUMN IF NOT EXISTS interest_days INTEGER,
+    ADD COLUMN IF NOT EXISTS interest_calculation_type TEXT DEFAULT 'MONTHLY';
 
 ALTER TABLE audit_logs
     ADD COLUMN IF NOT EXISTS performed_by TEXT,
@@ -177,6 +181,30 @@ BEGIN
                 interest_for_month BETWEEN 1 AND 12
                 AND interest_for_year BETWEEN 1900 AND 9999
             )
+        );
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'loan_repayments_interest_days_chk'
+    ) THEN
+        ALTER TABLE loan_repayments
+        ADD CONSTRAINT loan_repayments_interest_days_chk
+        CHECK (
+            interest_days IS NULL
+            OR interest_days > 0
+        );
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'loan_repayments_interest_calc_type_chk'
+    ) THEN
+        ALTER TABLE loan_repayments
+        ADD CONSTRAINT loan_repayments_interest_calc_type_chk
+        CHECK (
+            interest_calculation_type IS NULL
+            OR interest_calculation_type IN ('MONTHLY', 'PRORATED_DAYS')
         );
     END IF;
 END $$;

@@ -16,9 +16,9 @@ export const Card: React.FC<CardProps> = ({
   noPadding = false 
 }) => {
   return (
-    <div className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden transition-all duration-200 ${className}`}>
+    <div className={`overflow-hidden rounded-[28px] border border-white/70 bg-white/85 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.35)] backdrop-blur-sm transition-all duration-300 dark:border-slate-700/70 dark:bg-slate-800/80 ${className}`}>
       {(title || subtitle) && (
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/20">
+        <div className="border-b border-slate-100/80 bg-slate-50/80 px-6 py-4 dark:border-slate-700/70 dark:bg-slate-900/30">
           {title && <h3 className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>}
           {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
         </div>

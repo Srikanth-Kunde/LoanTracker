@@ -43,10 +43,10 @@ export const Modal: React.FC<ModalProps> = ({
         onClick={onClose} 
       />
       <div className={`
-        relative w-full ${maxWidth ? `max-w-${maxWidth}` : maxWidths[size as keyof typeof maxWidths]} bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 
+        relative w-full ${maxWidth || maxWidths[size as keyof typeof maxWidths]} bg-white/95 dark:bg-slate-800/95 rounded-[28px] shadow-2xl border border-slate-200/80 dark:border-slate-700 
         overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300
       `}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/30">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h2>
           <button 
             onClick={onClose}

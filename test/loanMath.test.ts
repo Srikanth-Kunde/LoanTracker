@@ -7,6 +7,7 @@ import {
     getInvalidInterestRepayments,
     getInterestPaidForPeriod,
     getMissingInterestPeriods,
+    getProratedInterestForDays,
     getSpecialLoanOutstandingFromEvents
 } from '../utils/loanMath';
 
@@ -169,6 +170,14 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
     ['2013-02@2013-02-28', '2013-03@2013-03-10'],
     'Auto-generation should keep the close month but date it on the close/payoff date'
   );
+}
+
+{
+  const prorated = getProratedInterestForDays(50000, 1.5, 2013, 3, 20);
+
+  assert.equal(prorated.monthDays, 31, 'March 2013 should have 31 days for proration');
+  assert.equal(prorated.fullMonthInterest, 750, 'Full month interest should still be based on monthly rate');
+  assert.equal(prorated.proratedInterest, 483.87, 'Exact-day proration should use actual days held in the month');
 }
 
 console.log('loanMath regression tests passed');

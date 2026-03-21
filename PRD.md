@@ -28,6 +28,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 #### 3.3. Interest Collection & Proration
 *   The system suggests the standard monthly interest (`Outstanding Principal * Interest Rate`).
 *   **Crucial Override**: Operators can manually overwrite the suggested interest amount. This allows recording prorated interest when a member only took the loan for 15 or 20 days.
+*   **Exact-Day Mode**: The system should allow operators to switch the current-period calculation to an exact day-count basis, store the day count used, and preserve whether the entry was `MONTHLY` or `PRORATED_DAYS` for later audit review.
 *   **Explicit Settlement Period**: The system must support recording an interest payment against the month it settles, even when the cash is physically collected in a later month.
 
 #### 3.4. Principal Repayment
@@ -65,6 +66,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   `loan_topups`: Links to a `loan_id`. Stores `amount`, `date`, `rate`, and notes. The latest effective top-up rate is used for future monthly interest calculations.
 *   `loan_repayments`: Links to a `loan_id`. Stores total `amount` plus separated `principal_paid`, `interest_paid`, and `late_fee`.
 *   `loan_repayments` also stores `interest_for_month` and `interest_for_year` so the operator can allocate an interest collection to the intended liability month.
+*   `loan_repayments` also stores optional `interest_days` and `interest_calculation_type` metadata whenever a repayment is recorded on an exact-day basis.
 *   `app_settings`: Stores the active UI-backed settings used by the app, including `society_name`, `currency`, `loan_processing_fee`, `default_loan_interest_rate`, access codes, and appearance preferences.
 *   `audit_logs`: Stores write-audit metadata for ledger and admin actions.
 *   The legacy `payments` table is not part of the active product and should not exist after the latest migration.
@@ -95,6 +97,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Safety**: The script is **idempotent** and safe to rerun. It uses `IF NOT EXISTS` for tables and indexes and guarded policy creation.
 *   **Access Control**: The script automatically enables Row Level Security (RLS) and adds global permissions for the `anon` role to ensure secure but functional access from the Vite app.
 *   **Operational Note**: `migration.sql` is also the upgrade path for existing deployments. Operators must rerun it after the ledger hardening release so the new repayment-period columns, audit-log compatibility columns, constraints, triggers, and legacy-table cleanup are applied.
+*   **Current Proration Upgrade Note**: Existing deployments must rerun `migration.sql` one more time to add `interest_days` and `interest_calculation_type` for exact-day repayment auditability.
 *   **Current Closure Auto-Cleanup Fix**: No additional schema change is required for the latest post-closure interest cleanup. It is implemented in the shared calculation engine and repayment workflows on top of the existing tables.
 
 #### 5.4. Product Scope Corrections
@@ -114,6 +117,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Principal-Only Recovery Fix**: Corrected the loan status logic so voluntary principal repayments no longer suppress the interest collection workflow for the same month.
 *   **Arrears Posting Fix**: Corrected missed-month posting so arrears are allocated to their actual historical periods without generating negative or mathematically invalid current-period rows.
 *   **Collection-Date Based Due Calculation**: Corrected the repayment modal so interest due is derived from the operator-entered collection date, not merely from the currently selected reporting month.
+*   **Exact-Day Interest Workflow**: Added a current-period interest mode that can calculate and store 15-day / 20-day style proration directly in the repayment form while still clearing arrears month-by-month first.
 *   **Long-History Collection UX**: Added a compact arrears summary for loans spanning many years so the operator can review total arrears, month count, and date range without rendering excessively long month lists.
 *   **Safe Interest Wipe**: Refactored “Wipe Interest” so mixed repayment rows keep their principal component and only the interest allocation is removed.
 *   **Running Balance Determinism**: Refactored the audit ledger to compute row-by-row balance progression using event ordering rather than date-only reconstruction.
@@ -121,6 +125,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Audit Log Schema Alignment**: Fixed the frontend audit payload shape to match the Supabase `audit_logs` table and avoid silent insert failures.
 *   **Database Integrity Guards**: Added DB-level checks for non-negative repayments, component-sum validation, valid interest-period ranges, and trigger-based date validation for top-ups, repayments, and edited loan start dates.
 *   **Regression Harness**: Added deterministic loan-math regression coverage for multi-top-up and partial-repayment scenarios via `npm test`.
+*   **Live Context Sync**: Member, financial, and settings contexts now push local updates immediately and also subscribe/refetch in real time so backend changes surface without manual page reloads.
 *   **Robust Date Parsing**: Upgraded all date-handling utilities to natively support both dash-separated (`YYYY-MM-DD`) and slash-separated (`DD/MM/YYYY`) formats, as well as Indian-style shorthand (`DD-MM-YYYY`). This ensures legacy manual data imported via SQL can still be correctly parsed for interest calculations and audit reporting.
 *   **High-Precision UTC Calculation Logic**: Refactored the core calculation engine (`getSpecialLoanOutstanding`) to use UTC-aligned ISO comparisons. This resolves subtle "timezone shift" bugs where payments at the end of a month were occasionally missed by the interest calculator.
 *   **Zero-Balance & Start-Date Guards**: Implemented strict liability guards that automatically nullify interest for any period prior to the loan start date or any month where the principal balance has been cleared (within a 1-rupee rounding tolerance).

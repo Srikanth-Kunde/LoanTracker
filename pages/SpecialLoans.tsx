@@ -5,7 +5,7 @@ import { useMembers } from '../context/MemberContext';
 import { useFinancials } from '../context/FinancialContext';
 import { useAuth } from '../context/AuthContext';
 import { useAuditLog } from '../context/AuditLogContext';
-import { Loan, LoanStatus, LoanRepayment, PaymentMethod, UserRole, LoanCalculationMethod, LoanType } from '../types';
+import { InterestCalculationType, Loan, LoanStatus, LoanRepayment, PaymentMethod, UserRole, LoanCalculationMethod, LoanType } from '../types';
 import { MONTHS, formatCurrency } from '../constants';
 import {
     ChevronLeft, ChevronRight, Calculator, Eye, Banknote, Filter, AlertTriangle, FileText, Star,
@@ -19,7 +19,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Card } from '../components/ui/Card';
 import { LoanCalculator } from '../components/LoanCalculator';
-import { compareISODate, formatDisplayDate, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp } from '../utils/date';
+import { compareISODate, formatDisplayDate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp } from '../utils/date';
 import {
     getAutoGenerationStopDate,
     buildLoanLedger,
@@ -29,6 +29,7 @@ import {
     getInterestPeriodKey,
     getLastInterestPaymentDate,
     getMissingInterestPeriods,
+    getProratedInterestForDays,
     getRepaymentInterestPeriod
 } from '../utils/loanMath';
 
@@ -109,6 +110,8 @@ const SpecialLoans: React.FC = () => {
         interest: '',
         lateFee: '0',
         date: new Date().toISOString().split('T')[0],
+        interestCalculationType: 'MONTHLY' as InterestCalculationType,
+        interestDays: '',
         method: PaymentMethod.CASH,
         notes: ''
     });
@@ -124,7 +127,14 @@ const SpecialLoans: React.FC = () => {
         status: LoanStatus.ACTIVE
     });
 
-    const getRepaymentPreview = (loan: EnrichedLoan, collectionDate: string) => {
+    const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
+
+    const getRepaymentPreview = (
+        loan: EnrichedLoan,
+        collectionDate: string,
+        interestCalculationType: InterestCalculationType = 'MONTHLY',
+        rawInterestDays = ''
+    ) => {
         const collectionPeriod = getISODateMonthYear(collectionDate);
         const previousPeriod = collectionPeriod.month === 1
             ? { year: collectionPeriod.year - 1, month: 12 }
@@ -145,6 +155,19 @@ const SpecialLoans: React.FC = () => {
         );
         const currentPeriodInterestPaid = getInterestPaidForPeriod(currentLoanRepayments, loan.id, collectionPeriod);
         const currentPeriodAlreadyPaid = currentPeriodInterestPaid > 0;
+        const parsedInterestDays = Number.parseInt(rawInterestDays || '', 10);
+        const exactDaysRequested = interestCalculationType === 'PRORATED_DAYS' && Number.isFinite(parsedInterestDays) && parsedInterestDays > 0;
+        const exactDaysBasePrincipal = getSpecialLoanOutstanding(loan.id, collectionDate);
+        const fallbackMonthlyInterest = roundCurrency(exactDaysBasePrincipal * (currentPeriodDue.rate / 100));
+        const currentPeriodProration = exactDaysRequested
+            ? getProratedInterestForDays(
+                exactDaysBasePrincipal,
+                currentPeriodDue.rate,
+                collectionPeriod.year,
+                collectionPeriod.month,
+                parsedInterestDays
+            )
+            : null;
         const missedMonthsDetails = missedPeriods.map(period => ({
             month: period.month,
             year: period.year,
@@ -153,7 +176,11 @@ const SpecialLoans: React.FC = () => {
             lateFee: 0
         }));
         const arrearsInterest = missedMonthsDetails.reduce((sum, period) => sum + period.interest, 0);
-        const currentInterestDue = currentPeriodAlreadyPaid ? 0 : Math.round(currentPeriodDue.interestDue);
+        const currentInterestDue = currentPeriodAlreadyPaid
+            ? 0
+            : roundCurrency(exactDaysRequested
+                ? currentPeriodProration?.proratedInterest || fallbackMonthlyInterest
+                : currentPeriodDue.interestDue);
 
         return {
             collectionPeriod,
@@ -161,20 +188,32 @@ const SpecialLoans: React.FC = () => {
             currentInterestDue,
             arrearsInterest,
             totalSuggestedInterest: arrearsInterest + currentInterestDue,
-            missedMonthsDetails
+            missedMonthsDetails,
+            interestCalculationType,
+            interestDays: currentPeriodProration?.daysHeld,
+            interestMonthDays: currentPeriodProration?.monthDays || getDaysInMonth(collectionPeriod.year, collectionPeriod.month),
+            currentRate: currentPeriodDue.rate,
+            exactDaysBasePrincipal,
+            currentInterestFormula: currentPeriodProration
+                ? `${formatCurrency(exactDaysBasePrincipal, settings.currency)} × ${currentPeriodDue.rate}% × ${currentPeriodProration.daysHeld}/${currentPeriodProration.monthDays}`
+                : null
         };
     };
 
     const repaymentPreview = useMemo(() => {
         if (!activeLoan || !repayForm.date) return null;
-        return getRepaymentPreview(activeLoan, repayForm.date);
-    }, [activeLoan, repayForm.date, loanRepayments, loanTopups]);
+        return getRepaymentPreview(activeLoan, repayForm.date, repayForm.interestCalculationType, repayForm.interestDays);
+    }, [activeLoan, repayForm.date, repayForm.interestCalculationType, repayForm.interestDays, loanRepayments, loanTopups]);
 
     const repaymentPreviewSummary = useMemo(() => {
         if (!repaymentPreview) return null;
         const missed = repaymentPreview.missedMonthsDetails;
         if (missed.length === 0) {
-            return `Current period ${MONTHS[repaymentPreview.collectionPeriod.month - 1]} ${repaymentPreview.collectionPeriod.year}: ${formatCurrency(repaymentPreview.currentInterestDue, settings.currency)}`;
+            const currentPeriodLabel = `${MONTHS[repaymentPreview.collectionPeriod.month - 1]} ${repaymentPreview.collectionPeriod.year}`;
+            if (repaymentPreview.interestCalculationType === 'PRORATED_DAYS' && repaymentPreview.interestDays) {
+                return `Current period ${currentPeriodLabel}: ${formatCurrency(repaymentPreview.currentInterestDue, settings.currency)} for ${repaymentPreview.interestDays} day${repaymentPreview.interestDays > 1 ? 's' : ''} (${repaymentPreview.currentInterestFormula}).`;
+            }
+            return `Current period ${currentPeriodLabel}: ${formatCurrency(repaymentPreview.currentInterestDue, settings.currency)}`;
         }
 
         const first = missed[0];
@@ -183,7 +222,12 @@ const SpecialLoans: React.FC = () => {
             ? `${MONTHS[first.month - 1]} ${first.year}`
             : `${MONTHS[first.month - 1]} ${first.year} to ${MONTHS[last.month - 1]} ${last.year}`;
 
-        return `Arrears: ${missed.length} month${missed.length > 1 ? 's' : ''} (${arrearsRange}) = ${formatCurrency(repaymentPreview.arrearsInterest, settings.currency)}. Current period ${MONTHS[repaymentPreview.collectionPeriod.month - 1]} ${repaymentPreview.collectionPeriod.year} = ${formatCurrency(repaymentPreview.currentInterestDue, settings.currency)}.`;
+        const currentPeriodLabel = `${MONTHS[repaymentPreview.collectionPeriod.month - 1]} ${repaymentPreview.collectionPeriod.year}`;
+        const currentPeriodSummary = repaymentPreview.interestCalculationType === 'PRORATED_DAYS' && repaymentPreview.interestDays
+            ? `${formatCurrency(repaymentPreview.currentInterestDue, settings.currency)} for ${repaymentPreview.interestDays} day${repaymentPreview.interestDays > 1 ? 's' : ''} (${repaymentPreview.currentInterestFormula})`
+            : formatCurrency(repaymentPreview.currentInterestDue, settings.currency);
+
+        return `Arrears: ${missed.length} month${missed.length > 1 ? 's' : ''} (${arrearsRange}) = ${formatCurrency(repaymentPreview.arrearsInterest, settings.currency)}. Current period ${currentPeriodLabel} = ${currentPeriodSummary}.`;
     }, [repaymentPreview, settings.currency]);
 
     const activeLoanTransactions = useMemo(() => {
@@ -200,9 +244,6 @@ const SpecialLoans: React.FC = () => {
     const canRepayLoan = role === UserRole.ADMIN || role === UserRole.OPERATOR;
 
     // --- Logic & Memos ---
-
-    const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
-
     const calculateEMI = (principal: number, ratePerMonth: number, months: number) => {
         const safeMonths = Math.max(1, months);
         const r = ratePerMonth / 100;
@@ -460,6 +501,8 @@ const SpecialLoans: React.FC = () => {
             interest: preview.totalSuggestedInterest.toString(),
             lateFee: '0',
             date: defaultDate,
+            interestCalculationType: 'MONTHLY',
+            interestDays: '',
             method: PaymentMethod.CASH,
             notes: ''
         });
@@ -478,6 +521,12 @@ const SpecialLoans: React.FC = () => {
 
             if (compareISODate(repayForm.date, activeLoan.startDate) < 0) {
                 throw new Error(`Repayment date cannot be before loan start date`);
+            }
+            if (repayForm.interestCalculationType === 'PRORATED_DAYS') {
+                const dayCount = Number.parseInt(repayForm.interestDays || '', 10);
+                if (!Number.isFinite(dayCount) || dayCount <= 0 || dayCount > preview.interestMonthDays) {
+                    throw new Error(`Exact days must be between 1 and ${preview.interestMonthDays} for ${MONTHS[preview.collectionPeriod.month - 1]} ${preview.collectionPeriod.year}.`);
+                }
             }
             if (iAmt + lFee <= 0 && pAmt <= 0) throw new Error("Enter at least interest or late fee amount");
 
@@ -501,6 +550,7 @@ const SpecialLoans: React.FC = () => {
                         lateFee: 0,
                         interestForMonth: missed.month,
                         interestForYear: missed.year,
+                        interestCalculationType: 'MONTHLY',
                         method: repayForm.method,
                         notes: repayForm.notes || `Arrears interest for ${MONTHS[missed.month - 1]} ${missed.year}`
                     });
@@ -525,6 +575,8 @@ const SpecialLoans: React.FC = () => {
                         lateFee: lFee,
                         interestForMonth: currentInterest > 0 ? preview.collectionPeriod.month : undefined,
                         interestForYear: currentInterest > 0 ? preview.collectionPeriod.year : undefined,
+                        interestDays: currentInterest > 0 && repayForm.interestCalculationType === 'PRORATED_DAYS' ? preview.interestDays : undefined,
+                        interestCalculationType: currentInterest > 0 ? repayForm.interestCalculationType : undefined,
                         method: repayForm.method,
                         notes: repayForm.notes
                     });
@@ -543,6 +595,8 @@ const SpecialLoans: React.FC = () => {
                     lateFee: lFee,
                     interestForMonth: iAmt > 0 ? preview.collectionPeriod.month : undefined,
                     interestForYear: iAmt > 0 ? preview.collectionPeriod.year : undefined,
+                    interestDays: iAmt > 0 && repayForm.interestCalculationType === 'PRORATED_DAYS' ? preview.interestDays : undefined,
+                    interestCalculationType: iAmt > 0 ? repayForm.interestCalculationType : undefined,
                     method: repayForm.method,
                     notes: repayForm.notes
                 });
@@ -1142,6 +1196,71 @@ const SpecialLoans: React.FC = () => {
                             </div>
                         )}
 
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/40 p-4 shadow-sm">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Current Period Interest Basis</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Use full-month interest or record exact held days for partial-month cases like 15 or 20 days.</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {([
+                                        { label: 'Full Month', value: 'MONTHLY' },
+                                        { label: 'Exact Days', value: 'PRORATED_DAYS' }
+                                    ] as const).map(option => (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            onClick={() => {
+                                                if (!activeLoan) return;
+                                                const nextPreview = getRepaymentPreview(activeLoan, repayForm.date, option.value, repayForm.interestDays);
+                                                setRepayForm(prev => ({
+                                                    ...prev,
+                                                    interestCalculationType: option.value,
+                                                    interest: nextPreview.totalSuggestedInterest.toString()
+                                                }));
+                                            }}
+                                            className={`rounded-xl border px-3 py-2 text-xs font-bold transition-all ${repayForm.interestCalculationType === option.value
+                                                ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm dark:bg-primary-900/30 dark:text-primary-300'
+                                                : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {repayForm.interestCalculationType === 'PRORATED_DAYS' && (
+                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-[160px,1fr] gap-4 items-start">
+                                    <Input
+                                        label="Exact Days Held"
+                                        type="number"
+                                        min={1}
+                                        max={repaymentPreview?.interestMonthDays || 31}
+                                        value={repayForm.interestDays}
+                                        onChange={e => {
+                                            if (!activeLoan) return;
+                                            const nextDays = e.target.value;
+                                            const nextPreview = getRepaymentPreview(activeLoan, repayForm.date, 'PRORATED_DAYS', nextDays);
+                                            setRepayForm(prev => ({
+                                                ...prev,
+                                                interestDays: nextDays,
+                                                interest: nextPreview.totalSuggestedInterest.toString()
+                                            }));
+                                        }}
+                                        description={repaymentPreview ? `1 to ${repaymentPreview.interestMonthDays} days for ${MONTHS[repaymentPreview.collectionPeriod.month - 1]}` : undefined}
+                                    />
+                                    <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-200">
+                                        <div className="font-semibold uppercase tracking-wide text-[10px] text-blue-600 dark:text-blue-300">Prorated Preview</div>
+                                        <div className="mt-1">
+                                            {repaymentPreview?.interestDays
+                                                ? `${repaymentPreview.currentInterestFormula} = ${formatCurrency(repaymentPreview.currentInterestDue, settings.currency)}`
+                                                : 'Enter the exact number of held days to auto-calculate a prorated current-period interest amount.'}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <Input
                                 label="Interest Amount"
@@ -1174,7 +1293,7 @@ const SpecialLoans: React.FC = () => {
                             onChange={e => {
                                 if (!activeLoan) return;
                                 const nextDate = e.target.value;
-                                const preview = getRepaymentPreview(activeLoan, nextDate);
+                                const preview = getRepaymentPreview(activeLoan, nextDate, repayForm.interestCalculationType, repayForm.interestDays);
                                 setRepayForm(prev => ({
                                     ...prev,
                                     date: nextDate,
@@ -1394,7 +1513,14 @@ const SpecialLoans: React.FC = () => {
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-3 text-slate-500">
-                                                        {tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '—'}
+                                                        <div className="space-y-1">
+                                                            <div>{tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '—'}</div>
+                                                            {tx.interestCalculationType === 'PRORATED_DAYS' && tx.interestDays ? (
+                                                                <span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                                    {tx.interestDays} Days
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-bold">
                                                         {tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? (
@@ -1418,7 +1544,14 @@ const SpecialLoans: React.FC = () => {
                                                     <td className="px-4 py-3 text-right font-bold">
                                                         <span className="text-slate-700">{formatCurrency(tx.balanceAfter, settings.currency)}</span>
                                                     </td>
-                                                    <td className="px-4 py-3 text-slate-500 italic max-w-[200px] truncate">{tx.notes || '—'}</td>
+                                                    <td className="px-4 py-3 text-slate-500 italic max-w-[240px]">
+                                                        <div className="truncate">{tx.notes || '—'}</div>
+                                                        {tx.interestCalculationType === 'PRORATED_DAYS' && tx.interestDays ? (
+                                                            <div className="mt-1 text-[10px] not-italic font-semibold text-blue-600 dark:text-blue-300">
+                                                                Recorded using exact-day proration
+                                                            </div>
+                                                        ) : null}
+                                                    </td>
                                                     <td className="px-4 py-3 text-center">
                                                         <div className="flex justify-center gap-1">
                                                             {tx.entryType === 'DISBURSAL' ? (

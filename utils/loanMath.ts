@@ -1,5 +1,5 @@
 import { Loan, LoanRepayment, LoanTopup } from '../types';
-import { compareISODate, getISODateMonthYear, getLastDayOfMonthISO, normalizeISODate } from './date';
+import { compareISODate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, normalizeISODate } from './date';
 
 export interface InterestPeriod {
   year: number;
@@ -19,6 +19,8 @@ export interface LoanLedgerRow {
   notes?: string;
   balanceAfter: number;
   interestPeriod?: InterestPeriod | null;
+  interestDays?: number;
+  interestCalculationType?: string;
 }
 
 const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
@@ -351,7 +353,9 @@ export const buildLoanLedger = (
         lateFee: Number(repayment.lateFee || 0),
         notes: repayment.notes,
         balanceAfter: 0,
-        interestPeriod: getRepaymentInterestPeriod(repayment)
+        interestPeriod: getRepaymentInterestPeriod(repayment),
+        interestDays: repayment.interestDays,
+        interestCalculationType: repayment.interestCalculationType
       });
     });
 
@@ -379,4 +383,24 @@ export const getLastInterestPaymentDate = (repayments: LoanRepayment[], loanId: 
     .sort(compareISODate);
 
   return dates.at(-1) || null;
+};
+
+export const getProratedInterestForDays = (
+  principal: number,
+  monthlyRate: number,
+  year: number,
+  month: number,
+  daysHeld: number
+) => {
+  const monthDays = getDaysInMonth(year, month);
+  const safeDaysHeld = Math.min(Math.max(Math.round(daysHeld), 0), monthDays);
+  const fullMonthInterest = roundCurrency(principal * (monthlyRate / 100));
+  const proratedInterest = roundCurrency(fullMonthInterest * (safeDaysHeld / monthDays));
+
+  return {
+    monthDays,
+    daysHeld: safeDaysHeld,
+    fullMonthInterest,
+    proratedInterest
+  };
 };

@@ -68,6 +68,8 @@ export const getLastDayOfMonthISO = (year: number, month: number) => {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 };
 
+export const getDaysInMonth = (year: number, month: number) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+
 export const getFinancialYearBounds = (financialYear: string) => {
   if (financialYear === 'PRE-2026') {
     return { start: '1900-01-01', end: '2026-03-31' };
