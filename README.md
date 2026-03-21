@@ -74,9 +74,10 @@ The application requires a specific schema and security configuration to functio
 
 1.  Open your [Supabase Dashboard](https://supabase.com/dashboard).
 2.  Navigate to the **SQL Editor**.
-3.  Run `migration.sql` for schema setup.
-4.  Run `sql/sample-ajay-add.sql` only when you want sample data for Ajay and Srikanth.
-5.  Run `sql/sample-ajay-remove.sql` whenever you want to remove the sample rows.
+3.  If you want a full wipe, run `sql/reset-all.sql` first.
+4.  Run `migration.sql` for schema setup.
+5.  Run `sql/sample-ajay-add.sql` only when you want sample data for Ajay and Srikanth.
+6.  Run `sql/sample-ajay-remove.sql` whenever you want to remove the sample rows.
 
 ### Do You Need To Run SQL Again?
 - **Yes, if your database was created before the latest ledger hardening update, rerun `migration.sql`.**
@@ -84,6 +85,16 @@ The application requires a specific schema and security configuration to functio
 - The script remains **idempotent** and is safe to rerun from the Supabase SQL Editor.
 - **Legacy table removal**: `migration.sql` now drops the obsolete `payments` table because it is no longer part of the live product.
 - **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
+
+### Full Reset
+
+If you want to delete every application table and recreate the database from scratch:
+
+1. Run `sql/reset-all.sql`
+2. Run `migration.sql`
+3. Optionally run `sql/sample-ajay-add.sql`
+
+This will remove all current members, loans, repayments, top-ups, settings, and audit logs.
 
 **What this script does:**
 - **Recreates Active Tables**: Sets up `members`, `loans`, `loan_repayments`, `loan_topups`, `app_settings`, and `audit_logs`.
