@@ -109,7 +109,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
           date: r.date,
           amount: r.amount,
           interestPaid: r.interest_paid || 0,
-          principalPaid: r.principal_paid || 0,
+          principalPaid: r.principal_paid || (r.interest_paid === 0 ? r.amount : 0),
           lateFee: r.late_fee || 0,
           method: r.method as PaymentMethod,
           notes: r.notes

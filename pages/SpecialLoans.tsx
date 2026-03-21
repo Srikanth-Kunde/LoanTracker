@@ -347,7 +347,7 @@ const SpecialLoans: React.FC = () => {
             const y = checkYear;
             const wasPaid = loanRepayments.some(r => {
                 const [rYear, rMonth] = r.date.split('-').map(Number);
-                return rMonth === m && rYear === y && r.loanId === loan.id;
+                return rMonth === m && rYear === y && r.loanId === loan.id && (r.interestPaid || 0) > 0;
             });
             if (!wasPaid) {
                 missedMonths.push(`${MONTHS[m - 1]} ${y}`);
@@ -645,7 +645,7 @@ const SpecialLoans: React.FC = () => {
         while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
             const hasPayment = loanRepaymentsForLoan.some(r => {
                 const [y, m] = r.date.split('-').map(Number);
-                return y === currentY && m === currentM && ((r.interestPaid || 0) > 0 || (r.principalPaid || 0) > 0);
+                return y === currentY && m === currentM && ((r.interestPaid || 0) > 0);
             });
 
             if (!hasPayment) {
@@ -660,7 +660,7 @@ const SpecialLoans: React.FC = () => {
                     
                     missingRecords.push({
                         loanId: loan.id,
-                        date: `${currentY}-${String(currentM).padStart(2, '0')}-01`,
+                        date: getLastDayOfMonthISO(currentY, currentM),
                         amount: interestDue,
                         interestPaid: interestDue,
                         principalPaid: 0,
