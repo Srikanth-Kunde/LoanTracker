@@ -99,6 +99,8 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Enhanced Date Navigation**: Replaced linear month-switchers with direct Month/Year dropdown selectors in the Special Loans view, enabling instant jumps to historical data (e.g., 2012).
 *   **Auto-Generate Historical Interest**: Added a single-click "Auto-Gen" tool to automatically traverse a legacy loan's history month-by-month and backfill all missing interest payment records based on dynamically calculated outstanding principal balances.
 *   **Auto-Generate Interest Edge-Case Handling**: Fortified mathematical calculations to strictly evaluate liability across months where only partial principal was recovered, gracefully handle missing SQL `principal_paid` mappings for manual test entries, perfectly align output timestamps to the end of the month (e.g. `31-08-2017`), and allowed auto-generation to seamlessly function on historic legacy loans that are already marked as Closed.
+*   **Robust Date Parsing**: Upgraded all date-handling utilities to natively support both dash-separated (`YYYY-MM-DD`) and slash-separated (`DD/MM/YYYY`) formats, as well as Indian-style shorthand (`DD-MM-YYYY`). This ensures legacy manual data imported via SQL can still be correctly parsed for interest calculations and audit reporting.
+
 
 
 
