@@ -90,11 +90,7 @@ const SpecialLoans: React.FC = () => {
     });
     const [topupLoan, setTopupLoan] = useState<EnrichedLoan | null>(null);
 
-    // Auto-Gen state
     const [autoGenLoan, setAutoGenLoan] = useState<EnrichedLoan | null>(null);
-    const [autoGenPreview, setAutoGenPreview] = useState<{ months: number, totalInterest: number, records: Omit<LoanRepayment, 'id'>[] }>({
-        months: 0, totalInterest: 0, records: []
-    });
 
     const [repayForm, setRepayForm] = useState({
         principal: '',
@@ -259,6 +255,66 @@ const SpecialLoans: React.FC = () => {
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loans, members, loanRepayments, loanTopups, selectedMonth, selectedYear, searchTerm, statusFilter, sortOrder]);
+
+    const autoGenPreview = useMemo(() => {
+        if (!autoGenLoan) return { months: 0, totalInterest: 0, records: [] };
+        
+        const { year: startYear, month: startMonth } = getISODateMonthYear(autoGenLoan.startDate);
+        const today = new Date();
+        const endYear = today.getFullYear();
+        const endMonth = today.getMonth() + 1;
+
+        const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === autoGenLoan.id);
+        
+        const paidMonths = new Set(
+            loanRepaymentsForLoan
+                .filter(r => (r.interestPaid || 0) > 0)
+                .map(r => {
+                    try {
+                        const { year, month } = getISODateMonthYear(r.date);
+                        return `${year}-${month}`;
+                    } catch (e) { return null; }
+                })
+                .filter(Boolean) as string[]
+        );
+
+        let currentY = startYear;
+        let currentM = startMonth + 1;
+        if (currentM > 12) { currentM = 1; currentY++; }
+        
+        const missingRecords: Omit<LoanRepayment, 'id'>[] = [];
+        let totalInterest = 0;
+        
+        while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
+            const monthKey = `${currentY}-${currentM}`;
+            if (!paidMonths.has(monthKey)) {
+                const prevMDate = new Date(currentY, currentM - 1, 0); // Last day of previous month
+                const asOf = `${prevMDate.getFullYear()}-${String(prevMDate.getMonth() + 1).padStart(2, '0')}-${String(prevMDate.getDate()).padStart(2, '0')}`;
+                const outstanding = getSpecialLoanOutstanding(autoGenLoan.id, asOf);
+                
+                if (outstanding > 1) { // Balance > 1 to ignore rounding dust
+                    const interestDue = Math.round(outstanding * (autoGenLoan.interestRate / 100));
+                    totalInterest += interestDue;
+                    
+                    missingRecords.push({
+                        loanId: autoGenLoan.id,
+                        date: getLastDayOfMonthISO(currentY, currentM),
+                        amount: interestDue,
+                        interestPaid: interestDue,
+                        principalPaid: 0,
+                        lateFee: 0,
+                        method: PaymentMethod.CASH,
+                        notes: 'Auto-generated historical interest'
+                    });
+                }
+            }
+            
+            currentM++;
+            if (currentM > 12) { currentM = 1; currentY++; }
+        }
+        
+        return { months: missingRecords.length, totalInterest, records: missingRecords };
+    }, [autoGenLoan, loanRepayments, loanTopups, getSpecialLoanOutstanding]);
 
     const stats = useMemo(() => {
         const specialLoans = loans.filter(l => l.type === LoanType.SPECIAL && l.status === LoanStatus.ACTIVE);
@@ -647,9 +703,7 @@ const SpecialLoans: React.FC = () => {
             try {
                 await wipeLoanInterest(target.id);
                 log('WIPE_INTEREST', 'loan_repayments', target.id, { memberName: target.memberName });
-                // Re-open/refresh modals to see changes
-                if (autoGenLoan) openAutoGenModal(target);
-                else setModals(prev => ({ ...prev })); // Force re-render
+                // No need to manually refresh, useMemo handles it
             } catch (error) {
                 logger.error("Error wiping interest", error);
                 alert("Failed to wipe interest records");
@@ -659,72 +713,13 @@ const SpecialLoans: React.FC = () => {
 
     const openAutoGenModal = (loan: EnrichedLoan) => {
         if (!canRepayLoan) return;
-        
-        const { year: startYear, month: startMonth } = getISODateMonthYear(loan.startDate);
-        const today = new Date();
-        const endYear = today.getFullYear();
-        const endMonth = today.getMonth() + 1;
-
-        const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === loan.id);
-        
-        // Pre-parse paid months into a Set for fast lookup
-        const paidMonths = new Set(
-            loanRepaymentsForLoan
-                .filter(r => (r.interestPaid || 0) > 0)
-                .map(r => {
-                    try {
-                        const { year, month } = getISODateMonthYear(r.date);
-                        return `${year}-${month}`;
-                    } catch (e) { return null; }
-                })
-                .filter(Boolean) as string[]
-        );
-
-        let currentY = startYear;
-        let currentM = startMonth + 1; // Obligation starts next month
-        if (currentM > 12) { currentM = 1; currentY++; }
-        
-        const missingRecords: Omit<LoanRepayment, 'id'>[] = [];
-        let totalInterest = 0;
-        
-        while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
-            const monthKey = `${currentY}-${currentM}`;
-            const hasPayment = paidMonths.has(monthKey);
-
-            if (!hasPayment) {
-                const prevMDate = new Date(currentY, currentM - 1, 0, 23, 59, 59);
-                const isoDateStr = `${prevMDate.getFullYear()}-${String(prevMDate.getMonth() + 1).padStart(2, '0')}-${String(prevMDate.getDate()).padStart(2, '0')}T23:59:59.000Z`;
-                const outstanding = getSpecialLoanOutstanding(loan.id, isoDateStr);
-                
-                if (outstanding > 0) {
-                    const interestDue = Math.round(outstanding * (loan.interestRate / 100));
-                    totalInterest += interestDue;
-                    
-                    missingRecords.push({
-                        loanId: loan.id,
-                        date: getLastDayOfMonthISO(currentY, currentM),
-                        amount: interestDue,
-                        interestPaid: interestDue,
-                        principalPaid: 0,
-                        lateFee: 0,
-                        method: PaymentMethod.CASH,
-                        notes: 'Auto-generated historical interest'
-                    });
-                }
-            }
-            
-            currentM++;
-            if (currentM > 12) { currentM = 1; currentY++; }
-        }
-        
-        setAutoGenPreview({ months: missingRecords.length, totalInterest, records: missingRecords });
         setAutoGenLoan(loan);
         setModals({ ...modals, autoGen: true });
     };
 
     const handleGenerateInterest = async () => {
         try {
-            await useFinancials().bulkRecordLoanRepayments(autoGenPreview.records);
+            await bulkRecordLoanRepayments(autoGenPreview.records);
             log('BULK_RECORD_INTEREST', 'loan_repayments', autoGenLoan?.id || '', { generatedCount: autoGenPreview.months, totalAmount: autoGenPreview.totalInterest });
             setModals({ ...modals, autoGen: false });
         } catch (error) {
