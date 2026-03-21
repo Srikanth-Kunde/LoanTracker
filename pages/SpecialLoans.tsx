@@ -46,8 +46,6 @@ interface EnrichedLoan extends Loan {
     selectedMonthLateFee: number;
     selectedPeriodInterestPaid: number;
     lastInterestPaymentDate?: string | null;
-    missedMonths?: string[];
-    missedMonthsDetails?: { month: number, year: number, principal: number, interest: number, lateFee: number }[];
 }
 
 const SpecialLoans: React.FC = () => {
@@ -123,6 +121,68 @@ const SpecialLoans: React.FC = () => {
         date: '',
         status: LoanStatus.ACTIVE
     });
+
+    const getRepaymentPreview = (loan: EnrichedLoan, collectionDate: string) => {
+        const collectionPeriod = getISODateMonthYear(collectionDate);
+        const previousPeriod = collectionPeriod.month === 1
+            ? { year: collectionPeriod.year - 1, month: 12 }
+            : { year: collectionPeriod.year, month: collectionPeriod.month - 1 };
+        const currentLoanTopups = loanTopups.filter(t => t.loanId === loan.id);
+        const currentLoanRepayments = loanRepayments.filter(r => r.loanId === loan.id);
+        const missedPeriods = getMissingInterestPeriods(
+            loan,
+            currentLoanTopups,
+            currentLoanRepayments,
+            previousPeriod
+        );
+        const currentPeriodDue = getInterestDueForPeriod(
+            loan,
+            currentLoanTopups,
+            currentLoanRepayments,
+            collectionPeriod
+        );
+        const currentPeriodInterestPaid = getInterestPaidForPeriod(currentLoanRepayments, loan.id, collectionPeriod);
+        const currentPeriodAlreadyPaid = currentPeriodInterestPaid > 0;
+        const missedMonthsDetails = missedPeriods.map(period => ({
+            month: period.month,
+            year: period.year,
+            principal: 0,
+            interest: Math.round(period.interestDue),
+            lateFee: 0
+        }));
+        const arrearsInterest = missedMonthsDetails.reduce((sum, period) => sum + period.interest, 0);
+        const currentInterestDue = currentPeriodAlreadyPaid ? 0 : Math.round(currentPeriodDue.interestDue);
+
+        return {
+            collectionPeriod,
+            currentPeriodAlreadyPaid,
+            currentInterestDue,
+            arrearsInterest,
+            totalSuggestedInterest: arrearsInterest + currentInterestDue,
+            missedMonthsDetails
+        };
+    };
+
+    const repaymentPreview = useMemo(() => {
+        if (!activeLoan || !repayForm.date) return null;
+        return getRepaymentPreview(activeLoan, repayForm.date);
+    }, [activeLoan, repayForm.date, loanRepayments, loanTopups]);
+
+    const repaymentPreviewSummary = useMemo(() => {
+        if (!repaymentPreview) return null;
+        const missed = repaymentPreview.missedMonthsDetails;
+        if (missed.length === 0) {
+            return `Current period ${MONTHS[repaymentPreview.collectionPeriod.month - 1]} ${repaymentPreview.collectionPeriod.year}: ${formatCurrency(repaymentPreview.currentInterestDue, settings.currency)}`;
+        }
+
+        const first = missed[0];
+        const last = missed[missed.length - 1];
+        const arrearsRange = missed.length === 1
+            ? `${MONTHS[first.month - 1]} ${first.year}`
+            : `${MONTHS[first.month - 1]} ${first.year} to ${MONTHS[last.month - 1]} ${last.year}`;
+
+        return `Arrears: ${missed.length} month${missed.length > 1 ? 's' : ''} (${arrearsRange}) = ${formatCurrency(repaymentPreview.arrearsInterest, settings.currency)}. Current period ${MONTHS[repaymentPreview.collectionPeriod.month - 1]} ${repaymentPreview.collectionPeriod.year} = ${formatCurrency(repaymentPreview.currentInterestDue, settings.currency)}.`;
+    }, [repaymentPreview, settings.currency]);
 
     const activeLoanTransactions = useMemo(() => {
         if (!activeLoan) return [];
@@ -364,26 +424,7 @@ const SpecialLoans: React.FC = () => {
 
     const openRepayModal = (loan: EnrichedLoan) => {
         if (!canRepayLoan) return;
-
-        // Detect missed payments before this selected month
-        const currentLoanTopups = loanTopups.filter(t => t.loanId === loan.id);
-        const currentLoanRepayments = loanRepayments.filter(r => r.loanId === loan.id);
-        const missedPeriods = getMissingInterestPeriods(
-            loan,
-            currentLoanTopups,
-            currentLoanRepayments,
-            selectedMonth === 1 ? { year: selectedYear - 1, month: 12 } : { year: selectedYear, month: selectedMonth - 1 }
-        );
-        const missedMonths = missedPeriods.map(period => `${MONTHS[period.month - 1]} ${period.year}`);
-        const missedMonthsDetails = missedPeriods.map(period => ({
-            month: period.month,
-            year: period.year,
-            principal: 0,
-            interest: Math.round(period.interestDue),
-            lateFee: 0
-        }));
-
-        setActiveLoan({ ...loan, missedMonths, missedMonthsDetails } as any);
+        setActiveLoan(loan);
         const today = new Date();
         let defaultDate = today.toISOString().split('T')[0];
         if (selectedMonth !== today.getMonth() + 1 || selectedYear !== today.getFullYear()) {
@@ -391,12 +432,11 @@ const SpecialLoans: React.FC = () => {
             defaultDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
         }
 
-        const arrearsInterest = missedMonthsDetails.reduce((sum, period) => sum + period.interest, 0);
-        const currentInterest = loan.isPaidSelectedMonth ? 0 : loan.interestComp;
+        const preview = getRepaymentPreview(loan, defaultDate);
 
         setRepayForm({
             principal: '0',
-            interest: (arrearsInterest + currentInterest).toString(),
+            interest: preview.totalSuggestedInterest.toString(),
             lateFee: '0',
             date: defaultDate,
             method: PaymentMethod.CASH,
@@ -413,6 +453,7 @@ const SpecialLoans: React.FC = () => {
             const pAmt = parseFloat(repayForm.principal) || 0;
             const iAmt = parseFloat(repayForm.interest) || 0;
             const lFee = parseFloat(repayForm.lateFee) || 0;
+            const preview = getRepaymentPreview(activeLoan, repayForm.date);
 
             if (compareISODate(repayForm.date, activeLoan.startDate) < 0) {
                 throw new Error(`Repayment date cannot be before loan start date`);
@@ -423,13 +464,13 @@ const SpecialLoans: React.FC = () => {
             if (pAmt > currentOutstanding + 10) throw new Error(`Principal repaid (₹${pAmt}) exceeds outstanding balance (₹${currentOutstanding})`);
 
             let splitCount = 0;
-            if (activeLoan.missedMonthsDetails && activeLoan.missedMonthsDetails.length > 0) {
-                const arrearsInterest = activeLoan.missedMonthsDetails.reduce((sum, month) => sum + month.interest, 0);
+            if (preview.missedMonthsDetails.length > 0) {
+                const arrearsInterest = preview.missedMonthsDetails.reduce((sum, month) => sum + month.interest, 0);
                 if (iAmt < arrearsInterest) {
                     throw new Error(`Interest amount must cover arrears first (minimum ₹${arrearsInterest}).`);
                 }
 
-                for (const missed of activeLoan.missedMonthsDetails) {
+                for (const missed of preview.missedMonthsDetails) {
                     await recordLoanRepayment({
                         loanId: activeLoan.id,
                         date: repayForm.date,
@@ -451,8 +492,8 @@ const SpecialLoans: React.FC = () => {
                 }
 
                 if (currentInterest > 0 || pAmt > 0 || lFee > 0) {
-                    if (activeLoan.isPaidSelectedMonth && currentInterest > 0) {
-                        throw new Error(`Interest for ${MONTHS[selectedMonth - 1]} ${selectedYear} is already settled.`);
+                    if (preview.currentPeriodAlreadyPaid && currentInterest > 0) {
+                        throw new Error(`Interest for ${MONTHS[preview.collectionPeriod.month - 1]} ${preview.collectionPeriod.year} is already settled.`);
                     }
                     await recordLoanRepayment({
                         loanId: activeLoan.id,
@@ -461,16 +502,16 @@ const SpecialLoans: React.FC = () => {
                         principalPaid: pAmt,
                         interestPaid: currentInterest,
                         lateFee: lFee,
-                        interestForMonth: currentInterest > 0 ? selectedMonth : undefined,
-                        interestForYear: currentInterest > 0 ? selectedYear : undefined,
+                        interestForMonth: currentInterest > 0 ? preview.collectionPeriod.month : undefined,
+                        interestForYear: currentInterest > 0 ? preview.collectionPeriod.year : undefined,
                         method: repayForm.method,
                         notes: repayForm.notes
                     });
                     splitCount++;
                 }
             } else {
-                if (activeLoan.isPaidSelectedMonth && iAmt > 0) {
-                    throw new Error(`Interest for ${MONTHS[selectedMonth - 1]} ${selectedYear} is already settled. Record principal only or edit the existing entry.`);
+                if (preview.currentPeriodAlreadyPaid && iAmt > 0) {
+                    throw new Error(`Interest for ${MONTHS[preview.collectionPeriod.month - 1]} ${preview.collectionPeriod.year} is already settled. Record principal only or edit the existing entry.`);
                 }
                 await recordLoanRepayment({
                     loanId: activeLoan.id,
@@ -479,8 +520,8 @@ const SpecialLoans: React.FC = () => {
                     principalPaid: pAmt,
                     interestPaid: iAmt,
                     lateFee: lFee,
-                    interestForMonth: iAmt > 0 ? selectedMonth : undefined,
-                    interestForYear: iAmt > 0 ? selectedYear : undefined,
+                    interestForMonth: iAmt > 0 ? preview.collectionPeriod.month : undefined,
+                    interestForYear: iAmt > 0 ? preview.collectionPeriod.year : undefined,
                     method: repayForm.method,
                     notes: repayForm.notes
                 });
@@ -1037,9 +1078,9 @@ const SpecialLoans: React.FC = () => {
                                 <div className="text-right">
                                     <div className="text-violet-700 dark:text-violet-300 font-black text-sm">{formatCurrency(activeLoan.historicalOutstanding, settings.currency)} outstanding</div>
                                     <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                                        {activeLoan.isPaidSelectedMonth
-                                            ? `Interest for ${MONTHS[selectedMonth - 1]} ${selectedYear} already settled`
-                                            : `Interest Due: ${formatCurrency(activeLoan.interestComp, settings.currency)}`}
+                                        {repaymentPreview?.currentPeriodAlreadyPaid
+                                            ? `Interest for ${MONTHS[repaymentPreview.collectionPeriod.month - 1]} ${repaymentPreview.collectionPeriod.year} already settled`
+                                            : `Interest Due: ${formatCurrency(repaymentPreview?.currentInterestDue || 0, settings.currency)}`}
                                     </div>
                                 </div>
                             </div>
@@ -1047,13 +1088,37 @@ const SpecialLoans: React.FC = () => {
 
                         {errorMsg && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg">{errorMsg}</div>}
 
+                        {repaymentPreviewSummary && (
+                            <div className="p-3 bg-slate-50 text-slate-700 text-xs rounded-lg border border-slate-200">
+                                {repaymentPreviewSummary}
+                            </div>
+                        )}
+
+                        {repaymentPreview && repaymentPreview.missedMonthsDetails.length > 0 && (
+                            <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-lg border border-amber-100">
+                                {repaymentPreview.missedMonthsDetails.length <= 6 ? (
+                                    <>
+                                        Arrears to clear first:
+                                        {' '}
+                                        {repaymentPreview.missedMonthsDetails.map(period => `${MONTHS[period.month - 1]} ${period.year}`).join(', ')}
+                                        {' '}
+                                        ({formatCurrency(repaymentPreview.arrearsInterest, settings.currency)})
+                                    </>
+                                ) : (
+                                    <>
+                                        Arrears month list suppressed because the history is long. Use the summary above for the full range and total.
+                                    </>
+                                )}
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4">
                             <Input
                                 label="Interest Amount"
                                 type="number"
                                 value={repayForm.interest}
                                 onChange={e => setRepayForm({ ...repayForm, interest: e.target.value })}
-                                description="Monthly interest due"
+                                description={repaymentPreview ? `Suggested total interest through ${MONTHS[repaymentPreview.collectionPeriod.month - 1]} ${repaymentPreview.collectionPeriod.year}` : 'Monthly interest due'}
                             />
                             <Input
                                 label="Voluntary Principal ↓"
@@ -1076,7 +1141,17 @@ const SpecialLoans: React.FC = () => {
                             label="Collection Date"
                             type="date"
                             value={repayForm.date}
-                            onChange={e => setRepayForm({ ...repayForm, date: e.target.value })}
+                            onChange={e => {
+                                if (!activeLoan) return;
+                                const nextDate = e.target.value;
+                                const preview = getRepaymentPreview(activeLoan, nextDate);
+                                setRepayForm(prev => ({
+                                    ...prev,
+                                    date: nextDate,
+                                    interest: preview.totalSuggestedInterest.toString()
+                                }));
+                                setErrorMsg('');
+                            }}
                         />
 
                         <div>

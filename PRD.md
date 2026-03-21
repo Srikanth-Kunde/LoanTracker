@@ -110,6 +110,8 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Interest Allocation Model**: Reworked repayment storage so an interest collection can be assigned to a specific settlement month/year instead of inferring the liability month from the payment date alone.
 *   **Principal-Only Recovery Fix**: Corrected the loan status logic so voluntary principal repayments no longer suppress the interest collection workflow for the same month.
 *   **Arrears Posting Fix**: Corrected missed-month posting so arrears are allocated to their actual historical periods without generating negative or mathematically invalid current-period rows.
+*   **Collection-Date Based Due Calculation**: Corrected the repayment modal so interest due is derived from the operator-entered collection date, not merely from the currently selected reporting month.
+*   **Long-History Collection UX**: Added a compact arrears summary for loans spanning many years so the operator can review total arrears, month count, and date range without rendering excessively long month lists.
 *   **Safe Interest Wipe**: Refactored “Wipe Interest” so mixed repayment rows keep their principal component and only the interest allocation is removed.
 *   **Running Balance Determinism**: Refactored the audit ledger to compute row-by-row balance progression using event ordering rather than date-only reconstruction.
 *   **Top-Up Rate History Support**: Top-ups now preserve a rate value that becomes the effective future monthly rate for subsequent interest calculations.

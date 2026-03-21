@@ -174,6 +174,8 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Explicit Interest Settlement Periods**: Repayment rows can now store `interest_for_month` and `interest_for_year`, allowing operators to record “December interest paid in January” without distorting ledger history.
 *   **Principal-Only Repayment Fix**: Principal recoveries no longer mark a month as “interest collected”, which fixes a major historical-entry bug for voluntary part-payments.
 *   **Arrears Split Fix**: Backlog interest is now allocated to the correct historical months instead of back-dating artificial cash movements or generating negative current-month rows.
+*   **Collection-Date Driven Interest Preview**: The repayment modal now recalculates arrears and current-period interest from the entered collection date itself, fixing back-dated entries such as `10-03-2013` needing `Feb 2013 + Mar 2013`.
+*   **Large History UX**: For long-running loans from 2012 onward, the repayment modal now shows a compact arrears summary with month count, date range, and total instead of rendering an unreadable month-by-month list.
 *   **Running Balance Accuracy**: The Special Loan audit ledger now uses deterministic row-by-row balance progression instead of date-only balance reconstruction.
 *   **Interest Wipe Safety**: “Wipe Interest” now preserves principal and mixed repayment rows instead of deleting them wholesale.
 *   **Effective Rate Tracking**: Top-ups can now capture a monthly rate, and the latest effective rate is used in future interest calculations.
