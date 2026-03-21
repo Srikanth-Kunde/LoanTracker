@@ -112,6 +112,7 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Member Details Profile**: Added a comprehensive profile view for members, showing total outstanding, top-ups, and interest collected at a glance.
 *   **Quick Date Selection**: Implemented direct Year and Month dropdowns in the Special Loans tab for significantly faster historical record navigation.
 *   **Audit Report Consistency**: Refactored filtering logic to ensure that UI cards and CSV exports (Tally/Full Audit) are always in sync, even when search filters are applied.
+*   **Auto-Generate Interest Module**: Added a powerful utility to backfill historical legacy ledgers by dynamically generating accurate monthly interest payments with a single click.
 
 *   **Audit Reports**: Extended the Audit Tally and CSV exports to handle historical data from 2012.
 

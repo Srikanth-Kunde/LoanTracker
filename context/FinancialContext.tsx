@@ -20,6 +20,7 @@ interface FinancialContextType {
   updateLoan: (loan: Loan) => Promise<void>;
   deleteLoan: (id: string) => Promise<void>;
   recordLoanRepayment: (repayment: Omit<LoanRepayment, 'id'>) => Promise<void>;
+  bulkRecordLoanRepayments: (repayments: Omit<LoanRepayment, 'id'>[]) => Promise<void>;
   deleteLoanRepayment: (id: string) => Promise<void>;
   closeLoan: (loanId: string) => Promise<void>;
 
@@ -231,7 +232,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
 
   const recordLoanRepayment = useCallback(async (r: Omit<LoanRepayment, 'id'>) => {
     const { error } = await supabase.from('loan_repayments').insert([{
-      id: `rep_${Date.now()}`,
+      id: `rep_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       loan_id: r.loanId,
       date: r.date,
       amount: r.amount,
@@ -241,6 +242,28 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       method: r.method,
       notes: r.notes
     }]);
+
+    if (error) throw error;
+    fetchFinancials();
+  }, [fetchFinancials]);
+
+  const bulkRecordLoanRepayments = useCallback(async (repayments: Omit<LoanRepayment, 'id'>[]) => {
+    if (!repayments.length) return;
+    
+    // Process in batches if large, but typical auto-generate is < 150 months so single insert is fine
+    const payload = repayments.map((r, i) => ({
+      id: `rep_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+      loan_id: r.loanId,
+      date: r.date,
+      amount: r.amount,
+      interest_paid: r.interestPaid,
+      principal_paid: r.principalPaid,
+      late_fee: r.lateFee || 0,
+      method: r.method,
+      notes: r.notes
+    }));
+
+    const { error } = await supabase.from('loan_repayments').insert(payload);
 
     if (error) throw error;
     fetchFinancials();
@@ -350,7 +373,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     <FinancialContext.Provider value={{
       payments, loans, loanRepayments, loanTopups,
       recordPayment, deletePayment, getMemberPayments, getPaymentById,
-      createLoan, updateLoan, deleteLoan, recordLoanRepayment, deleteLoanRepayment,
+      createLoan, updateLoan, deleteLoan, recordLoanRepayment, bulkRecordLoanRepayments, deleteLoanRepayment,
       closeLoan,
       addLoanTopup, deleteLoanTopup, getSpecialLoanOutstanding,
       setFinancialData, importFinancials, deleteAllFinancials, resetFinancials,

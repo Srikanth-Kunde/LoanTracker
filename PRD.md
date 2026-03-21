@@ -97,6 +97,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   Audit CSV exports now maintain perfect consistency with UI cards by utilizing unified filtering and chronological voucher sequencing.
 *   **Member Details View**: Integrated a specialized profile modal in the Members tab, providing a deep-dive into individual financial standing and historical loan summaries.
 *   **Enhanced Date Navigation**: Replaced linear month-switchers with direct Month/Year dropdown selectors in the Special Loans view, enabling instant jumps to historical data (e.g., 2012).
+*   **Auto-Generate Historical Interest**: Added a single-click "Auto-Gen" tool to automatically traverse a legacy loan's history month-by-month and backfill all missing interest payment records based on dynamically calculated outstanding principal balances.
 
 
 

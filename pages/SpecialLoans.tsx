@@ -64,8 +64,9 @@ const SpecialLoans: React.FC = () => {
         calc: boolean;
         history: boolean;
         edit: boolean;
-        topup: boolean;   // NEW: top-up modal
-    }>({ create: false, repay: false, calc: false, history: false, edit: false, topup: false });
+        topup: boolean;
+        autoGen: boolean;
+    }>({ create: false, repay: false, calc: false, history: false, edit: false, topup: false, autoGen: false });
 
     const [printScheduleLoan, setPrintScheduleLoan] = useState<EnrichedLoan | null>(null);
 
@@ -87,6 +88,12 @@ const SpecialLoans: React.FC = () => {
         notes: ''
     });
     const [topupLoan, setTopupLoan] = useState<EnrichedLoan | null>(null);
+
+    // Auto-Gen state
+    const [autoGenLoan, setAutoGenLoan] = useState<EnrichedLoan | null>(null);
+    const [autoGenPreview, setAutoGenPreview] = useState<{ months: number, totalInterest: number, records: Omit<LoanRepayment, 'id'>[] }>({
+        months: 0, totalInterest: 0, records: []
+    });
 
     const [repayForm, setRepayForm] = useState({
         principal: '',
@@ -617,6 +624,74 @@ const SpecialLoans: React.FC = () => {
         }
     };
 
+    const openAutoGenModal = (loan: EnrichedLoan) => {
+        if (!canRepayLoan) return;
+        
+        const startYear = parseInt(loan.startDate.substring(0, 4));
+        const startMonth = parseInt(loan.startDate.substring(5, 7));
+        const today = new Date();
+        const endYear = today.getFullYear();
+        const endMonth = today.getMonth() + 1;
+
+        const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === loan.id);
+        
+        let currentY = startYear;
+        let currentM = startMonth + 1; // Obligation starts next month
+        if (currentM > 12) { currentM = 1; currentY++; }
+        
+        const missingRecords: Omit<LoanRepayment, 'id'>[] = [];
+        let totalInterest = 0;
+        
+        while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
+            const hasPayment = loanRepaymentsForLoan.some(r => {
+                const [y, m] = r.date.split('-').map(Number);
+                return y === currentY && m === currentM && ((r.interestPaid || 0) > 0 || (r.principalPaid || 0) > 0);
+            });
+
+            if (!hasPayment) {
+                // Determine outstanding as of end of previous month
+                const prevMDate = new Date(currentY, currentM - 1, 0, 23, 59, 59);
+                const isoDateStr = `${prevMDate.getFullYear()}-${String(prevMDate.getMonth() + 1).padStart(2, '0')}-${String(prevMDate.getDate()).padStart(2, '0')}T23:59:59.000Z`;
+                const outstanding = getSpecialLoanOutstanding(loan.id, isoDateStr);
+                
+                if (outstanding > 0) {
+                    const interestDue = Math.round(outstanding * (loan.interestRate / 100));
+                    totalInterest += interestDue;
+                    
+                    missingRecords.push({
+                        loanId: loan.id,
+                        date: `${currentY}-${String(currentM).padStart(2, '0')}-01`,
+                        amount: interestDue,
+                        interestPaid: interestDue,
+                        principalPaid: 0,
+                        lateFee: 0,
+                        method: PaymentMethod.CASH,
+                        notes: 'Auto-generated historical interest'
+                    });
+                }
+            }
+            
+            currentM++;
+            if (currentM > 12) { currentM = 1; currentY++; }
+        }
+        
+        setAutoGenPreview({ months: missingRecords.length, totalInterest, records: missingRecords });
+        setAutoGenLoan(loan);
+        setModals({ ...modals, autoGen: true });
+    };
+
+    const handleGenerateInterest = async () => {
+        try {
+            await useFinancials().bulkRecordLoanRepayments(autoGenPreview.records);
+            log('BULK_RECORD_INTEREST', 'loan_repayments', autoGenLoan?.id || '', { generatedCount: autoGenPreview.months, totalAmount: autoGenPreview.totalInterest });
+            setModals({ ...modals, autoGen: false });
+        } catch (error) {
+            const e = error as Error;
+            logger.error("Error generating interest", e);
+            alert("Error generating interest: " + e.message);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -804,6 +879,11 @@ const SpecialLoans: React.FC = () => {
                                                     Collect
                                                 </Button>
                                             )}
+                                            {canCreateLoan && loan.status === LoanStatus.ACTIVE && (
+                                                <Button size="sm" variant="ghost" onClick={() => openAutoGenModal(loan)} title="Auto-Generate Interest History" className="text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 px-2">
+                                                    <Zap size={14} className="mr-1 inline" /> Auto-Gen
+                                                </Button>
+                                            )}
                                             {loan.isPaidSelectedMonth && loan.status === LoanStatus.ACTIVE && (
                                                 <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded cursor-not-allowed select-none" title="Already collected this month">
                                                     ✓ Paid
@@ -820,7 +900,7 @@ const SpecialLoans: React.FC = () => {
                                             )}
                                             {role === UserRole.ADMIN && (
                                                 <>
-                                                    <Button size="sm" variant="ghost" icon={Zap} onClick={() => handlePreClose(loan)} title="Pre-close Loan" className="text-amber-600 hover:bg-amber-50" />
+                                                    <Button size="sm" variant="ghost" icon={AlertTriangle} onClick={() => handlePreClose(loan)} title="Pre-close Loan" className="text-rose-600 hover:bg-rose-50" />
                                                     <Button size="sm" variant="ghost" icon={Edit} onClick={() => openEditModal(loan)} title="Edit Loan" />
                                                     <Button size="sm" variant="ghost" icon={Trash2} onClick={() => handleDeleteLoan(loan.id)} className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" title="Delete Loan" />
                                                 </>
@@ -1060,6 +1140,32 @@ const SpecialLoans: React.FC = () => {
                         </Button>
                     </div>
                 )}
+            </Modal>
+
+            <Modal isOpen={modals.autoGen && !!autoGenLoan} onClose={() => setModals({ ...modals, autoGen: false })} title="Auto-Generate Interest Payments" maxWidth="max-w-md">
+                <div className="space-y-6 pt-2">
+                    <div className="bg-amber-50 dark:bg-amber-900/30 p-4 rounded-lg flex gap-3 text-amber-800 dark:text-amber-200 text-sm">
+                        <AlertTriangle className="shrink-0 mt-0.5" />
+                        <p>This will automatically calculate and record interest payments for all missing months from the loan's start date ({autoGenLoan && formatDisplayDate(autoGenLoan.startDate)}) until the current month.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                            <span className="text-slate-500 font-medium">Missing Months Detected</span>
+                            <span className="font-bold text-slate-900 dark:text-white text-xl">{autoGenPreview.months}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                            <span className="text-slate-500 font-medium">Total Interest Calculated</span>
+                            <span className="font-bold text-amber-600 text-xl">{formatCurrency(autoGenPreview.totalInterest, settings.currency)}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">Interest is calculated month-by-month based on the outstanding principal at that time, accounting for any top-ups or partial repayments.</p>
+                    </div>
+
+                    <div className="flex justify-end gap-3 mt-6">
+                        <Button variant="outline" onClick={() => setModals({ ...modals, autoGen: false })}>Cancel</Button>
+                        <Button onClick={handleGenerateInterest} disabled={autoGenPreview.months === 0}>Generate {autoGenPreview.months} Records</Button>
+                    </div>
+                </div>
             </Modal>
 
             {/* LOAN DETAILS MODAL — Expanded width for ledger stability */}
