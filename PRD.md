@@ -1,10 +1,11 @@
-# Product Requirements Document (PRD)
-## LoanTracker: Special Loans Edition
+# Legacy Loan Tracker - PRD
+## Product Overview
+Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present).
 
 ---
 
 ### 1. Overview & Objective
-A specialized digital ledger system to manage complex "Special Loans" for groups of over 40 members. This system modernizes a physical, handwritten ledger dating back to 2012, characterized by members taking multiple interest-only loans, frequent principal top-ups, and varying interest payment structures (e.g., prorated 15/20 day interest periods).
+A dedicated digital ledger designed to digitize and audit handwritten loan records dating back to 2012. This system follows the specific group dynamic where members take multiple interest-only loans, perform frequent principal top-ups, and make partial repayments. **Regular Savings (Podhupu) features are explicitly excluded** to prioritize loan auditing accuracy.
 
 ### 2. Core Principles & Philosophy
 *   **Manual Override is King**: The physical ledger contains many exceptions (e.g., waived late fees, prorated interest). The system must never auto-enforce strict calculations that prevent the operator from matching the physical book.
@@ -37,9 +38,9 @@ A specialized digital ledger system to manage complex "Special Loans" for groups
 *   Late fees are recorded *only* if explicitly entered by the Operator during a repayment collection.
 
 #### 3.6. Audit & Reporting
-*   A compact audit workspace to review total capital deployed via Special Loans and total interest collected without a generic savings dashboard.
-*   A comprehensive Audit Report tracking every principal disbursement (Loans + Top-ups) and every collection (Interest + Principal + Late Fees) chronologically.
-*   Audit review must support all-time history from 2012 onward, not just a fixed current-year reporting window.
+*   A clean audit workspace to review total capital deployed and interest collected across all legacy records.
+*   A comprehensive Audit Report tracking every principal disbursement and collection chronologically.
+*   Audit review must support all-time history from 2012 onward.
 
 #### 3.7. Member Management
 *   A centralized interface to manage the society's 40+ members.

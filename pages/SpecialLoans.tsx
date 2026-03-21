@@ -44,7 +44,8 @@ const SpecialLoans: React.FC = () => {
     const { members } = useMembers();
     const {
         loans, loanRepayments, createLoan, updateLoan, deleteLoan,
-        recordLoanRepayment, closeLoan
+        recordLoanRepayment, closeLoan,
+        deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, bulkRecordLoanRepayments
     } = useFinancials();
     const { role } = useAuth();
     const { loanTopups, addLoanTopup, getSpecialLoanOutstanding } = useFinancials();
@@ -99,8 +100,8 @@ const SpecialLoans: React.FC = () => {
         principal: '',
         interest: '',
         lateFee: '0',
-        date: '',
-        method: PaymentMethod.CASH as PaymentMethod,
+        date: new Date().toISOString().split('T')[0],
+        method: PaymentMethod.CASH,
         notes: ''
     });
 
@@ -114,6 +115,14 @@ const SpecialLoans: React.FC = () => {
         date: '',
         status: LoanStatus.ACTIVE
     });
+
+    const activeLoanTransactions = useMemo(() => {
+        if (!activeLoan) return [];
+        const repayments = loanRepayments.filter(r => r.loanId === activeLoan.id).map(r => ({ ...r, entryType: 'REPAYMENT' }));
+        const topups = loanTopups.filter(t => t.loanId === activeLoan.id).map(t => ({ ...t, entryType: 'TOPUP' }));
+        
+        return [...repayments, ...topups].sort((a, b) => compareISODate(a.date, (b as any).date));
+    }, [activeLoan, loanRepayments, loanTopups]);
 
     // Permissions
     const canCreateLoan = role === UserRole.ADMIN;
@@ -620,6 +629,30 @@ const SpecialLoans: React.FC = () => {
                 const e = error as Error;
                 logger.error("Error deleting loan", e);
                 alert("Error deleting loan: " + e.message);
+            }
+        }
+    };
+
+    const handleWipeInterest = async () => {
+        const target = activeLoan || autoGenLoan;
+        if (!target) return;
+
+        const interestCount = loanRepayments.filter(r => r.loanId === target.id && (r.interestPaid || 0) > 0).length;
+        if (interestCount === 0) {
+            alert("No interest records found to wipe.");
+            return;
+        }
+
+        if (confirm(`CAUTION: This will delete ALL ${interestCount} recorded interest payments for this loan. Principal repayments will be kept. Proceed?`)) {
+            try {
+                await wipeLoanInterest(target.id);
+                log('WIPE_INTEREST', 'loan_repayments', target.id, { memberName: target.memberName });
+                // Re-open/refresh modals to see changes
+                if (autoGenLoan) openAutoGenModal(target);
+                else setModals(prev => ({ ...prev })); // Force re-render
+            } catch (error) {
+                logger.error("Error wiping interest", error);
+                alert("Failed to wipe interest records");
             }
         }
     };
@@ -1170,97 +1203,141 @@ const SpecialLoans: React.FC = () => {
                         <p className="text-xs text-slate-400 mt-2">Interest is calculated month-by-month based on the outstanding principal at that time, accounting for any top-ups or partial repayments.</p>
                     </div>
 
-                    <div className="flex justify-end gap-3 mt-6">
-                        <Button variant="outline" onClick={() => setModals({ ...modals, autoGen: false })}>Cancel</Button>
-                        <Button onClick={handleGenerateInterest} disabled={autoGenPreview.months === 0}>Generate {autoGenPreview.months} Records</Button>
+                    <div className="flex justify-between gap-3 mt-6">
+                        {autoGenPreview.months === 0 && loanRepayments.filter(r => r.loanId === (autoGenLoan?.id) && (r.interestPaid || 0) > 0).length > 0 && (
+                            <Button variant="danger" onClick={handleWipeInterest} className="bg-red-50 text-red-600 hover:bg-red-100 border-red-200">
+                                <Trash2 size={16} className="mr-2" />
+                                Wipe & Re-gen
+                            </Button>
+                        )}
+                        <div className="flex gap-3 ml-auto">
+                            <Button variant="outline" onClick={() => setModals({ ...modals, autoGen: false })}>Cancel</Button>
+                            <Button onClick={handleGenerateInterest} disabled={autoGenPreview.months === 0}>Generate {autoGenPreview.months} Records</Button>
+                        </div>
                     </div>
                 </div>
             </Modal>
 
             {/* LOAN DETAILS MODAL — Expanded width for ledger stability */}
-            < Modal isOpen={modals.history} onClose={() => setModals({ ...modals, history: false })} title="Special Loan Summary" maxWidth="3xl" >
+            <Modal isOpen={modals.history} onClose={() => setModals({ ...modals, history: false })} title="Special Loan Audit Ledger" maxWidth="4xl">
                 {activeLoan && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-4 gap-3">
                             <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                                <p className="text-slate-400 text-[9px] uppercase font-bold mb-1">Total Disbursed</p>
-                                <p className="font-black text-slate-800 dark:text-white">{formatCurrency(activeLoan.principalAmount + loanTopups.filter(t => t.loanId === activeLoan.id).reduce((s, t) => s + t.amount, 0), settings.currency)}</p>
-                                <p className="text-[9px] text-slate-400">{formatCurrency(activeLoan.principalAmount, settings.currency)} orig</p>
+                                <p className="text-slate-400 text-[9px] uppercase font-bold mb-1">Original Principal</p>
+                                <p className="font-black text-slate-800 dark:text-white">{formatCurrency(activeLoan.principalAmount, settings.currency)}</p>
+                            </div>
+                            <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-100 dark:border-violet-800 text-center">
+                                <p className="text-violet-500 text-[9px] uppercase font-bold mb-1">Total Top-Ups</p>
+                                <p className="font-black text-violet-800 dark:text-violet-200">{formatCurrency(loanTopups.filter(t => t.loanId === activeLoan.id).reduce((s, t) => s + t.amount, 0), settings.currency)}</p>
                             </div>
                             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 text-center">
-                                <p className="text-blue-500 text-[9px] uppercase font-bold mb-1">Repaid</p>
+                                <p className="text-blue-500 text-[9px] uppercase font-bold mb-1">Principal Repaid</p>
                                 <p className="font-black text-blue-800 dark:text-blue-200">{formatCurrency(activeLoan.historicalPrincipalPaid, settings.currency)}</p>
                             </div>
-                            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800 text-center">
-                                <p className="text-amber-600 text-[9px] uppercase font-bold mb-1">Balance</p>
-                                <p className="font-black text-amber-900 dark:text-amber-200">{formatCurrency(activeLoan.historicalOutstanding, settings.currency)}</p>
+                            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800 text-center shadow-inner">
+                                <p className="text-amber-600 text-[9px] uppercase font-bold mb-1">Live Balance</p>
+                                <p className="font-black text-xl text-amber-900 dark:text-amber-200">{formatCurrency(activeLoan.historicalOutstanding, settings.currency)}</p>
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Loan Specifications</h4>
-                            <div className="grid grid-cols-2 gap-x-8 gap-y-3 p-4 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                <div className="flex justify-between border-b border-slate-200 pb-1">
-                                    <span className="text-xs text-slate-500">Member</span>
-                                    <span className="text-xs font-bold dark:text-white">{activeLoan.memberName}</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-200 pb-1">
-                                    <span className="text-xs text-slate-500">Interest Rate</span>
-                                    <span className="text-xs font-bold dark:text-white">{activeLoan.interestRate}%/mo</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-200 pb-1">
-                                    <span className="text-xs text-slate-500">Method</span>
-                                    <span className="text-xs font-bold dark:text-white">{activeLoan.calculationMethod}</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-200 pb-1">
-                                    <span className="text-xs text-slate-500">Tenure</span>
-                                    <span className="text-xs font-bold dark:text-white">{activeLoan.durationMonths === 0 ? "Open-ended (Interest-Only)" : `${activeLoan.durationMonths} Months`}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-xs text-slate-500">Start Date</span>
-                                    <span className="text-xs font-bold dark:text-white">{formatDisplayDate(activeLoan.startDate)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-xs text-slate-500">Status</span>
-                                    <span className="text-xs font-bold uppercase text-amber-600">{activeLoan.status}</span>
-                                </div>
+                            <div className="flex justify-between shadow-sm items-center">
+                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Transaction Audit Trail</h4>
+                                <Button variant="ghost" size="sm" className="text-[10px] text-red-600" onClick={handleWipeInterest}>Wipe All Interest</Button>
                             </div>
-                        </div>
-
-                        {/* Top-Up History */}
-                        {loanTopups.filter(t => t.loanId === activeLoan.id).length > 0 && (
-                            <div className="space-y-1">
-                                <h4 className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-widest">Top-Up History</h4>
-                                <div className="rounded-xl overflow-hidden border border-violet-100 dark:border-violet-800">
+                            <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+                                <div className="max-h-[400px] overflow-y-auto">
                                     <table className="min-w-full text-xs">
-                                        <thead className="bg-violet-50 dark:bg-violet-900/20">
+                                        <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
                                             <tr>
-                                                <th className="px-3 py-1.5 text-left text-violet-600 font-semibold uppercase">Date</th>
-                                                <th className="px-3 py-1.5 text-right text-violet-600 font-semibold uppercase">Amount</th>
-                                                <th className="px-3 py-1.5 text-right text-violet-600 font-semibold uppercase">Rate</th>
-                                                <th className="px-3 py-1.5 text-left text-violet-600 font-semibold uppercase">Notes</th>
+                                                <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Date</th>
+                                                <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Type</th>
+                                                <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Amount</th>
+                                                <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Principal</th>
+                                                <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Interest</th>
+                                                <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Notes</th>
+                                                <th className="px-4 py-3 text-center font-bold text-slate-500 uppercase">Actions</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-violet-50 dark:divide-violet-900/30 bg-white dark:bg-slate-800">
-                                            {loanTopups.filter(t => t.loanId === activeLoan.id).sort((a, b) => compareISODate(a.date, b.date)).map(t => (
-                                                <tr key={t.id} className="hover:bg-violet-50/50">
-                                                    <td className="px-3 py-1.5">{formatDisplayDate(t.date)}</td>
-                                                    <td className="px-3 py-1.5 text-right font-semibold text-violet-700 dark:text-violet-300">{formatCurrency(t.amount, settings.currency)}</td>
-                                                    <td className="px-3 py-1.5 text-right text-slate-500">{t.rate}%/mo</td>
-                                                    <td className="px-3 py-1.5 text-slate-400 italic">{t.notes || '—'}</td>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {/* Base Loan Disbursal Row */}
+                                            <tr className="bg-emerald-50/20">
+                                                <td className="px-4 py-3 font-medium">{formatDisplayDate(activeLoan.startDate)}</td>
+                                                <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">DISBURSAL</span></td>
+                                                <td className="px-4 py-3 text-right font-black text-emerald-700">{formatCurrency(activeLoan.principalAmount, settings.currency)}</td>
+                                                <td className="px-4 py-3 text-right font-black text-emerald-700">{formatCurrency(activeLoan.principalAmount, settings.currency)}</td>
+                                                <td className="px-4 py-3 text-right text-slate-300">—</td>
+                                                <td className="px-4 py-3 text-slate-500 italic">Original loan disbursement</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500" onClick={() => openEditModal(activeLoan)}><Edit size={12} /></Button>
+                                                </td>
+                                            </tr>
+                                            {activeLoanTransactions.map((tx: any) => (
+                                                <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/20 transition-colors">
+                                                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{formatDisplayDate(tx.date)}</td>
+                                                    <td className="px-4 py-3">
+                                                        {tx.entryType === 'TOPUP' ? (
+                                                            <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-700 font-bold text-[10px]">TOP-UP</span>
+                                                        ) : (tx.principalPaid || 0) > 0 && (tx.interestPaid || 0) === 0 ? (
+                                                            <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-bold text-[10px]">REPAYMENT</span>
+                                                        ) : (
+                                                            <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">INTEREST</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-bold">
+                                                        {tx.entryType === 'TOPUP' ? (
+                                                            <span className="text-violet-600">+{formatCurrency(tx.amount || 0, settings.currency)}</span>
+                                                        ) : (tx.principalPaid || 0) > 0 || (tx.interestPaid || 0) > 0 ? (
+                                                            <span className="text-red-600">-{formatCurrency((tx.principalPaid || 0) + (tx.interestPaid || 0), settings.currency)}</span>
+                                                        ) : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-bold">
+                                                        {(tx.principalPaid || 0) > 0 ? (
+                                                            <span className="text-blue-600">-{formatCurrency(tx.principalPaid, settings.currency)}</span>
+                                                        ) : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-bold">
+                                                        {(tx.interestPaid || 0) > 0 ? (
+                                                            <span className="text-emerald-600">-{formatCurrency(tx.interestPaid, settings.currency)}</span>
+                                                        ) : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-slate-500 italic max-w-[200px] truncate">{tx.notes || '—'}</td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <div className="flex justify-center gap-1">
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="h-6 w-6 text-red-500" 
+                                                                onClick={async () => {
+                                                                    if (confirm("Delete this transaction permanently?")) {
+                                                                        try {
+                                                                            if (tx.entryType === 'TOPUP') await deleteLoanTopup(tx.id);
+                                                                            else await deleteLoanRepayment(tx.id);
+                                                                            log('DELETE_TRANSACTION', 'special_loans', activeLoan.id, { date: tx.date, type: tx.entryType });
+                                                                        } catch (e) { alert("Failed to delete record"); }
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Trash2 size={12} />
+                                                            </Button>
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
-                        )}
+                        </div>
 
-                        <p className="text-[10px] text-center text-slate-400 italic">Detailed ledger available on the member's profile page.</p>
-                        <Button variant="secondary" className="w-full rounded-xl" onClick={() => setModals({ ...modals, history: false })}>Close Summary</Button>
+                        <div className="flex gap-3 pt-2">
+                             <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setModals({ ...modals, history: false })}>Close Ledger</Button>
+                             <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl" onClick={() => { setModals({ ...modals, history: false, autoGen: true }); openAutoGenModal(activeLoan); }}>Recalculate Interest</Button>
+                        </div>
                     </div>
                 )}
-            </Modal >
+            </Modal>
 
             {/* EDIT LOAN MODAL */}
             < Modal isOpen={modals.edit} onClose={() => setModals({ ...modals, edit: false })} title="Edit Special Loan" >

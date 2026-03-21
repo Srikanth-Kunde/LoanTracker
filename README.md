@@ -1,6 +1,8 @@
-# LoanTracker (Special Loans Edition)
+# Legacy Loan Tracker
+Digitize and audit historical handwritten loan records starting from 2012 with absolute precision. This specialized tool focuses exclusively on **Special Loans** (Interest-only, with multiple top-ups and flexible repayments).
 
-A specialized React/Vite application designed to digitize complex legacy loan ledgers dating back to 2012. This version of the tracker focuses exclusively on **Special Loans**—interest-only loans where members can take multiple top-ups and make partial principal payments at any time.
+> [!NOTE]
+> All "Regular Savings" (Podhupu) features have been removed to simplify the user experience for historical record keeping.
 
 ## 🌟 Key Features
 
@@ -8,8 +10,8 @@ A specialized React/Vite application designed to digitize complex legacy loan le
 *   **Manual Interest Proration:** Supports overwriting standard monthly interest amounts to account for 15-day or 20-day partial borrowing periods.
 *   **No Auto-Late Fees:** Designed to perfectly match historical handwritten books, the system will never auto-calculate late fees. Late fees are only recorded if explicitly provided by the operator.
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
-*   **Reduced Scope UI:** The application now exposes only `Special Loans`, `Members`, `Audit Report`, and `Settings`.
-*   **Schema-Aligned Settings:** The settings screen now uses the actual `app_settings` columns defined in `migration.sql`.
+*   **Auto-Interest Engine:** Single-click "Zap" button to backfill decades of historical interest records based on dynamically calculated principal balances.
+*   **Reduced Scope UI:** The application is laser-focused on `Special Loans`, `Members`, `Audit Report`, and `Settings`. No distracting dashboards or bank-sync features.
 *   **Separate Backend Scripts:** Schema setup and sample data are now split into separate SQL Editor scripts.
 
 ## 🚀 Quick Start
@@ -76,11 +78,10 @@ The application requires a specific schema and security configuration to functio
 5.  Run `sql/sample-ajay-remove.sql` whenever you want to remove the sample rows.
 
 ### Do You Need To Run SQL Again?
-
-*   **Run `migration.sql` now** if this Supabase project has not yet been initialized for the current Special Loans only version.
-*   **Rerunning `migration.sql` is safe** if you want to ensure the required tables, indexes, RLS policies, and `default_settings` row exist.
-*   **Sample data is not inserted by `migration.sql` anymore.** You must run `sql/sample-ajay-add.sql` separately if you want to see Ajay and Srikanth in the app.
-*   **No extra schema migration exists** beyond `migration.sql`.
+- **No new schema changes** are required for the Legacy Loan Tracker update.
+- **Run `migration.sql` only once** for initial setup. Rerunning it is safe and idempotent.
+- **`payments` table**: This table is still present in the schema but is ignored by the UI in this version.
+- **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
 
 **What this script does:**
 - **Recreates Tables**: Sets up `members`, `loans`, `payments`, etc., with the correct types.
