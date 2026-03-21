@@ -3,7 +3,13 @@ import { Payment, Loan, LoanRepayment, LoanStatus, PaymentMethod, LoanType, Loan
 import { getIndianFinancialYear } from '../constants';
 import { supabase } from '../supabaseClient';
 import { logger } from '../utils/logger';
-import { compareISODate, isISODateBefore, isoDateToTimestamp } from '../utils/date';
+import {
+  compareISODate,
+  isoDateToTimestamp,
+  getLastDayOfMonthISO,
+  isISODateOnOrBefore,
+  normalizeISODate
+} from '../utils/date';
 
 interface FinancialContextType {
   payments: Payment[];
@@ -88,8 +94,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
           principalAmount: Number(l.principal_amount),
           processingFee: Number(l.processing_fee || 0),
           interestRate: Number(l.interest_rate),
-          startDate: l.start_date,
-          endDate: l.end_date,
+          startDate: normalizeISODate(l.start_date),
+          endDate: l.end_date ? normalizeISODate(l.end_date) : undefined,
           status: l.status as LoanStatus,
           type: (l.loan_type || 'SPECIAL') as LoanType,
           durationMonths: l.duration_months,
@@ -111,7 +117,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
           return {
             id: r.id,
             loanId: r.loan_id,
-            date: r.date,
+            date: normalizeISODate(r.date),
             amount: amt,
             interestPaid: iPaid,
             principalPaid: pPaid,
@@ -128,7 +134,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
           loanId: t.loan_id,
           amount: Number(t.amount),
           rate: Number(t.rate),
-          date: t.date,
+          date: normalizeISODate(t.date),
           notes: t.notes,
           createdAt: t.created_at
         })));

@@ -59,8 +59,13 @@ export const getISODateMonthYear = (dateStr: string) => {
 };
 
 export const getLastDayOfMonthISO = (year: number, month: number) => {
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  // Use 0 as the day to get the last day of the PREVIOUS month relative to 'month'
+  // If month is 1 (Jan), day 0 gives Dec 31 of year-1
+  const date = new Date(Date.UTC(year, month, 0));
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const d = date.getUTCDate();
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 };
 
 export const getFinancialYearBounds = (financialYear: string) => {
@@ -85,6 +90,15 @@ export const formatDisplayDate = (dateStr: string) => {
       year: 'numeric',
       timeZone: 'UTC'
     }).format(new Date(Date.UTC(year, month - 1, day)));
+  } catch (e) {
+    return dateStr;
+  }
+};
+export const normalizeISODate = (dateStr: string) => {
+  if (!dateStr) return '';
+  try {
+    const { year, month, day } = parseISODateParts(dateStr);
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   } catch (e) {
     return dateStr;
   }
