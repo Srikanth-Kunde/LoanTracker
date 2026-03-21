@@ -632,10 +632,25 @@ const SpecialLoans: React.FC = () => {
         const endYear = today.getFullYear();
         const endMonth = today.getMonth() + 1;
 
-        console.log("DEBUG AutoGen:", { startYear, startMonth, endYear, endMonth, loanId: loan.id });
+        console.log("DEBUG AutoGen Started:", { startYear, startMonth, endYear, endMonth, loanId: loan.id });
 
         const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === loan.id);
         
+        // Pre-parse paid months into a Set for fast lookup
+        const paidMonths = new Set(
+            loanRepaymentsForLoan
+                .filter(r => (r.interestPaid || 0) > 0)
+                .map(r => {
+                    try {
+                        const { year, month } = getISODateMonthYear(r.date);
+                        return `${year}-${month}`;
+                    } catch (e) { return null; }
+                })
+                .filter(Boolean) as string[]
+        );
+
+        console.log("DEBUG Months already marked as Paid:", Array.from(paidMonths));
+
         let currentY = startYear;
         let currentM = startMonth + 1; // Obligation starts next month
         if (currentM > 12) { currentM = 1; currentY++; }
@@ -643,13 +658,9 @@ const SpecialLoans: React.FC = () => {
         const missingRecords: Omit<LoanRepayment, 'id'>[] = [];
         let totalInterest = 0;
         
-        console.log("DEBUG Loop Start:", { currentY, currentM });
-
         while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
-            const hasPayment = loanRepaymentsForLoan.some(r => {
-                const { year: y, month: m } = getISODateMonthYear(r.date);
-                return y === currentY && m === currentM && ((r.interestPaid || 0) > 0);
-            });
+            const monthKey = `${currentY}-${currentM}`;
+            const hasPayment = paidMonths.has(monthKey);
 
             if (!hasPayment) {
                 // Determine outstanding as of end of previous month
@@ -657,8 +668,6 @@ const SpecialLoans: React.FC = () => {
                 const isoDateStr = `${prevMDate.getFullYear()}-${String(prevMDate.getMonth() + 1).padStart(2, '0')}-${String(prevMDate.getDate()).padStart(2, '0')}T23:59:59.000Z`;
                 const outstanding = getSpecialLoanOutstanding(loan.id, isoDateStr);
                 
-                console.log(`DEBUG Month ${currentY}-${currentM}: Outstanding=${outstanding}`);
-
                 if (outstanding > 0) {
                     const interestDue = Math.round(outstanding * (loan.interestRate / 100));
                     totalInterest += interestDue;
@@ -673,7 +682,11 @@ const SpecialLoans: React.FC = () => {
                         method: PaymentMethod.CASH,
                         notes: 'Auto-generated historical interest'
                     });
+                } else {
+                    console.log(`DEBUG Skipping Month ${monthKey}: Balance is 0 as of end of previous month`);
                 }
+            } else {
+                console.log(`DEBUG Skipping Month ${monthKey}: Interest record found in DB`);
             }
             
             currentM++;
