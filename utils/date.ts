@@ -1,11 +1,34 @@
 export const parseISODateParts = (dateStr: string) => {
-  const [yearStr = '', monthStr = '', dayStr = '1'] = dateStr.split('T')[0].split('-');
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
+  if (!dateStr) throw new Error("Empty date string");
+  
+  // Clean string and split by common delimiters (- or /)
+  const clean = dateStr.split('T')[0].trim();
+  const parts = clean.split(/[-/]/);
+  
+  if (parts.length !== 3) {
+    throw new Error(`Invalid date format: ${dateStr}`);
+  }
 
-  if (!year || !month || !day) {
-    throw new Error(`Invalid ISO date: ${dateStr}`);
+  let year: number, month: number, day: number;
+
+  // Detect format by checking where the 4-digit year is
+  if (parts[0].length === 4) {
+    // Treat as YYYY-MM-DD
+    year = Number(parts[0]);
+    month = Number(parts[1]);
+    day = Number(parts[2]);
+  } else if (parts[2].length === 4) {
+    // Treat as DD-MM-YYYY or MM-DD-YYYY
+    // Our system assumes Indian format DD-MM-YYYY for legacy manual data
+    day = Number(parts[0]);
+    month = Number(parts[1]);
+    year = Number(parts[2]);
+  } else {
+    throw new Error(`Unrecognized date format (needs YYYY at start or end): ${dateStr}`);
+  }
+
+  if (isNaN(year) || isNaN(month) || isNaN(day) || !year || !month || !day) {
+    throw new Error(`Invalid date values detected: ${dateStr}`);
   }
 
   return { year, month, day };
@@ -53,11 +76,16 @@ export const getFinancialYearBounds = (financialYear: string) => {
 };
 
 export const formatDisplayDate = (dateStr: string) => {
-  const { year, month, day } = parseISODateParts(dateStr);
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'UTC'
-  }).format(new Date(Date.UTC(year, month - 1, day)));
+  if (!dateStr) return '—';
+  try {
+    const { year, month, day } = parseISODateParts(dateStr);
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'UTC'
+    }).format(new Date(Date.UTC(year, month - 1, day)));
+  } catch (e) {
+    return dateStr;
+  }
 };

@@ -346,7 +346,7 @@ const SpecialLoans: React.FC = () => {
             const m = checkMonth;
             const y = checkYear;
             const wasPaid = loanRepayments.some(r => {
-                const [rYear, rMonth] = r.date.split('-').map(Number);
+                const { year: rYear, month: rMonth } = getISODateMonthYear(r.date);
                 return rMonth === m && rYear === y && r.loanId === loan.id && (r.interestPaid || 0) > 0;
             });
             if (!wasPaid) {
@@ -627,8 +627,7 @@ const SpecialLoans: React.FC = () => {
     const openAutoGenModal = (loan: EnrichedLoan) => {
         if (!canRepayLoan) return;
         
-        const startYear = parseInt(loan.startDate.substring(0, 4));
-        const startMonth = parseInt(loan.startDate.substring(5, 7));
+        const { year: startYear, month: startMonth } = getISODateMonthYear(loan.startDate);
         const today = new Date();
         const endYear = today.getFullYear();
         const endMonth = today.getMonth() + 1;
@@ -644,7 +643,7 @@ const SpecialLoans: React.FC = () => {
         
         while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
             const hasPayment = loanRepaymentsForLoan.some(r => {
-                const [y, m] = r.date.split('-').map(Number);
+                const { year: y, month: m } = getISODateMonthYear(r.date);
                 return y === currentY && m === currentM && ((r.interestPaid || 0) > 0);
             });
 
