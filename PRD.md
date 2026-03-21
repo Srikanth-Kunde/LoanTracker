@@ -105,8 +105,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Zero-Balance & Start-Date Guards**: Implemented strict liability guards that automatically nullify interest for any period prior to the loan start date or any month where the principal balance has been cleared (within a 1-rupee rounding tolerance).
 *   **Auto-Gen Stability (Fix for React Error #321)**: Resolved a critical "Minified Hooks Error" by refactoring the `handleGenerateInterest` function to eliminate illegal hook calls within callbacks.
 *   **Reactive Auto-Gen Preview**: Migrated the "Missing Months" calculation to a `useMemo` hook. This ensures that the count refreshes instantly in the UI after a user performs a "Wipe & Re-gen" action, providing immediate visual confirmation.
-*   **Auto-Gen Stability (Fix for React Error #321)**: Resolved a critical "Minified Hooks Error" by refactoring the `handleGenerateInterest` function to eliminate illegal hook calls within callbacks.
-*   **Reactive Auto-Gen Preview**: Migrated the "Missing Months" calculation to a `useMemo` hook. This ensures that the count refreshes instantly in the UI after a user performs a "Wipe & Re-gen" action, providing immediate visual confirmation that the data has been cleared and is ready for recalculation.
+*   **Audit Ledger Running Balance**: Implemented a new "Balance" column in the Special Loan Audit Ledger. This provides a row-by-row mathematical audit trail, showing the exact outstanding principal remaining after every individual transaction.
 
 
 

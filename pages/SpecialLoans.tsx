@@ -1251,6 +1251,7 @@ const SpecialLoans: React.FC = () => {
                                                 <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Amount</th>
                                                 <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Principal</th>
                                                 <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Interest</th>
+                                                <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Balance</th>
                                                 <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Notes</th>
                                                 <th className="px-4 py-3 text-center font-bold text-slate-500 uppercase">Actions</th>
                                             </tr>
@@ -1263,6 +1264,7 @@ const SpecialLoans: React.FC = () => {
                                                 <td className="px-4 py-3 text-right font-black text-emerald-700">{formatCurrency(activeLoan.principalAmount, settings.currency)}</td>
                                                 <td className="px-4 py-3 text-right font-black text-emerald-700">{formatCurrency(activeLoan.principalAmount, settings.currency)}</td>
                                                 <td className="px-4 py-3 text-right text-slate-300">—</td>
+                                                <td className="px-4 py-3 text-right font-black text-emerald-700">{formatCurrency(activeLoan.principalAmount, settings.currency)}</td>
                                                 <td className="px-4 py-3 text-slate-500 italic">Original loan disbursement</td>
                                                 <td className="px-4 py-3 text-center">
                                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500" onClick={() => openEditModal(activeLoan)}><Edit size={12} /></Button>
@@ -1296,6 +1298,9 @@ const SpecialLoans: React.FC = () => {
                                                         {(tx.interestPaid || 0) > 0 ? (
                                                             <span className="text-emerald-600">-{formatCurrency(tx.interestPaid, settings.currency)}</span>
                                                         ) : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-bold">
+                                                        <span className="text-slate-700">{formatCurrency(getSpecialLoanOutstanding(activeLoan.id, tx.date), settings.currency)}</span>
                                                     </td>
                                                     <td className="px-4 py-3 text-slate-500 italic max-w-[200px] truncate">{tx.notes || '—'}</td>
                                                     <td className="px-4 py-3 text-center">

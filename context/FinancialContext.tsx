@@ -329,34 +329,42 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   }, [fetchFinancials]);
 
   const getSpecialLoanOutstanding = useCallback((loanId: string, asOfDate?: string) => {
-    const loan = loans.find((l: Loan) => l.id === loanId);
+    const targetId = String(loanId).trim();
+    const loan = loans.find((l: Loan) => String(l.id).trim() === targetId);
     if (!loan) return 0;
 
-    // Safety: If asOfDate is provided and it is BEFORE the loan's own start date, 
-    // the outstanding principal for THIS loan must be zero at that time.
-    if (asOfDate && compareISODate(asOfDate, loan.startDate) < 0) {
-      return 0;
-    }
+    // Standard normalization to YYYY-MM-DD for comparison
+    const cutoff = asOfDate ? normalizeISODate(asOfDate) : null;
+    const lStart = normalizeISODate(loan.startDate);
+
+    // If cutoff is before loan start, balance is effectively zero for interest purposes
+    if (cutoff && cutoff < lStart) return 0;
 
     let totalPrincipal = Number(loan.principalAmount || 0);
     
-    // Add top-ups up to asOfDate
-    loanTopups.filter((t: LoanTopup) => t.loanId === loanId).forEach((t: LoanTopup) => {
-      if (!asOfDate || compareISODate(t.date, asOfDate) <= 0) {
-        totalPrincipal += Number(t.amount || 0);
+    // Add all top-ups recorded on or before cutoff
+    loanTopups.forEach((t: LoanTopup) => {
+      if (String(t.loanId).trim() === targetId) {
+        const tDate = normalizeISODate(t.date);
+        if (!cutoff || tDate <= cutoff) {
+          totalPrincipal += Number(t.amount || 0);
+        }
       }
     });
 
-    // Subtract repayments up to asOfDate
-    loanRepayments.filter((r: LoanRepayment) => r.loanId === loanId).forEach((r: LoanRepayment) => {
-      if (!asOfDate || compareISODate(r.date, asOfDate) <= 0) {
-        totalPrincipal -= Number(r.principalPaid || 0);
+    // Subtract all principal repayments recorded on or before cutoff
+    loanRepayments.forEach((r: LoanRepayment) => {
+      if (String(r.loanId).trim() === targetId) {
+        const rDate = normalizeISODate(r.date);
+        if (!cutoff || rDate <= cutoff) {
+          totalPrincipal -= Number(r.principalPaid || 0);
+        }
       }
     });
 
-    // We use a small epsilon (> 1) to ignore rounding dust (paisa differences)
-    // which shouldn't trigger interest calculations.
-    return totalPrincipal > 1 ? totalPrincipal : 0;
+    // Use a small epsilon of ₹1 to ignore rounding artifacts in legacy migrations
+    const result = Math.round(totalPrincipal * 100) / 100;
+    return result > 1 ? result : 0;
   }, [loans, loanTopups, loanRepayments]);
 
   const setFinancialData = useCallback(({ payments, loans, loanRepayments }: any) => {

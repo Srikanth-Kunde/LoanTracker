@@ -117,7 +117,8 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Auto-Generate Edge-Cases**: Hardened the auto-generator to correctly calculate liability across months containing partial principal recoveries, elegantly handle legacy closed loans, format output dates to the end-of-month, and automatically repair manual SQL entries missing principal data.
 *   **Robust Date Parsing**: Upgraded internal date utilities to support diverse formats like `10/06/2017` and `10-06-2017`, preventing data parsing failures on legacy handwritten records.
 *   **High-Precision Calculation Engine**: Hardened the interest logic with UTC-safe date comparisons and "zero-balance" guards to ensure 100% accuracy on historical ledgers.
-*   **Auto-Gen Stability**: Resolved a critical "React Error #321" in the interest generator and refactored it for better performance and real-time UI updates after data wipes.
+*   **Balance Audit Column**: Added a real-time "Running Balance" column to the loan ledger for row-by-row verification of principal reductions.
+*   **Auto-Gen Stability**: Resolved reported crashes (`React Error #321` and `Invalid Date 2018-00-31`) and refactored the generator for instant UI updates.
 *   **Auto-Gen Stability**: Resolved a critical "React Error #321" in the interest generator and refactored it for better performance and real-time UI updates after data wipes.
 *   **Precision Interest Logic**: Validated the "zero-balance" logic, ensuring interest is only generated for months where an actual principal liability exists.
 
