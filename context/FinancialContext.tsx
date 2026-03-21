@@ -5,11 +5,9 @@ import { supabase } from '../supabaseClient';
 import { logger } from '../utils/logger';
 import {
   compareISODate,
-  isoDateToTimestamp,
-  getLastDayOfMonthISO,
-  isISODateOnOrBefore,
   normalizeISODate
 } from '../utils/date';
+import { getSpecialLoanOutstandingFromEvents } from '../utils/loanMath';
 
 interface FinancialContextType {
   payments: Payment[];
@@ -28,7 +26,7 @@ interface FinancialContextType {
   recordLoanRepayment: (repayment: Omit<LoanRepayment, 'id'>) => Promise<void>;
   bulkRecordLoanRepayments: (repayments: Omit<LoanRepayment, 'id'>[]) => Promise<void>;
   deleteLoanRepayment: (id: string) => Promise<void>;
-  closeLoan: (loanId: string) => Promise<void>;
+  closeLoan: (loanId: string, endDate?: string) => Promise<void>;
 
   // Top-up actions (Special / Interest-Only loans)
   addLoanTopup: (topup: Omit<LoanTopup, 'id' | 'createdAt'>) => Promise<void>;
@@ -51,6 +49,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   const [loanRepayments, setLoanRepayments] = useState<LoanRepayment[]>([]);
   const [loanTopups, setLoanTopups] = useState<LoanTopup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const roundCurrency = useCallback((value: number) => Math.round(value * 100) / 100, []);
 
   const fetchFinancials = useCallback(async () => {
     try {
@@ -113,7 +113,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         setLoanRepayments((repaymentsRes.data as any[]).map(r => {
           const amt = Number(r.amount || 0);
           const iPaid = Number(r.interest_paid || 0);
-          const pPaid = Number(r.principal_paid || (iPaid === 0 ? amt : 0));
+          const pPaid = Number(r.principal_paid ?? Math.max(0, amt - iPaid));
           return {
             id: r.id,
             loanId: r.loan_id,
@@ -122,8 +122,11 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
             interestPaid: iPaid,
             principalPaid: pPaid,
             lateFee: Number(r.late_fee || 0),
+            interestForMonth: r.interest_for_month ? Number(r.interest_for_month) : undefined,
+            interestForYear: r.interest_for_year ? Number(r.interest_for_year) : undefined,
             method: r.method as PaymentMethod,
-            notes: r.notes
+            notes: r.notes,
+            createdAt: r.created_at
           };
         }));
       }
@@ -242,7 +245,33 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     fetchFinancials();
   }, [fetchFinancials]);
 
+  const validateRepayment = useCallback((repayment: Omit<LoanRepayment, 'id'>) => {
+    const principalPaid = Number(repayment.principalPaid || 0);
+    const interestPaid = Number(repayment.interestPaid || 0);
+    const lateFee = Number(repayment.lateFee || 0);
+    const amount = Number(repayment.amount || 0);
+
+    if (principalPaid < 0 || interestPaid < 0 || lateFee < 0 || amount < 0) {
+      throw new Error('Repayment values cannot be negative.');
+    }
+
+    const expectedAmount = roundCurrency(principalPaid + interestPaid);
+    if (roundCurrency(amount) !== expectedAmount) {
+      throw new Error(`Repayment amount must equal principal + interest (${expectedAmount}).`);
+    }
+
+    const hasInterestPeriod = repayment.interestForMonth != null || repayment.interestForYear != null;
+    if (hasInterestPeriod && (!repayment.interestForMonth || !repayment.interestForYear)) {
+      throw new Error('Interest period must include both month and year.');
+    }
+
+    if (repayment.interestForMonth && (repayment.interestForMonth < 1 || repayment.interestForMonth > 12)) {
+      throw new Error('Interest period month must be between 1 and 12.');
+    }
+  }, [roundCurrency]);
+
   const recordLoanRepayment = useCallback(async (r: Omit<LoanRepayment, 'id'>) => {
+    validateRepayment(r);
     const { error } = await supabase.from('loan_repayments').insert([{
       id: `rep_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       loan_id: r.loanId,
@@ -251,13 +280,15 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       interest_paid: r.interestPaid,
       principal_paid: r.principalPaid,
       late_fee: r.lateFee || 0,
+      interest_for_month: r.interestForMonth ?? null,
+      interest_for_year: r.interestForYear ?? null,
       method: r.method,
       notes: r.notes
     }]);
 
     if (error) throw error;
     fetchFinancials();
-  }, [fetchFinancials]);
+  }, [fetchFinancials, validateRepayment]);
 
   const bulkRecordLoanRepayments = useCallback(async (repayments: Omit<LoanRepayment, 'id'>[]) => {
     if (!repayments.length) return;
@@ -271,15 +302,19 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       interest_paid: r.interestPaid,
       principal_paid: r.principalPaid,
       late_fee: r.lateFee || 0,
+      interest_for_month: r.interestForMonth ?? null,
+      interest_for_year: r.interestForYear ?? null,
       method: r.method,
       notes: r.notes
     }));
+
+    repayments.forEach(validateRepayment);
 
     const { error } = await supabase.from('loan_repayments').insert(payload);
 
     if (error) throw error;
     fetchFinancials();
-  }, [fetchFinancials]);
+  }, [fetchFinancials, validateRepayment]);
 
   const deleteLoanRepayment = useCallback(async (id: string) => {
     const { error } = await supabase.from('loan_repayments').delete().eq('id', id);
@@ -287,10 +322,10 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     fetchFinancials();
   }, [fetchFinancials]);
 
-  const closeLoan = useCallback(async (loanId: string) => {
+  const closeLoan = useCallback(async (loanId: string, endDate?: string) => {
     const { error } = await supabase.from('loans').update({
       status: LoanStatus.CLOSED,
-      end_date: new Date().toISOString().split('T')[0]
+      end_date: normalizeISODate(endDate || new Date().toISOString().split('T')[0])
     }).eq('id', loanId);
 
     if (error) throw error;
@@ -319,52 +354,45 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   }, [fetchFinancials]);
 
   const wipeLoanInterest = useCallback(async (loanId: string) => {
-    const { error } = await supabase.from('loan_repayments')
-      .delete()
-      .eq('loan_id', loanId)
-      .gt('interest_paid', 0);
-    
-    if (error) throw error;
+    const interestRows = loanRepayments.filter(r => r.loanId === loanId && (r.interestPaid || 0) > 0);
+    const fullDeleteIds = interestRows
+      .filter(r => (r.principalPaid || 0) === 0 && (r.lateFee || 0) === 0)
+      .map(r => r.id);
+
+    const mixedRows = interestRows.filter(r => !fullDeleteIds.includes(r.id));
+
+    if (fullDeleteIds.length > 0) {
+      const { error } = await supabase.from('loan_repayments')
+        .delete()
+        .in('id', fullDeleteIds);
+      if (error) throw error;
+    }
+
+    for (const row of mixedRows) {
+      const { error } = await supabase.from('loan_repayments').update({
+        amount: roundCurrency(Number(row.principalPaid || 0)),
+        interest_paid: 0,
+        interest_for_month: null,
+        interest_for_year: null
+      }).eq('id', row.id);
+
+      if (error) throw error;
+    }
+
     fetchFinancials();
-  }, [fetchFinancials]);
+  }, [fetchFinancials, loanRepayments, roundCurrency]);
 
   const getSpecialLoanOutstanding = useCallback((loanId: string, asOfDate?: string) => {
     const targetId = String(loanId).trim();
     const loan = loans.find((l: Loan) => String(l.id).trim() === targetId);
     if (!loan) return 0;
 
-    // Standard normalization to YYYY-MM-DD for comparison
-    const cutoff = asOfDate ? normalizeISODate(asOfDate) : null;
-    const lStart = normalizeISODate(loan.startDate);
-
-    // If cutoff is before loan start, balance is effectively zero for interest purposes
-    if (cutoff && cutoff < lStart) return 0;
-
-    let totalPrincipal = Number(loan.principalAmount || 0);
-    
-    // Add all top-ups recorded on or before cutoff
-    loanTopups.forEach((t: LoanTopup) => {
-      if (String(t.loanId).trim() === targetId) {
-        const tDate = normalizeISODate(t.date);
-        if (!cutoff || tDate <= cutoff) {
-          totalPrincipal += Number(t.amount || 0);
-        }
-      }
-    });
-
-    // Subtract all principal repayments recorded on or before cutoff
-    loanRepayments.forEach((r: LoanRepayment) => {
-      if (String(r.loanId).trim() === targetId) {
-        const rDate = normalizeISODate(r.date);
-        if (!cutoff || rDate <= cutoff) {
-          totalPrincipal -= Number(r.principalPaid || 0);
-        }
-      }
-    });
-
-    // Use a small epsilon of ₹1 to ignore rounding artifacts in legacy migrations
-    const result = Math.round(totalPrincipal * 100) / 100;
-    return result > 1 ? result : 0;
+    return getSpecialLoanOutstandingFromEvents(
+      loan,
+      loanTopups.filter(t => String(t.loanId).trim() === targetId),
+      loanRepayments.filter(r => String(r.loanId).trim() === targetId),
+      asOfDate
+    );
   }, [loans, loanTopups, loanRepayments]);
 
   const setFinancialData = useCallback(({ payments, loans, loanRepayments }: any) => {

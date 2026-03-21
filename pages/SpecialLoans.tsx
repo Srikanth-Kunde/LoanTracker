@@ -20,6 +20,15 @@ import { Modal } from '../components/ui/Modal';
 import { Card } from '../components/ui/Card';
 import { LoanCalculator } from '../components/LoanCalculator';
 import { compareISODate, formatDisplayDate, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp } from '../utils/date';
+import {
+    buildLoanLedger,
+    getInterestDueForPeriod,
+    getInterestPaidForPeriod,
+    getInterestPeriodKey,
+    getLastInterestPaymentDate,
+    getMissingInterestPeriods,
+    getRepaymentInterestPeriod
+} from '../utils/loanMath';
 
 interface EnrichedLoan extends Loan {
     memberName: string;
@@ -35,6 +44,8 @@ interface EnrichedLoan extends Loan {
     isOverdueMonth: boolean;
     historicalLateFeePaid: number;
     selectedMonthLateFee: number;
+    selectedPeriodInterestPaid: number;
+    lastInterestPaymentDate?: string | null;
     missedMonths?: string[];
     missedMonthsDetails?: { month: number, year: number, principal: number, interest: number, lateFee: number }[];
 }
@@ -85,6 +96,7 @@ const SpecialLoans: React.FC = () => {
     // Top-up form state
     const [topupForm, setTopupForm] = useState({
         amount: '',
+        rate: '',
         date: new Date().toISOString().split('T')[0],
         notes: ''
     });
@@ -114,10 +126,11 @@ const SpecialLoans: React.FC = () => {
 
     const activeLoanTransactions = useMemo(() => {
         if (!activeLoan) return [];
-        const repayments = loanRepayments.filter(r => r.loanId === activeLoan.id).map(r => ({ ...r, entryType: 'REPAYMENT' }));
-        const topups = loanTopups.filter(t => t.loanId === activeLoan.id).map(t => ({ ...t, entryType: 'TOPUP' }));
-        
-        return [...repayments, ...topups].sort((a, b) => compareISODate(a.date, (b as any).date));
+        return buildLoanLedger(
+            activeLoan,
+            loanTopups.filter(t => t.loanId === activeLoan.id),
+            loanRepayments.filter(r => r.loanId === activeLoan.id)
+        );
     }, [activeLoan, loanRepayments, loanTopups]);
 
     // Permissions
@@ -138,8 +151,8 @@ const SpecialLoans: React.FC = () => {
 
     const loansInSelectedPeriod = useMemo((): EnrichedLoan[] => {
         const endOfMonth = new Date(selectedYear, selectedMonth, 0, 23, 59, 59);
-        const startOfMonthTime = new Date(selectedYear, selectedMonth - 1, 1).getTime();
         const endOfMonthTime = endOfMonth.getTime();
+        const selectedPeriod = { year: selectedYear, month: selectedMonth };
 
         const repaymentsByLoan = new Map<string, LoanRepayment[]>();
         loanRepayments.forEach(r => {
@@ -156,14 +169,15 @@ const SpecialLoans: React.FC = () => {
         }).map(loan => {
             const member = members.find(m => m.id === loan.memberId);
             const allRepayments = repaymentsByLoan.get(loan.id) || [];
+            const topupsForLoan = loanTopups.filter(t => t.loanId === loan.id);
 
             let historicalPrincipalPaid = 0;
             let historicalInterestPaid = 0;
             let historicalLateFeePaid = 0;
             let totalPaidInSelectedMonth = 0;
             let selectedMonthLateFee = 0;
-            let isPaidSelectedMonth = false;
-            let principalPaidBeforeMonth = 0;
+            const selectedPeriodInterestPaid = getInterestPaidForPeriod(allRepayments, loan.id, selectedPeriod);
+            const isPaidSelectedMonth = selectedPeriodInterestPaid > 0;
 
             allRepayments.forEach(r => {
                 const rDate = isoDateToTimestamp(r.date, true);
@@ -172,20 +186,19 @@ const SpecialLoans: React.FC = () => {
                     historicalInterestPaid += (r.interestPaid || 0);
                     historicalLateFeePaid += (r.lateFee || 0);
                 }
-                const [rYear, rMonth] = r.date.split('-').map(Number);
-                if (rMonth === selectedMonth && rYear === selectedYear) {
-                    isPaidSelectedMonth = true;
+                const actualTxnPeriod = getISODateMonthYear(r.date);
+                if (actualTxnPeriod.month === selectedMonth && actualTxnPeriod.year === selectedYear) {
                     selectedMonthLateFee += (r.lateFee || 0);
-                    totalPaidInSelectedMonth += (r.amount || 0) + (r.lateFee || 0);
                 }
-                if (rDate < startOfMonthTime) {
-                    principalPaidBeforeMonth += (r.principalPaid || 0);
+
+                const assignedPeriod = getRepaymentInterestPeriod(r);
+                if (assignedPeriod && getInterestPeriodKey(assignedPeriod) === getInterestPeriodKey(selectedPeriod)) {
+                    totalPaidInSelectedMonth += (r.amount || 0) + (r.lateFee || 0);
                 }
             });
 
-            const principalAmount = loan.principalAmount || 0;
-            let historicalOutstanding = Math.max(0, principalAmount - historicalPrincipalPaid);
-            let openingOutstanding = Math.max(0, principalAmount - principalPaidBeforeMonth);
+            let historicalOutstanding = getSpecialLoanOutstanding(loan.id);
+            let openingOutstanding = 0;
             let monthlyDue = 0;
             let principalComp = 0;
             let interestComp = 0;
@@ -193,27 +206,11 @@ const SpecialLoans: React.FC = () => {
             // ── INTEREST-ONLY logic for Special Loans ────────────────────────
             // Outstanding = original + topups before start-of-month − principal repaid before start-of-month
             if (loan.status === LoanStatus.ACTIVE) {
-                // End-of-last-month cutoff for opening balance
-                const lastDayOfPrevMonth = new Date(selectedYear, selectedMonth - 1, 0, 23, 59, 59).toISOString();
-                const outstanding = getSpecialLoanOutstanding(loan.id, lastDayOfPrevMonth);
-                openingOutstanding = outstanding;
-                historicalOutstanding = getSpecialLoanOutstanding(loan.id);
-
-                interestComp = roundCurrency(outstanding * (loan.interestRate / 100));
+                const periodDue = getInterestDueForPeriod(loan, topupsForLoan, allRepayments, selectedPeriod);
+                openingOutstanding = periodDue.openingOutstanding;
+                interestComp = periodDue.interestDue;
                 principalComp = 0;  // No mandatory principal
                 monthlyDue = interestComp;
-            }
-
-            // Fix: No payment due in the month of disbursement itself.
-            // Payment obligation starts the NEXT month.
-            const loanStartDate = getISODateMonthYear(loan.startDate);
-            if (
-                loanStartDate.year === selectedYear &&
-                loanStartDate.month === selectedMonth
-            ) {
-                monthlyDue = 0;
-                principalComp = 0;
-                interestComp = 0;
             }
 
             // Determine if this month's payment is overdue
@@ -222,7 +219,8 @@ const SpecialLoans: React.FC = () => {
             const isOverdueMonth =
                 (todayDate.getFullYear() > selectedYear || (todayDate.getFullYear() === selectedYear && todayDate.getMonth() + 1 > selectedMonth)) &&
                 loan.status === LoanStatus.ACTIVE &&
-                monthlyDue > 0;
+                monthlyDue > 0 &&
+                !isPaidSelectedMonth;
 
             return {
                 ...loan,
@@ -233,12 +231,14 @@ const SpecialLoans: React.FC = () => {
                 historicalInterestPaid,
                 historicalLateFeePaid,
                 selectedMonthLateFee,
+                selectedPeriodInterestPaid,
                 monthlyDue: Math.round(monthlyDue),
                 principalComp: Math.round(principalComp),
                 interestComp: Math.round(interestComp),
                 isPaidSelectedMonth,
                 totalPaidInSelectedMonth,
-                isOverdueMonth
+                isOverdueMonth,
+                lastInterestPaymentDate: getLastInterestPaymentDate(allRepayments, loan.id)
             };
         }).filter(l =>
             l.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -258,61 +258,27 @@ const SpecialLoans: React.FC = () => {
 
     const autoGenPreview = useMemo(() => {
         if (!autoGenLoan) return { months: 0, totalInterest: 0, records: [] };
-        
-        const { year: startYear, month: startMonth } = getISODateMonthYear(autoGenLoan.startDate);
         const today = new Date();
-        const endYear = today.getFullYear();
-        const endMonth = today.getMonth() + 1;
-
+        const endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
         const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === autoGenLoan.id);
-        
-        const paidMonths = new Set(
-            loanRepaymentsForLoan
-                .filter(r => (r.interestPaid || 0) > 0)
-                .map(r => {
-                    try {
-                        const { year, month } = getISODateMonthYear(r.date);
-                        return `${year}-${month}`;
-                    } catch (e) { return null; }
-                })
-                .filter(Boolean) as string[]
-        );
+        const loanTopupsForLoan = loanTopups.filter(t => t.loanId === autoGenLoan.id);
+        const missingPeriods = getMissingInterestPeriods(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
 
-        let currentY = startYear;
-        let currentM = startMonth + 1;
-        if (currentM > 12) { currentM = 1; currentY++; }
-        
-        const missingRecords: Omit<LoanRepayment, 'id'>[] = [];
-        let totalInterest = 0;
-        
-        while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
-            const monthKey = `${currentY}-${currentM}`;
-            if (!paidMonths.has(monthKey)) {
-                // Calculation of interest for 'current month' depends on outstanding at 'end of previous month'
-                const asOf = getLastDayOfMonthISO(currentY, currentM - 1);
-                const outstanding = getSpecialLoanOutstanding(autoGenLoan.id, asOf);
-                
-                if (outstanding > 1) { 
-                    const interestDue = Math.round(outstanding * (autoGenLoan.interestRate / 100));
-                    totalInterest += interestDue;
-                    
-                    missingRecords.push({
-                        loanId: autoGenLoan.id,
-                        date: getLastDayOfMonthISO(currentY, currentM),
-                        amount: interestDue,
-                        interestPaid: interestDue,
-                        principalPaid: 0,
-                        lateFee: 0,
-                        method: PaymentMethod.CASH,
-                        notes: 'Auto-generated historical interest'
-                    });
-                }
-            }
-            
-            currentM++;
-            if (currentM > 12) { currentM = 1; currentY++; }
-        }
-        
+        const missingRecords: Omit<LoanRepayment, 'id'>[] = missingPeriods.map(period => ({
+            loanId: autoGenLoan.id,
+            date: getLastDayOfMonthISO(period.year, period.month),
+            amount: period.interestDue,
+            interestPaid: period.interestDue,
+            principalPaid: 0,
+            lateFee: 0,
+            interestForMonth: period.month,
+            interestForYear: period.year,
+            method: PaymentMethod.CASH,
+            notes: 'Auto-generated historical interest'
+        }));
+
+        const totalInterest = missingRecords.reduce((sum, record) => sum + (record.interestPaid || 0), 0);
+
         return { months: missingRecords.length, totalInterest, records: missingRecords };
     }, [autoGenLoan, loanRepayments, loanTopups, getSpecialLoanOutstanding]);
 
@@ -356,16 +322,20 @@ const SpecialLoans: React.FC = () => {
 
     // --- Handlers ---
 
-    const handleCreateLoan = () => {
+    const handleCreateLoan = async () => {
         if (!canCreateLoan) return;
         setErrorMsg('');
         try {
+            if (!createForm.memberId) throw new Error("Please select a member");
+            if (loans.some(l => l.memberId === createForm.memberId && l.type === LoanType.SPECIAL && l.status === LoanStatus.ACTIVE)) {
+                throw new Error("This member already has an active special loan. Record a top-up instead.");
+            }
             const reqAmount = parseFloat(createForm.amount);
             if (isNaN(reqAmount) || reqAmount <= 0) throw new Error("Please enter a valid principal amount");
             const rate = parseFloat(createForm.rate);
             if (isNaN(rate) || rate <= 0) throw new Error("Please enter a valid interest rate");
 
-            createLoan({
+            await createLoan({
                 memberId: createForm.memberId,
                 principalAmount: reqAmount,
                 processingFee: parseFloat(createForm.processingFee) || 0,
@@ -394,49 +364,24 @@ const SpecialLoans: React.FC = () => {
 
     const openRepayModal = (loan: EnrichedLoan) => {
         if (!canRepayLoan) return;
-        if (loan.isPaidSelectedMonth) {
-            alert(`Interest for ${MONTHS[selectedMonth - 1]} ${selectedYear} has already been collected for this loan.`);
-            return;
-        }
 
         // Detect missed payments before this selected month
-        const missedMonths: string[] = [];
-        const missedMonthsDetails: { month: number, year: number, interest: number, lateFee: number }[] = [];
-        const loanStart = getISODateMonthYear(loan.startDate);
-        let checkYear = loanStart.month === 12 ? loanStart.year + 1 : loanStart.year;
-        let checkMonth = loanStart.month === 12 ? 1 : loanStart.month + 1;
-        const selectedDate = new Date(selectedYear, selectedMonth - 1, 1);
-
-        while (new Date(checkYear, checkMonth - 1, 1) < selectedDate) {
-            const m = checkMonth;
-            const y = checkYear;
-            const wasPaid = loanRepayments.some(r => {
-                const { year: rYear, month: rMonth } = getISODateMonthYear(r.date);
-                return rMonth === m && rYear === y && r.loanId === loan.id && (r.interestPaid || 0) > 0;
-            });
-            if (!wasPaid) {
-                missedMonths.push(`${MONTHS[m - 1]} ${y}`);
-                
-                // For Special Loans (Interest Only):
-                // We need the outstanding balance for THAT historical month to calculate late fees correctly.
-                const lastDayOfThatMonth = getLastDayOfMonthISO(y, m);
-                const historicalOutstanding = getSpecialLoanOutstanding(loan.id, lastDayOfThatMonth);
-                const monthlyInterest = Math.round(historicalOutstanding * (loan.interestRate / 100));
-                
-                missedMonthsDetails.push({
-                    month: m,
-                    year: y,
-                    interest: monthlyInterest,
-                    lateFee: monthlyInterest // 1:1 Late fee for each missed month
-                });
-            }
-            if (checkMonth === 12) {
-                checkMonth = 1;
-                checkYear += 1;
-            } else {
-                checkMonth += 1;
-            }
-        }
+        const currentLoanTopups = loanTopups.filter(t => t.loanId === loan.id);
+        const currentLoanRepayments = loanRepayments.filter(r => r.loanId === loan.id);
+        const missedPeriods = getMissingInterestPeriods(
+            loan,
+            currentLoanTopups,
+            currentLoanRepayments,
+            selectedMonth === 1 ? { year: selectedYear - 1, month: 12 } : { year: selectedYear, month: selectedMonth - 1 }
+        );
+        const missedMonths = missedPeriods.map(period => `${MONTHS[period.month - 1]} ${period.year}`);
+        const missedMonthsDetails = missedPeriods.map(period => ({
+            month: period.month,
+            year: period.year,
+            principal: 0,
+            interest: Math.round(period.interestDue),
+            lateFee: 0
+        }));
 
         setActiveLoan({ ...loan, missedMonths, missedMonthsDetails } as any);
         const today = new Date();
@@ -446,12 +391,12 @@ const SpecialLoans: React.FC = () => {
             defaultDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
         }
 
-        // Multiplier calculates the dues for missed months + current month
-        const multiplier = missedMonths.length + 1;
+        const arrearsInterest = missedMonthsDetails.reduce((sum, period) => sum + period.interest, 0);
+        const currentInterest = loan.isPaidSelectedMonth ? 0 : loan.interestComp;
 
         setRepayForm({
             principal: '0',
-            interest: (loan.interestComp * multiplier).toString(),
+            interest: (arrearsInterest + currentInterest).toString(),
             lateFee: '0',
             date: defaultDate,
             method: PaymentMethod.CASH,
@@ -474,37 +419,59 @@ const SpecialLoans: React.FC = () => {
             }
             if (iAmt + lFee <= 0 && pAmt <= 0) throw new Error("Enter at least interest or late fee amount");
 
-            const currentOutstanding = getSpecialLoanOutstanding(activeLoan.id);
+            const currentOutstanding = getSpecialLoanOutstanding(activeLoan.id, repayForm.date);
             if (pAmt > currentOutstanding + 10) throw new Error(`Principal repaid (₹${pAmt}) exceeds outstanding balance (₹${currentOutstanding})`);
 
+            let splitCount = 0;
             if (activeLoan.missedMonthsDetails && activeLoan.missedMonthsDetails.length > 0) {
-                // SPLIT TRANSACTION LOGIC:
-                // Record the historical months first with back-dated entries.
+                const arrearsInterest = activeLoan.missedMonthsDetails.reduce((sum, month) => sum + month.interest, 0);
+                if (iAmt < arrearsInterest) {
+                    throw new Error(`Interest amount must cover arrears first (minimum ₹${arrearsInterest}).`);
+                }
+
                 for (const missed of activeLoan.missedMonthsDetails) {
-                    const dateStr = getLastDayOfMonthISO(missed.year, missed.month);
-                    
                     await recordLoanRepayment({
                         loanId: activeLoan.id,
-                        date: dateStr,
-                        amount: missed.interest, // amount = principalPaid + interestPaid
+                        date: repayForm.date,
+                        amount: missed.interest,
                         principalPaid: 0,
                         interestPaid: missed.interest,
-                        lateFee: 0, // Entire late fee attributed to the month of actual payment
-                        method: repayForm.method
+                        lateFee: 0,
+                        interestForMonth: missed.month,
+                        interestForYear: missed.year,
+                        method: repayForm.method,
+                        notes: repayForm.notes || `Arrears interest for ${MONTHS[missed.month - 1]} ${missed.year}`
                     });
+                    splitCount++;
                 }
-                
-                // Current month transaction
-                await recordLoanRepayment({
-                    loanId: activeLoan.id,
-                    date: repayForm.date,
-                    amount: pAmt + (iAmt - activeLoan.missedMonthsDetails.reduce((s, m) => s + m.interest, 0)),
-                    principalPaid: pAmt,
-                    interestPaid: iAmt - activeLoan.missedMonthsDetails.reduce((s, m) => s + m.interest, 0),
-                    lateFee: lFee, // Entire late fee attributed to current transaction
-                    method: repayForm.method
-                });
+
+                const currentInterest = iAmt - arrearsInterest;
+                if (currentInterest < 0) {
+                    throw new Error("Current-period interest cannot be negative after clearing arrears.");
+                }
+
+                if (currentInterest > 0 || pAmt > 0 || lFee > 0) {
+                    if (activeLoan.isPaidSelectedMonth && currentInterest > 0) {
+                        throw new Error(`Interest for ${MONTHS[selectedMonth - 1]} ${selectedYear} is already settled.`);
+                    }
+                    await recordLoanRepayment({
+                        loanId: activeLoan.id,
+                        date: repayForm.date,
+                        amount: pAmt + currentInterest,
+                        principalPaid: pAmt,
+                        interestPaid: currentInterest,
+                        lateFee: lFee,
+                        interestForMonth: currentInterest > 0 ? selectedMonth : undefined,
+                        interestForYear: currentInterest > 0 ? selectedYear : undefined,
+                        method: repayForm.method,
+                        notes: repayForm.notes
+                    });
+                    splitCount++;
+                }
             } else {
+                if (activeLoan.isPaidSelectedMonth && iAmt > 0) {
+                    throw new Error(`Interest for ${MONTHS[selectedMonth - 1]} ${selectedYear} is already settled. Record principal only or edit the existing entry.`);
+                }
                 await recordLoanRepayment({
                     loanId: activeLoan.id,
                     date: repayForm.date,
@@ -512,9 +479,12 @@ const SpecialLoans: React.FC = () => {
                     principalPaid: pAmt,
                     interestPaid: iAmt,
                     lateFee: lFee,
+                    interestForMonth: iAmt > 0 ? selectedMonth : undefined,
+                    interestForYear: iAmt > 0 ? selectedYear : undefined,
                     method: repayForm.method,
                     notes: repayForm.notes
                 });
+                splitCount = 1;
             }
 
             log('RECORD_REPAYMENT', 'loan_repayments', activeLoan.id, { 
@@ -522,13 +492,13 @@ const SpecialLoans: React.FC = () => {
                 interest: iAmt, 
                 principal: pAmt, 
                 lateFee: lFee,
-                splitCount: (activeLoan.missedMonthsDetails?.length || 0) + 1
+                splitCount
             });
 
             // Auto-close if principal fully repaid
             if (pAmt > 0 && (currentOutstanding - pAmt) <= 1) {
                 if (confirm("Outstanding balance is now zero. Close this loan?")) {
-                    await closeLoan(activeLoan.id);
+                    await closeLoan(activeLoan.id, repayForm.date);
                 }
             }
 
@@ -546,6 +516,7 @@ const SpecialLoans: React.FC = () => {
         setTopupLoan(loan);
         setTopupForm({
             amount: '',
+            rate: loan.interestRate.toString(),
             date: new Date().toISOString().split('T')[0],
             notes: ''
         });
@@ -558,17 +529,22 @@ const SpecialLoans: React.FC = () => {
         setErrorMsg('');
         try {
             const amt = parseFloat(topupForm.amount);
+            const rate = parseFloat(topupForm.rate);
             if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid top-up amount");
+            if (isNaN(rate) || rate <= 0) throw new Error("Please enter a valid monthly rate");
             if (!topupForm.date) throw new Error("Please select a top-up date");
+            if (compareISODate(topupForm.date, topupLoan.startDate) < 0) {
+                throw new Error("Top-up date cannot be before the loan start date");
+            }
 
             await addLoanTopup({
                 loanId: topupLoan.id,
                 amount: amt,
-                rate: topupLoan.interestRate,
+                rate,
                 date: topupForm.date,
                 notes: topupForm.notes || undefined
             });
-            log('ADD_TOPUP', 'loan_topups', topupLoan.id, { memberName: topupLoan.memberName, amount: amt, date: topupForm.date });
+            log('ADD_TOPUP', 'loan_topups', topupLoan.id, { memberName: topupLoan.memberName, amount: amt, rate, date: topupForm.date });
             setModals({ ...modals, topup: false });
         } catch (error) {
             const e = error as Error;
@@ -594,6 +570,11 @@ const SpecialLoans: React.FC = () => {
             const topupDatesStr = loanTopupsForLoan.map(t => formatDisplayDate(t.date)).join(' | ');
             const lateFeesTotal = loanRepayments.filter(r => r.loanId === l.id).reduce((s, r) => s + (r.lateFee || 0), 0);
             const outstanding = getSpecialLoanOutstanding(l.id);
+            const lastPaymentDate = loanRepayments
+                .filter(r => r.loanId === l.id)
+                .map(r => r.date)
+                .sort(compareISODate)
+                .at(-1);
             
             return [
                 l.memberId,
@@ -607,7 +588,7 @@ const SpecialLoans: React.FC = () => {
                 l.historicalInterestPaid,
                 l.selectedMonthLateFee,
                 lateFeesTotal, // this is cumulative from the repayments loop above
-                l.historicalOutstanding,
+                lastPaymentDate ? formatDisplayDate(lastPaymentDate) : '',
                 l.status
             ];
         });
@@ -625,6 +606,7 @@ const SpecialLoans: React.FC = () => {
     };
 
     const openEditModal = (loan: EnrichedLoan) => {
+        setActiveLoan(loan);
         setEditForm({
             id: loan.id,
             amount: loan.principalAmount.toString(),
@@ -638,11 +620,17 @@ const SpecialLoans: React.FC = () => {
     const handleUpdateLoan = async () => {
         if (!activeLoan) return;
         try {
+            const newStartDate = editForm.date;
+            const earliestEventDate = [...loanTopups.filter(t => t.loanId === activeLoan.id).map(t => t.date), ...loanRepayments.filter(r => r.loanId === activeLoan.id).map(r => r.date)]
+                .sort(compareISODate)[0];
+            if (earliestEventDate && compareISODate(newStartDate, earliestEventDate) > 0) {
+                throw new Error(`Loan start date cannot be after the earliest transaction (${formatDisplayDate(earliestEventDate)}).`);
+            }
             await updateLoan({
                 ...activeLoan,
                 principalAmount: parseFloat(editForm.amount),
                 interestRate: parseFloat(editForm.rate),
-                startDate: editForm.date,
+                startDate: newStartDate,
                 status: editForm.status,
                 durationMonths: 0,
                 calculationMethod: 'INTEREST_ONLY'
@@ -668,7 +656,7 @@ const SpecialLoans: React.FC = () => {
                     lateFee: 0,
                     method: PaymentMethod.CASH
                 });
-                await closeLoan(loan.id);
+                await closeLoan(loan.id, new Date().toISOString().split('T')[0]);
             } catch (error) {
                 const e = error as Error;
                 logger.error("Error pre-closing loan", e);
@@ -911,12 +899,12 @@ const SpecialLoans: React.FC = () => {
                                         <div className="flex justify-end gap-2">
                                             <Button size="sm" variant="ghost" icon={Eye} onClick={() => { setActiveLoan(loan); setModals({ ...modals, history: true }); }} title="View Details" />
                                             <Button size="sm" variant="ghost" icon={FileText} onClick={() => setPrintScheduleLoan(loan)} title="View Schedule" className="text-blue-600 dark:text-blue-400" />
-                                            {canRepayLoan && loan.status === LoanStatus.ACTIVE && !loan.isPaidSelectedMonth && (
+                                            {canRepayLoan && loan.status === LoanStatus.ACTIVE && (
                                                 <Button size="sm" onClick={() => openRepayModal(loan)} title="Record Interest Payment" className="text-xs px-2 py-1">
-                                                    Collect
+                                                    {loan.isPaidSelectedMonth ? 'Repay' : 'Collect'}
                                                 </Button>
                                             )}
-                                            {canCreateLoan && (
+                                            {canCreateLoan && loan.status === LoanStatus.ACTIVE && (
                                                 <Button size="sm" variant="ghost" onClick={() => openAutoGenModal(loan)} title="Auto-Generate Interest History" className="text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 px-2">
                                                     <Zap size={14} className="mr-1 inline" /> Auto-Gen
                                                 </Button>
@@ -1039,7 +1027,7 @@ const SpecialLoans: React.FC = () => {
             </Modal>
 
             {/* REPAY MODAL — Interest Only Collection */}
-            <Modal isOpen={modals.repay} onClose={() => setModals({ ...modals, repay: false })} title="Collect Monthly Interest">
+            <Modal isOpen={modals.repay} onClose={() => setModals({ ...modals, repay: false })} title="Record Collection / Principal Repayment">
                 {activeLoan && (
                     <div className="space-y-4">
                         <div className="bg-violet-50 dark:bg-violet-900/20 p-3 rounded-lg border border-violet-100 dark:border-violet-800">
@@ -1048,7 +1036,11 @@ const SpecialLoans: React.FC = () => {
                                 <span className="font-bold text-slate-800 dark:text-white">{activeLoan.memberName}</span>
                                 <div className="text-right">
                                     <div className="text-violet-700 dark:text-violet-300 font-black text-sm">{formatCurrency(activeLoan.historicalOutstanding, settings.currency)} outstanding</div>
-                                    <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">Interest Due: {formatCurrency(activeLoan.interestComp, settings.currency)}</div>
+                                    <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                                        {activeLoan.isPaidSelectedMonth
+                                            ? `Interest for ${MONTHS[selectedMonth - 1]} ${selectedYear} already settled`
+                                            : `Interest Due: ${formatCurrency(activeLoan.interestComp, settings.currency)}`}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1135,7 +1127,7 @@ const SpecialLoans: React.FC = () => {
                                 </div>
                             </div>
                             <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                                Rate: <span className="font-semibold text-violet-600">{topupLoan.interestRate}% / month</span> (same as original)
+                                Current effective rate: <span className="font-semibold text-violet-600">{topupLoan.interestRate}% / month</span>
                             </div>
                         </div>
 
@@ -1148,6 +1140,14 @@ const SpecialLoans: React.FC = () => {
                             value={topupForm.amount}
                             onChange={e => setTopupForm({ ...topupForm, amount: e.target.value })}
                             description={topupForm.amount ? `New outstanding will be: ${formatCurrency(getSpecialLoanOutstanding(topupLoan.id) + (parseFloat(topupForm.amount) || 0), settings.currency)}` : 'Amount being disbursed now'}
+                        />
+
+                        <Input
+                            label="Monthly Rate (% / Mo)"
+                            type="number"
+                            value={topupForm.rate}
+                            onChange={e => setTopupForm({ ...topupForm, rate: e.target.value })}
+                            description="If changed, this rate becomes effective for future interest calculations from the next due month."
                         />
 
                         <Input
@@ -1248,6 +1248,7 @@ const SpecialLoans: React.FC = () => {
                                             <tr>
                                                 <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Date</th>
                                                 <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Type</th>
+                                                <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Interest Period</th>
                                                 <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Amount</th>
                                                 <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Principal</th>
                                                 <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Interest</th>
@@ -1257,24 +1258,13 @@ const SpecialLoans: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                            {/* Base Loan Disbursal Row */}
-                                            <tr className="bg-emerald-50/20">
-                                                <td className="px-4 py-3 font-medium">{formatDisplayDate(activeLoan.startDate)}</td>
-                                                <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">DISBURSAL</span></td>
-                                                <td className="px-4 py-3 text-right font-black text-emerald-700">{formatCurrency(activeLoan.principalAmount, settings.currency)}</td>
-                                                <td className="px-4 py-3 text-right font-black text-emerald-700">{formatCurrency(activeLoan.principalAmount, settings.currency)}</td>
-                                                <td className="px-4 py-3 text-right text-slate-300">—</td>
-                                                <td className="px-4 py-3 text-right font-black text-emerald-700">{formatCurrency(activeLoan.principalAmount, settings.currency)}</td>
-                                                <td className="px-4 py-3 text-slate-500 italic">Original loan disbursement</td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500" onClick={() => openEditModal(activeLoan)}><Edit size={12} /></Button>
-                                                </td>
-                                            </tr>
                                             {activeLoanTransactions.map((tx: any) => (
                                                 <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/20 transition-colors">
                                                     <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{formatDisplayDate(tx.date)}</td>
                                                     <td className="px-4 py-3">
-                                                        {tx.entryType === 'TOPUP' ? (
+                                                        {tx.entryType === 'DISBURSAL' ? (
+                                                            <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">DISBURSAL</span>
+                                                        ) : tx.entryType === 'TOPUP' ? (
                                                             <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-700 font-bold text-[10px]">TOP-UP</span>
                                                         ) : (tx.principalPaid || 0) > 0 && (tx.interestPaid || 0) === 0 ? (
                                                             <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-bold text-[10px]">REPAYMENT</span>
@@ -1282,15 +1272,20 @@ const SpecialLoans: React.FC = () => {
                                                             <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">INTEREST</span>
                                                         )}
                                                     </td>
+                                                    <td className="px-4 py-3 text-slate-500">
+                                                        {tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '—'}
+                                                    </td>
                                                     <td className="px-4 py-3 text-right font-bold">
-                                                        {tx.entryType === 'TOPUP' ? (
+                                                        {tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? (
                                                             <span className="text-violet-600">+{formatCurrency(tx.amount || 0, settings.currency)}</span>
                                                         ) : (tx.principalPaid || 0) > 0 || (tx.interestPaid || 0) > 0 ? (
                                                             <span className="text-red-600">-{formatCurrency((tx.principalPaid || 0) + (tx.interestPaid || 0), settings.currency)}</span>
                                                         ) : '—'}
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-bold">
-                                                        {(tx.principalPaid || 0) > 0 ? (
+                                                        {tx.entryType === 'DISBURSAL' ? (
+                                                            <span className="text-emerald-700">{formatCurrency(tx.amount, settings.currency)}</span>
+                                                        ) : (tx.principalPaid || 0) > 0 ? (
                                                             <span className="text-blue-600">-{formatCurrency(tx.principalPaid, settings.currency)}</span>
                                                         ) : '—'}
                                                     </td>
@@ -1300,27 +1295,31 @@ const SpecialLoans: React.FC = () => {
                                                         ) : '—'}
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-bold">
-                                                        <span className="text-slate-700">{formatCurrency(getSpecialLoanOutstanding(activeLoan.id, tx.date), settings.currency)}</span>
+                                                        <span className="text-slate-700">{formatCurrency(tx.balanceAfter, settings.currency)}</span>
                                                     </td>
                                                     <td className="px-4 py-3 text-slate-500 italic max-w-[200px] truncate">{tx.notes || '—'}</td>
                                                     <td className="px-4 py-3 text-center">
                                                         <div className="flex justify-center gap-1">
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                className="h-6 w-6 text-red-500" 
-                                                                onClick={async () => {
-                                                                    if (confirm("Delete this transaction permanently?")) {
-                                                                        try {
-                                                                            if (tx.entryType === 'TOPUP') await deleteLoanTopup(tx.id);
-                                                                            else await deleteLoanRepayment(tx.id);
-                                                                            log('DELETE_TRANSACTION', 'special_loans', activeLoan.id, { date: tx.date, type: tx.entryType });
-                                                                        } catch (e) { alert("Failed to delete record"); }
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Trash2 size={12} />
-                                                            </Button>
+                                                            {tx.entryType === 'DISBURSAL' ? (
+                                                                <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500" onClick={() => openEditModal(activeLoan)}><Edit size={12} /></Button>
+                                                            ) : (
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-6 w-6 text-red-500" 
+                                                                    onClick={async () => {
+                                                                        if (confirm("Delete this transaction permanently?")) {
+                                                                            try {
+                                                                                if (tx.entryType === 'TOPUP') await deleteLoanTopup(tx.id);
+                                                                                else await deleteLoanRepayment(tx.id);
+                                                                                log('DELETE_TRANSACTION', 'special_loans', activeLoan.id, { date: tx.date, type: tx.entryType, interestPeriod: tx.interestPeriod || null });
+                                                                            } catch (e) { alert("Failed to delete record"); }
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Trash2 size={12} />
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "/tmp/loantracker-tests",
+    "rootDir": ".",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "moduleResolution": "node",
+    "allowImportingTsExtensions": false
+  },
+  "include": [
+    "test/**/*.ts",
+    "utils/date.ts",
+    "utils/loanMath.ts",
+    "types.ts"
+  ]
+}

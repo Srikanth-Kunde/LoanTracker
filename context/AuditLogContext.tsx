@@ -16,12 +16,14 @@ export type AuditAction =
     | 'LOGIN' | 'LOGOUT';
 
 export interface AuditLogEntry {
-    id: string;
+    id: number;
     performed_by: string;         // role: ADMIN | OPERATOR
     action: AuditAction;
     table_name: string;
-    record_id?: string;
+    record_id?: string | null;
+    entity_id?: string | null;
     details?: Record<string, unknown>;
+    payload?: Record<string, unknown>;
     created_at: string;
 }
 
@@ -50,12 +52,13 @@ export function AuditLogProvider({ children }: { children: ReactNode }) {
     ) => {
         if (!role) return; // Not logged in — skip
         const entry = {
-            id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             performed_by: role.toUpperCase(),
             action,
             table_name: tableName,
             record_id: recordId ?? null,
+            entity_id: recordId ?? null,
             details: details ?? null,
+            payload: details ?? null,
             created_at: new Date().toISOString()
         };
         // Intentionally NOT awaited — fire and forget

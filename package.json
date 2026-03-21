@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "tsc -p tsconfig.test.json && node -e \"require('fs').mkdirSync('/tmp/loantracker-tests', { recursive: true }); require('fs').writeFileSync('/tmp/loantracker-tests/package.json', '{\\\"type\\\":\\\"commonjs\\\"}')\" && node /tmp/loantracker-tests/test/loanMath.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Save, RotateCcw, Database } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
-import { SocietySettings, AccentColor, ThemeMode } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { SocietySettings, AccentColor, ThemeMode, UserRole } from '../types';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -11,8 +12,10 @@ const ACCENT_OPTIONS: AccentColor[] = ['blue', 'emerald', 'violet', 'amber', 'ro
 
 const SettingsPage: React.FC = () => {
   const { settings, updateSettings, resetSettings } = useSettings();
+  const { role } = useAuth();
   const [form, setForm] = useState<SocietySettings>(settings);
   const [message, setMessage] = useState('');
+  const canEdit = role === UserRole.ADMIN;
 
   useEffect(() => {
     setForm(settings);
@@ -23,6 +26,10 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSave = () => {
+    if (!canEdit) {
+      setMessage('Only admins can update settings.');
+      return;
+    }
     updateSettings({
       societyName: form.societyName.trim() || settings.societyName,
       currency: form.currency.trim() || settings.currency,
@@ -39,6 +46,10 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleReset = () => {
+    if (!canEdit) {
+      setMessage('Only admins can reset settings.');
+      return;
+    }
     resetSettings();
     setMessage('Settings reset to defaults.');
   };
@@ -50,6 +61,11 @@ const SettingsPage: React.FC = () => {
         <p className="text-slate-500 dark:text-slate-400">
           This page is aligned to the existing <code>app_settings</code> columns defined in <code>migration.sql</code>.
         </p>
+        {!canEdit && (
+          <p className="text-amber-600 dark:text-amber-400 text-sm">
+            You are in read-only mode. Admin access is required to change system settings or access codes.
+          </p>
+        )}
       </div>
 
       <Card title="General" subtitle="Core defaults used by the special-loan workflow">
@@ -58,11 +74,13 @@ const SettingsPage: React.FC = () => {
             label="Society Name"
             value={form.societyName}
             onChange={e => setField('societyName', e.target.value)}
+            disabled={!canEdit}
           />
           <Input
             label="Currency"
             value={form.currency}
             onChange={e => setField('currency', e.target.value)}
+            disabled={!canEdit}
           />
           <Input
             label="Default Monthly Interest Rate (%)"
@@ -71,6 +89,7 @@ const SettingsPage: React.FC = () => {
             value={String(form.defaultLoanInterestRate ?? '')}
             onChange={e => setField('defaultLoanInterestRate', Number(e.target.value))}
             description="Used as the default rate when creating a new special loan."
+            disabled={!canEdit}
           />
           <Input
             label="Loan Processing Fee"
@@ -79,12 +98,14 @@ const SettingsPage: React.FC = () => {
             value={String(form.loanProcessingFee ?? '')}
             onChange={e => setField('loanProcessingFee', Number(e.target.value))}
             description="Optional manual fee recorded at disbursal time."
+            disabled={!canEdit}
           />
           <Input
             label="Banner Image URL"
             value={form.bannerImage ?? ''}
             onChange={e => setField('bannerImage', e.target.value)}
             className="md:col-span-2"
+            disabled={!canEdit}
           />
         </div>
       </Card>
@@ -96,18 +117,21 @@ const SettingsPage: React.FC = () => {
             type="password"
             value={form.adminPassword ?? ''}
             onChange={e => setField('adminPassword', e.target.value)}
+            disabled={!canEdit}
           />
           <Input
             label="Operator Code"
             type="password"
             value={form.operatorCode ?? ''}
             onChange={e => setField('operatorCode', e.target.value)}
+            disabled={!canEdit}
           />
           <Input
             label="Viewer Code"
             type="password"
             value={form.viewerCode ?? ''}
             onChange={e => setField('viewerCode', e.target.value)}
+            disabled={!canEdit}
           />
         </div>
       </Card>
@@ -122,6 +146,7 @@ const SettingsPage: React.FC = () => {
               value={form.themeMode ?? 'light'}
               onChange={e => setField('themeMode', e.target.value as ThemeMode)}
               className="block w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-white"
+              disabled={!canEdit}
             >
               {THEME_OPTIONS.map(option => (
                 <option key={option} value={option}>{option}</option>
@@ -136,6 +161,7 @@ const SettingsPage: React.FC = () => {
               value={form.accentColor ?? 'blue'}
               onChange={e => setField('accentColor', e.target.value as AccentColor)}
               className="block w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-white"
+              disabled={!canEdit}
             >
               {ACCENT_OPTIONS.map(option => (
                 <option key={option} value={option}>{option}</option>
@@ -157,8 +183,8 @@ const SettingsPage: React.FC = () => {
       </Card>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button icon={Save} onClick={handleSave}>Save Settings</Button>
-        <Button variant="outline" icon={RotateCcw} onClick={handleReset}>Reset Defaults</Button>
+        <Button icon={Save} onClick={handleSave} disabled={!canEdit}>Save Settings</Button>
+        <Button variant="outline" icon={RotateCcw} onClick={handleReset} disabled={!canEdit}>Reset Defaults</Button>
         {message && <span className="text-sm text-emerald-600 dark:text-emerald-400">{message}</span>}
       </div>
     </div>

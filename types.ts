@@ -109,8 +109,11 @@ export interface LoanRepayment {
   interestPaid: number;
   principalPaid: number;
   lateFee?: number;
+  interestForMonth?: number;
+  interestForYear?: number;
   method: PaymentMethod;
   notes?: string;
+  createdAt?: string;
 }
 
 export interface SocietySettings {
