@@ -65,8 +65,16 @@ const getNextPeriod = ({ year, month }: InterestPeriod): InterestPeriod =>
 const getPreviousPeriod = ({ year, month }: InterestPeriod): InterestPeriod =>
   month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
 
+const comparePeriods = (left: InterestPeriod, right: InterestPeriod) => {
+  if (left.year !== right.year) return left.year - right.year;
+  return left.month - right.month;
+};
+
 const isPeriodAfter = (left: InterestPeriod, right: InterestPeriod) =>
   left.year > right.year || (left.year === right.year && left.month > right.month);
+
+const isSamePeriod = (left: InterestPeriod, right: InterestPeriod) =>
+  left.year === right.year && left.month === right.month;
 
 export const getEffectiveLoanRate = (loan: Loan, topups: LoanTopup[], asOfDate?: string) => {
   const cutoff = asOfDate ? normalizeISODate(asOfDate) : null;
@@ -147,6 +155,82 @@ export const getInterestDueForPeriod = (
   };
 };
 
+const getSustainedZeroBalanceDate = (
+  loan: Loan,
+  topups: LoanTopup[],
+  repayments: LoanRepayment[]
+) => {
+  const ledger = buildLoanLedger(loan, topups, repayments);
+  let zeroBalanceDate: string | null = null;
+
+  ledger.forEach(row => {
+    if (row.balanceAfter <= 1) {
+      zeroBalanceDate = row.date;
+      return;
+    }
+
+    zeroBalanceDate = null;
+  });
+
+  return zeroBalanceDate;
+};
+
+export const getAutoGenerationStopDate = (
+  loan: Loan,
+  topups: LoanTopup[],
+  repayments: LoanRepayment[],
+  endPeriod: InterestPeriod
+) => {
+  let stopDate = getLastDayOfMonthISO(endPeriod.year, endPeriod.month);
+  const zeroBalanceDate = getSustainedZeroBalanceDate(loan, topups, repayments);
+
+  if (loan.endDate && compareISODate(loan.endDate, stopDate) < 0) {
+    stopDate = normalizeISODate(loan.endDate);
+  }
+
+  if (zeroBalanceDate && compareISODate(zeroBalanceDate, stopDate) < 0) {
+    stopDate = zeroBalanceDate;
+  }
+
+  return stopDate;
+};
+
+const getChargeableInterestPeriods = (
+  loan: Loan,
+  topups: LoanTopup[],
+  repayments: LoanRepayment[],
+  endPeriod: InterestPeriod
+) => {
+  const startPeriod = getInterestPeriodFromDate(loan.startDate);
+  const stopDate = getAutoGenerationStopDate(loan, topups, repayments, endPeriod);
+  const stopPeriod = getInterestPeriodFromDate(stopDate);
+  let cursor = getNextPeriod(startPeriod);
+  const periods: Array<InterestPeriod & {
+    interestDue: number;
+    openingOutstanding: number;
+    rate: number;
+    postingDate: string;
+  }> = [];
+
+  while (comparePeriods(cursor, stopPeriod) <= 0) {
+    const periodDue = getInterestDueForPeriod(loan, topups, repayments, cursor);
+    if (periodDue.interestDue > 0) {
+      periods.push({
+        ...cursor,
+        interestDue: periodDue.interestDue,
+        openingOutstanding: periodDue.openingOutstanding,
+        rate: periodDue.rate,
+        postingDate: isSamePeriod(cursor, stopPeriod)
+          ? stopDate
+          : getLastDayOfMonthISO(cursor.year, cursor.month)
+      });
+    }
+    cursor = getNextPeriod(cursor);
+  }
+
+  return periods;
+};
+
 export const getInterestPaidForPeriod = (
   repayments: LoanRepayment[],
   loanId: string,
@@ -176,24 +260,42 @@ export const getMissingInterestPeriods = (
   repayments: LoanRepayment[],
   endPeriod: InterestPeriod
 ) => {
-  const startPeriod = getInterestPeriodFromDate(loan.startDate);
-  let cursor = getNextPeriod(startPeriod);
-  const missing: Array<InterestPeriod & { interestDue: number; openingOutstanding: number; rate: number }> = [];
+  const invalidRepaymentIds = new Set(
+    getInvalidInterestRepayments(loan, topups, repayments, endPeriod).map(repayment => repayment.id)
+  );
+  const validRepayments = repayments.filter(repayment => !invalidRepaymentIds.has(repayment.id));
 
-  while (!isPeriodAfter(cursor, endPeriod)) {
-    const periodDue = getInterestDueForPeriod(loan, topups, repayments, cursor);
-    if (periodDue.interestDue > 0 && !isInterestSettledForPeriod(repayments, loan.id, cursor)) {
-      missing.push({
-        ...cursor,
-        interestDue: periodDue.interestDue,
-        openingOutstanding: periodDue.openingOutstanding,
-        rate: periodDue.rate
-      });
+  return getChargeableInterestPeriods(loan, topups, repayments, endPeriod).filter(period =>
+    !isInterestSettledForPeriod(validRepayments, loan.id, period)
+  );
+};
+
+export const getInvalidInterestRepayments = (
+  loan: Loan,
+  topups: LoanTopup[],
+  repayments: LoanRepayment[],
+  endPeriod: InterestPeriod
+) => {
+  const chargeablePeriods = getChargeableInterestPeriods(loan, topups, repayments, endPeriod);
+  const validPeriodKeys = new Set(chargeablePeriods.map(getInterestPeriodKey));
+  const stopDate = getAutoGenerationStopDate(loan, topups, repayments, endPeriod);
+
+  return repayments.filter(repayment => {
+    if (repayment.loanId !== loan.id || (repayment.interestPaid || 0) <= 0) {
+      return false;
     }
-    cursor = getNextPeriod(cursor);
-  }
 
-  return missing;
+    const assignedPeriod = getRepaymentInterestPeriod(repayment);
+    if (!assignedPeriod) {
+      return compareISODate(repayment.date, stopDate) > 0;
+    }
+
+    if (!validPeriodKeys.has(getInterestPeriodKey(assignedPeriod))) {
+      return true;
+    }
+
+    return compareISODate(repayment.date, stopDate) > 0;
+  });
 };
 
 export const buildLoanLedger = (

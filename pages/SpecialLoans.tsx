@@ -21,8 +21,10 @@ import { Card } from '../components/ui/Card';
 import { LoanCalculator } from '../components/LoanCalculator';
 import { compareISODate, formatDisplayDate, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp } from '../utils/date';
 import {
+    getAutoGenerationStopDate,
     buildLoanLedger,
     getInterestDueForPeriod,
+    getInvalidInterestRepayments,
     getInterestPaidForPeriod,
     getInterestPeriodKey,
     getLastInterestPaymentDate,
@@ -54,7 +56,7 @@ const SpecialLoans: React.FC = () => {
     const {
         loans, loanRepayments, createLoan, updateLoan, deleteLoan,
         recordLoanRepayment, closeLoan,
-        deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, bulkRecordLoanRepayments
+        deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, bulkRecordLoanRepayments
     } = useFinancials();
     const { role } = useAuth();
     const { loanTopups, addLoanTopup, getSpecialLoanOutstanding } = useFinancials();
@@ -317,16 +319,27 @@ const SpecialLoans: React.FC = () => {
     }, [loans, members, loanRepayments, loanTopups, selectedMonth, selectedYear, searchTerm, statusFilter, sortOrder]);
 
     const autoGenPreview = useMemo(() => {
-        if (!autoGenLoan) return { months: 0, totalInterest: 0, records: [] };
+        if (!autoGenLoan) {
+            return {
+                months: 0,
+                totalInterest: 0,
+                records: [],
+                staleInterestCount: 0,
+                staleInterestTotal: 0,
+                stopDate: null as string | null
+            };
+        }
         const today = new Date();
         const endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
         const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === autoGenLoan.id);
         const loanTopupsForLoan = loanTopups.filter(t => t.loanId === autoGenLoan.id);
+        const stopDate = getAutoGenerationStopDate(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
+        const staleInterestRows = getInvalidInterestRepayments(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
         const missingPeriods = getMissingInterestPeriods(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
 
         const missingRecords: Omit<LoanRepayment, 'id'>[] = missingPeriods.map(period => ({
             loanId: autoGenLoan.id,
-            date: getLastDayOfMonthISO(period.year, period.month),
+            date: period.postingDate,
             amount: period.interestDue,
             interestPaid: period.interestDue,
             principalPaid: 0,
@@ -338,8 +351,16 @@ const SpecialLoans: React.FC = () => {
         }));
 
         const totalInterest = missingRecords.reduce((sum, record) => sum + (record.interestPaid || 0), 0);
+        const staleInterestTotal = staleInterestRows.reduce((sum, row) => sum + Number(row.interestPaid || 0), 0);
 
-        return { months: missingRecords.length, totalInterest, records: missingRecords };
+        return {
+            months: missingRecords.length,
+            totalInterest,
+            records: missingRecords,
+            staleInterestCount: staleInterestRows.length,
+            staleInterestTotal,
+            stopDate
+        };
     }, [autoGenLoan, loanRepayments, loanTopups, getSpecialLoanOutstanding]);
 
     const stats = useMemo(() => {
@@ -748,8 +769,17 @@ const SpecialLoans: React.FC = () => {
 
     const handleGenerateInterest = async () => {
         try {
-            await bulkRecordLoanRepayments(autoGenPreview.records);
-            log('BULK_RECORD_INTEREST', 'loan_repayments', autoGenLoan?.id || '', { generatedCount: autoGenPreview.months, totalAmount: autoGenPreview.totalInterest });
+            if (!autoGenLoan) return;
+
+            const cleanedCount = await cleanupInvalidLoanInterest(autoGenLoan.id);
+            if (autoGenPreview.records.length > 0) {
+                await bulkRecordLoanRepayments(autoGenPreview.records);
+            }
+            log('BULK_RECORD_INTEREST', 'loan_repayments', autoGenLoan.id, {
+                generatedCount: autoGenPreview.months,
+                cleanedCount,
+                totalAmount: autoGenPreview.totalInterest
+            });
             setModals({ ...modals, autoGen: false });
         } catch (error) {
             const e = error as Error;
@@ -945,8 +975,8 @@ const SpecialLoans: React.FC = () => {
                                                     {loan.isPaidSelectedMonth ? 'Repay' : 'Collect'}
                                                 </Button>
                                             )}
-                                            {canCreateLoan && loan.status === LoanStatus.ACTIVE && (
-                                                <Button size="sm" variant="ghost" onClick={() => openAutoGenModal(loan)} title="Auto-Generate Interest History" className="text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 px-2">
+                                            {canCreateLoan && (
+                                                <Button size="sm" variant="ghost" onClick={() => openAutoGenModal(loan)} title="Auto-Generate / Repair Interest History" className="text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 px-2">
                                                     <Zap size={14} className="mr-1 inline" /> Auto-Gen
                                                 </Button>
                                             )}
@@ -1258,10 +1288,14 @@ const SpecialLoans: React.FC = () => {
                 <div className="space-y-6 pt-2">
                     <div className="bg-amber-50 dark:bg-amber-900/30 p-4 rounded-lg flex gap-3 text-amber-800 dark:text-amber-200 text-sm">
                         <AlertTriangle className="shrink-0 mt-0.5" />
-                        <p>This will automatically calculate and record interest payments for all missing months from the loan's start date ({autoGenLoan && formatDisplayDate(autoGenLoan.startDate)}) until the current month.</p>
+                        <p>This will calculate missing interest from the loan start date ({autoGenLoan && formatDisplayDate(autoGenLoan.startDate)}) up to the earlier of today, the loan close date, or the date the principal reached zero. Any stale auto-interest dated after that cutoff will be cleaned automatically.</p>
                     </div>
 
                     <div className="space-y-4">
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                            <span className="text-slate-500 font-medium">Auto-Gen Cutoff Date</span>
+                            <span className="font-bold text-slate-900 dark:text-white">{autoGenPreview.stopDate ? formatDisplayDate(autoGenPreview.stopDate) : 'N/A'}</span>
+                        </div>
                         <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                             <span className="text-slate-500 font-medium">Missing Months Detected</span>
                             <span className="font-bold text-slate-900 dark:text-white text-xl">{autoGenPreview.months}</span>
@@ -1270,7 +1304,17 @@ const SpecialLoans: React.FC = () => {
                             <span className="text-slate-500 font-medium">Total Interest Calculated</span>
                             <span className="font-bold text-amber-600 text-xl">{formatCurrency(autoGenPreview.totalInterest, settings.currency)}</span>
                         </div>
-                        <p className="text-xs text-slate-400 mt-2">Interest is calculated month-by-month based on the outstanding principal at that time, accounting for any top-ups or partial repayments.</p>
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                            <span className="text-slate-500 font-medium">Invalid Interest Rows To Clean</span>
+                            <span className="font-bold text-rose-600 text-xl">{autoGenPreview.staleInterestCount}</span>
+                        </div>
+                        {autoGenPreview.staleInterestCount > 0 && (
+                            <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                                <span className="text-slate-500 font-medium">Invalid Interest Value</span>
+                                <span className="font-bold text-rose-600 text-xl">{formatCurrency(autoGenPreview.staleInterestTotal, settings.currency)}</span>
+                            </div>
+                        )}
+                        <p className="text-xs text-slate-400 mt-2">Interest is calculated month-by-month from historical outstanding principal. If the cutoff lands inside a month, that month can still be generated, but it will be dated on the actual close/payoff date instead of month-end.</p>
                     </div>
 
                     <div className="flex justify-between gap-3 mt-6">
@@ -1282,7 +1326,9 @@ const SpecialLoans: React.FC = () => {
                         )}
                         <div className="flex gap-3 ml-auto">
                             <Button variant="outline" onClick={() => setModals({ ...modals, autoGen: false })}>Cancel</Button>
-                            <Button onClick={handleGenerateInterest} disabled={autoGenPreview.months === 0}>Generate {autoGenPreview.months} Records</Button>
+                            <Button onClick={handleGenerateInterest} disabled={autoGenPreview.months === 0 && autoGenPreview.staleInterestCount === 0}>
+                                Apply Auto-Fix ({autoGenPreview.months} new, {autoGenPreview.staleInterestCount} clean)
+                            </Button>
                         </div>
                     </div>
                 </div>

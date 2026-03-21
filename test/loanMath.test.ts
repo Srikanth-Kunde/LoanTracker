@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { Loan, LoanRepayment, LoanStatus, LoanTopup, LoanType, PaymentMethod } from '../types';
 import {
-  buildLoanLedger,
-  getInterestDueForPeriod,
-  getInterestPaidForPeriod,
-  getMissingInterestPeriods,
-  getSpecialLoanOutstandingFromEvents
+    buildLoanLedger,
+    getAutoGenerationStopDate,
+    getInterestDueForPeriod,
+    getInvalidInterestRepayments,
+    getInterestPaidForPeriod,
+    getMissingInterestPeriods,
+    getSpecialLoanOutstandingFromEvents
 } from '../utils/loanMath';
 
 const makeLoan = (overrides: Partial<Loan> = {}): Loan => ({
@@ -116,6 +118,56 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
     ledger.map(row => row.balanceAfter),
     [50000, 60000, 55000],
     'Running balance should be deterministic and respect same-day created_at ordering'
+  );
+}
+
+{
+  const loan = makeLoan({
+    startDate: '2013-01-10',
+    principalAmount: 50000,
+    endDate: '2013-03-10',
+    status: LoanStatus.CLOSED
+  });
+  const repayments = [
+    makeRepayment('rep_principal_close', {
+      date: '2013-03-10',
+      amount: 50000,
+      principalPaid: 50000
+    }),
+    makeRepayment('rep_stale_mar', {
+      date: '2013-03-31',
+      amount: 750,
+      interestPaid: 750,
+      interestForMonth: 3,
+      interestForYear: 2013
+    }),
+    makeRepayment('rep_stale_apr', {
+      date: '2013-04-30',
+      amount: 750,
+      interestPaid: 750,
+      interestForMonth: 4,
+      interestForYear: 2013
+    })
+  ];
+
+  assert.equal(
+    getAutoGenerationStopDate(loan, [], repayments, { year: 2013, month: 12 }),
+    '2013-03-10',
+    'Auto-generation should stop on the actual close/payoff date'
+  );
+
+  const invalidRows = getInvalidInterestRepayments(loan, [], repayments, { year: 2013, month: 12 });
+  assert.deepEqual(
+    invalidRows.map(row => row.id),
+    ['rep_stale_mar', 'rep_stale_apr'],
+    'Interest rows dated after the close/payoff date should be flagged for cleanup'
+  );
+
+  const missing = getMissingInterestPeriods(loan, [], repayments, { year: 2013, month: 12 });
+  assert.deepEqual(
+    missing.map(period => `${period.year}-${String(period.month).padStart(2, '0')}@${period.postingDate}`),
+    ['2013-02@2013-02-28', '2013-03@2013-03-10'],
+    'Auto-generation should keep the close month but date it on the close/payoff date'
   );
 }
 

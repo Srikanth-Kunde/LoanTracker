@@ -6,7 +6,7 @@ import { logger } from '../utils/logger';
 import {
   normalizeISODate
 } from '../utils/date';
-import { getSpecialLoanOutstandingFromEvents } from '../utils/loanMath';
+import { getInvalidInterestRepayments, getSpecialLoanOutstandingFromEvents } from '../utils/loanMath';
 
 interface FinancialContextType {
   loans: Loan[];
@@ -25,6 +25,7 @@ interface FinancialContextType {
   addLoanTopup: (topup: Omit<LoanTopup, 'id' | 'createdAt'>) => Promise<void>;
   deleteLoanTopup: (id: string) => Promise<void>;
   wipeLoanInterest: (loanId: string) => Promise<void>;
+  cleanupInvalidLoanInterest: (loanId: string) => Promise<number>;
   getSpecialLoanOutstanding: (loanId: string, asOfDate?: string) => number;
 
   setFinancialData: (data: { loans?: Loan[], loanRepayments?: LoanRepayment[] }) => void;
@@ -257,15 +258,66 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     fetchFinancials();
   }, [fetchFinancials]);
 
+  const cleanupInvalidInterestRowsForLoan = useCallback(async (loan: Loan) => {
+    const today = new Date();
+    const endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
+    const invalidRows = getInvalidInterestRepayments(
+      loan,
+      loanTopups.filter(t => t.loanId === loan.id),
+      loanRepayments.filter(r => r.loanId === loan.id),
+      endPeriod
+    );
+
+    if (!invalidRows.length) {
+      return 0;
+    }
+
+    const fullDeleteIds = invalidRows
+      .filter(row => (row.principalPaid || 0) === 0 && (row.lateFee || 0) === 0)
+      .map(row => row.id);
+    const mixedRows = invalidRows.filter(row => !fullDeleteIds.includes(row.id));
+
+    if (fullDeleteIds.length > 0) {
+      const { error } = await supabase.from('loan_repayments')
+        .delete()
+        .in('id', fullDeleteIds);
+      if (error) throw error;
+    }
+
+    for (const row of mixedRows) {
+      const { error } = await supabase.from('loan_repayments').update({
+        amount: roundCurrency(Number(row.principalPaid || 0)),
+        interest_paid: 0,
+        interest_for_month: null,
+        interest_for_year: null
+      }).eq('id', row.id);
+
+      if (error) throw error;
+    }
+
+    return invalidRows.length;
+  }, [loanRepayments, loanTopups, roundCurrency]);
+
   const closeLoan = useCallback(async (loanId: string, endDate?: string) => {
+    const normalizedEndDate = normalizeISODate(endDate || new Date().toISOString().split('T')[0]);
     const { error } = await supabase.from('loans').update({
       status: LoanStatus.CLOSED,
-      end_date: normalizeISODate(endDate || new Date().toISOString().split('T')[0])
+      end_date: normalizedEndDate
     }).eq('id', loanId);
 
     if (error) throw error;
+
+    const loan = loans.find(existingLoan => existingLoan.id === loanId);
+    if (loan) {
+      await cleanupInvalidInterestRowsForLoan({
+        ...loan,
+        status: LoanStatus.CLOSED,
+        endDate: normalizedEndDate
+      });
+    }
+
     fetchFinancials();
-  }, [fetchFinancials]);
+  }, [cleanupInvalidInterestRowsForLoan, fetchFinancials, loans]);
 
   // Top-ups
   const addLoanTopup = useCallback(async (t: Omit<LoanTopup, 'id' | 'createdAt'>) => {
@@ -317,6 +369,18 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     fetchFinancials();
   }, [fetchFinancials, loanRepayments, roundCurrency]);
 
+  const cleanupInvalidLoanInterest = useCallback(async (loanId: string) => {
+    const loan = loans.find(existingLoan => existingLoan.id === loanId);
+    if (!loan) return 0;
+
+    const cleanedCount = await cleanupInvalidInterestRowsForLoan(loan);
+    if (cleanedCount > 0) {
+      fetchFinancials();
+    }
+
+    return cleanedCount;
+  }, [cleanupInvalidInterestRowsForLoan, fetchFinancials, loans]);
+
   const getSpecialLoanOutstanding = useCallback((loanId: string, asOfDate?: string) => {
     const targetId = String(loanId).trim();
     const loan = loans.find((l: Loan) => String(l.id).trim() === targetId);
@@ -359,7 +423,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       loans, loanRepayments, loanTopups,
       createLoan, updateLoan, deleteLoan, recordLoanRepayment, bulkRecordLoanRepayments, deleteLoanRepayment,
       closeLoan,
-      addLoanTopup, deleteLoanTopup, wipeLoanInterest, getSpecialLoanOutstanding,
+      addLoanTopup, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, getSpecialLoanOutstanding,
       setFinancialData, importFinancials, deleteAllFinancials, resetFinancials,
       isLoading
     }}>

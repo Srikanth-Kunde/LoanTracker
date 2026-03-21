@@ -85,6 +85,7 @@ The application requires a specific schema and security configuration to functio
 - The script remains **idempotent** and is safe to rerun from the Supabase SQL Editor.
 - **Legacy table removal**: `migration.sql` now drops the obsolete `payments` table because it is no longer part of the live product.
 - **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
+- **Current closure auto-cleanup fix**: No additional SQL is required for the latest post-closure / zero-balance interest cleanup. That behavior is handled entirely in the application logic.
 
 ### Full Reset
 
@@ -192,6 +193,8 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Audit Report Consistency**: Refactored filtering logic to ensure that UI cards and CSV exports (Tally/Full Audit) are always in sync, even when search filters are applied.
 *   **Auto-Generate Interest Module**: Added a powerful utility to backfill historical legacy ledgers by dynamically generating accurate monthly interest payments with a single click.
 *   **Auto-Generate Edge-Cases**: Hardened the auto-generator to correctly calculate liability across months containing partial principal recoveries, elegantly handle legacy closed loans, format output dates to the end-of-month, and automatically repair manual SQL entries missing principal data.
+*   **Auto-Gen Closure / Zero-Balance Cleanup**: Auto-generation now stops at the earlier of today, the loan close date, or the sustained zero-balance date. If the final valid period ends mid-month, the generated interest is dated on the actual close/payoff date, and stale interest rows after that cutoff are cleaned automatically.
+*   **Closed-Loan Repair Access**: The same Auto-Gen modal is now available on closed loans so historical stale interest rows can be repaired without SQL intervention.
 *   **Robust Date Parsing**: Upgraded internal date utilities to support diverse formats like `10/06/2017` and `10-06-2017`, preventing data parsing failures on legacy handwritten records.
 *   **High-Precision Calculation Engine**: Hardened the interest logic with UTC-safe date comparisons and "zero-balance" guards to ensure 100% accuracy on historical ledgers.
 *   **Balance Audit Column**: Added a real-time "Running Balance" column to the loan ledger for row-by-row verification of principal reductions.

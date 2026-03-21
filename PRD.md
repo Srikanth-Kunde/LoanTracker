@@ -95,6 +95,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Safety**: The script is **idempotent** and safe to rerun. It uses `IF NOT EXISTS` for tables and indexes and guarded policy creation.
 *   **Access Control**: The script automatically enables Row Level Security (RLS) and adds global permissions for the `anon` role to ensure secure but functional access from the Vite app.
 *   **Operational Note**: `migration.sql` is also the upgrade path for existing deployments. Operators must rerun it after the ledger hardening release so the new repayment-period columns, audit-log compatibility columns, constraints, triggers, and legacy-table cleanup are applied.
+*   **Current Closure Auto-Cleanup Fix**: No additional schema change is required for the latest post-closure interest cleanup. It is implemented in the shared calculation engine and repayment workflows on top of the existing tables.
 
 #### 5.4. Product Scope Corrections
 *   The generic `Dashboard` has been removed from the live app surface to focus on the ledger system.
@@ -107,6 +108,8 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Enhanced Date Navigation**: Replaced linear month-switchers with direct Month/Year dropdown selectors in the Special Loans view, enabling instant jumps to historical data (e.g., 2012).
 *   **Auto-Generate Historical Interest**: Added a single-click "Auto-Gen" tool to automatically traverse a legacy loan's history month-by-month and backfill all missing interest payment records based on dynamically calculated outstanding principal balances.
 *   **Auto-Generate Interest Edge-Case Handling**: Fortified mathematical calculations to strictly evaluate liability across months where only partial principal was recovered, gracefully handle missing SQL `principal_paid` mappings for manual test entries, perfectly align output timestamps to the end of the month (e.g. `31-08-2017`), and allowed auto-generation to seamlessly function on historic legacy loans that are already marked as Closed.
+*   **Auto-Gen Closure / Payoff Control**: The generator now stops at the earlier of today, the loan close date, or the sustained zero-balance date. If the last valid interest month ends on a mid-month closure/payoff, the generated record is dated on that actual closure date instead of month-end, and any stale post-cutoff interest entries are automatically cleaned.
+*   **Closed-Loan Repair Workflow**: Operators can open the same Auto-Gen workflow on closed loans to repair stale historical interest rows without directly editing the database.
 *   **Interest Allocation Model**: Reworked repayment storage so an interest collection can be assigned to a specific settlement month/year instead of inferring the liability month from the payment date alone.
 *   **Principal-Only Recovery Fix**: Corrected the loan status logic so voluntary principal repayments no longer suppress the interest collection workflow for the same month.
 *   **Arrears Posting Fix**: Corrected missed-month posting so arrears are allocated to their actual historical periods without generating negative or mathematically invalid current-period rows.
