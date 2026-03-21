@@ -879,7 +879,7 @@ const SpecialLoans: React.FC = () => {
                                                     Collect
                                                 </Button>
                                             )}
-                                            {canCreateLoan && loan.status === LoanStatus.ACTIVE && (
+                                            {canCreateLoan && (
                                                 <Button size="sm" variant="ghost" onClick={() => openAutoGenModal(loan)} title="Auto-Generate Interest History" className="text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 px-2">
                                                     <Zap size={14} className="mr-1 inline" /> Auto-Gen
                                                 </Button>

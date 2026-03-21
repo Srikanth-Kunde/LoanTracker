@@ -113,6 +113,7 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Quick Date Selection**: Implemented direct Year and Month dropdowns in the Special Loans tab for significantly faster historical record navigation.
 *   **Audit Report Consistency**: Refactored filtering logic to ensure that UI cards and CSV exports (Tally/Full Audit) are always in sync, even when search filters are applied.
 *   **Auto-Generate Interest Module**: Added a powerful utility to backfill historical legacy ledgers by dynamically generating accurate monthly interest payments with a single click.
+*   **Auto-Generate Edge-Cases**: Hardened the auto-generator to correctly calculate liability across months containing partial principal recoveries, elegantly handle legacy closed loans, format output dates to the end-of-month, and automatically repair manual SQL entries missing principal data.
 
 *   **Audit Reports**: Extended the Audit Tally and CSV exports to handle historical data from 2012.
 
