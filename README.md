@@ -8,6 +8,7 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 
 *   **Dynamic Principal Tracking:** Outstanding balances are calculated on-the-fly based on original principal + top-ups - principal repayments.
 *   **Manual Interest Proration:** Supports overwriting standard monthly interest amounts to account for 15-day or 20-day partial borrowing periods.
+*   **Interest-Period Aware Ledger:** Interest collections are now allocated to an explicit settlement month/year, so back-dated entries, arrears, and principal-only recoveries no longer corrupt monthly status.
 *   **No Auto-Late Fees:** Designed to perfectly match historical handwritten books, the system will never auto-calculate late fees. Late fees are only recorded if explicitly provided by the operator.
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
 *   **Auto-Interest Engine:** Single-click "Zap" button to backfill decades of historical interest records based on dynamically calculated principal balances.
@@ -78,16 +79,68 @@ The application requires a specific schema and security configuration to functio
 5.  Run `sql/sample-ajay-remove.sql` whenever you want to remove the sample rows.
 
 ### Do You Need To Run SQL Again?
-- **No new schema changes** are required for the Legacy Loan Tracker update.
-- **Run `migration.sql` only once** for initial setup. Rerunning it is safe and idempotent.
-- **`payments` table**: This table is still present in the schema but is ignored by the UI in this version.
+- **Yes, if your database was created before the latest ledger hardening update, rerun `migration.sql`.**
+- `migration.sql` now adds new repayment allocation columns, audit-log compatibility columns, repayment validation constraints, and date-validation triggers.
+- The script remains **idempotent** and is safe to rerun from the Supabase SQL Editor.
+- **Legacy table removal**: `migration.sql` now drops the obsolete `payments` table because it is no longer part of the live product.
 - **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
 
 **What this script does:**
-- **Recreates Tables**: Sets up `members`, `loans`, `payments`, etc., with the correct types.
+- **Recreates Active Tables**: Sets up `members`, `loans`, `loan_repayments`, `loan_topups`, `app_settings`, and `audit_logs`.
+- **Upgrades Existing Tables**: Adds `loan_repayments.interest_for_month`, `loan_repayments.interest_for_year`, and new `audit_logs` compatibility columns if they are missing.
+- **Removes Dead Schema**: Drops the unused `payments` table so the database matches the actual app surface.
+- **Adds Integrity Guards**: Enforces non-negative repayment values, `amount = principal + interest`, valid interest-period ranges, and blocks loan events before the base loan date.
 - **Enables Security**: Activates Row Level Security (RLS) to remove the "UNRESTRICTED" warning.
 - **Grants Access**: Adds policies to allow your web app (via the `anon` key) to read and write data.
 - **Idempotency**: Safe to run multiple times; it will only add missing pieces.
+
+### Existing Deployment Upgrade
+
+If you already have live ledger data:
+
+1. Run `migration.sql` in the Supabase SQL Editor.
+2. Confirm that only these public tables remain for the app: `members`, `loans`, `loan_topups`, `loan_repayments`, `app_settings`, `audit_logs`.
+3. Refresh the app so the frontend starts using the new repayment-period fields.
+4. Run `npm test` and `npm run build` locally if you maintain a custom deployment pipeline.
+
+You do **not** need any separate ad-hoc SQL patch if your existing data already satisfies:
+
+- `loan_repayments.amount = principal_paid + interest_paid`
+- `loan_repayments.amount >= 0`
+- `loan_repayments.interest_paid >= 0`
+- `loan_repayments.principal_paid >= 0`
+- `loan_repayments.late_fee >= 0`
+- no `loan_topups.date` or `loan_repayments.date` earlier than the parent `loans.start_date`
+
+If your legacy database contains rows that violate those rules, `migration.sql` can fail while adding the new constraints. In that case, correct the offending legacy rows first, then rerun `migration.sql`.
+
+Optional diagnostic queries for existing data:
+
+```sql
+-- Repayments where total amount does not equal principal + interest
+SELECT id, loan_id, date, amount, principal_paid, interest_paid
+FROM loan_repayments
+WHERE COALESCE(amount, 0) <> COALESCE(principal_paid, 0) + COALESCE(interest_paid, 0);
+
+-- Repayments with negative values
+SELECT id, loan_id, date, amount, principal_paid, interest_paid, late_fee
+FROM loan_repayments
+WHERE COALESCE(amount, 0) < 0
+   OR COALESCE(principal_paid, 0) < 0
+   OR COALESCE(interest_paid, 0) < 0
+   OR COALESCE(late_fee, 0) < 0;
+
+-- Loan events earlier than the parent loan start date
+SELECT l.id AS loan_id, l.start_date, r.id AS repayment_id, r.date AS repayment_date
+FROM loans l
+JOIN loan_repayments r ON r.loan_id = l.id
+WHERE r.date < l.start_date
+UNION ALL
+SELECT l.id AS loan_id, l.start_date, t.id AS topup_id, t.date AS topup_date
+FROM loans l
+JOIN loan_topups t ON t.loan_id = l.id
+WHERE t.date < l.start_date;
+```
 
 ### Sample Data Cleanup Queries
 
@@ -106,6 +159,17 @@ DELETE FROM members WHERE id = 'sample_ajay';
 
 ### Latest Changes
 
+*   **Ledger Hardening Update**: Added a shared event-driven calculation engine to keep monthly dues, arrears detection, running balances, auto-generation, and reporting on the same rule set.
+*   **Explicit Interest Settlement Periods**: Repayment rows can now store `interest_for_month` and `interest_for_year`, allowing operators to record “December interest paid in January” without distorting ledger history.
+*   **Principal-Only Repayment Fix**: Principal recoveries no longer mark a month as “interest collected”, which fixes a major historical-entry bug for voluntary part-payments.
+*   **Arrears Split Fix**: Backlog interest is now allocated to the correct historical months instead of back-dating artificial cash movements or generating negative current-month rows.
+*   **Running Balance Accuracy**: The Special Loan audit ledger now uses deterministic row-by-row balance progression instead of date-only balance reconstruction.
+*   **Interest Wipe Safety**: “Wipe Interest” now preserves principal and mixed repayment rows instead of deleting them wholesale.
+*   **Effective Rate Tracking**: Top-ups can now capture a monthly rate, and the latest effective rate is used in future interest calculations.
+*   **Audit Log Compatibility Fix**: Frontend audit writes were aligned with the real Supabase `audit_logs` schema so audit inserts no longer silently fail due to column mismatches.
+*   **Schema Integrity Guards**: Added database checks and triggers to reject negative repayment values, invalid interest period metadata, loan events before loan start, and start-date edits after later transactions exist.
+*   **Admin-Only Settings Mutations**: Non-admin users are now blocked from changing system settings and access codes through the UI.
+*   **Regression Coverage**: Added `npm test` with deterministic loan-math scenarios covering top-ups, partial principal repayments, arrears allocation, and running balances.
 *   **Restored Members Tab**: Re-added the Members page to the UI for better member tracking and updates.
 *   **Improved Type Safety**: Fixed `AuditAction` enum mismatches in the frontend.
 *   **IDE Resolution Fixes**: Added explicit file extensions to lazy-loaded imports in `App.tsx` for better IDE path resolution.
@@ -124,5 +188,3 @@ DELETE FROM members WHERE id = 'sample_ajay';
 
 
 *   **Audit Reports**: Extended the Audit Tally and CSV exports to handle historical data from 2012.
-
-

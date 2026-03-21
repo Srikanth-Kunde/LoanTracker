@@ -1,24 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Payment, Loan, LoanRepayment, LoanStatus, PaymentMethod, LoanType, LoanCalculationMethod, LoanTopup, PaymentCategory } from '../types';
+import { Loan, LoanRepayment, LoanStatus, PaymentMethod, LoanType, LoanCalculationMethod, LoanTopup } from '../types';
 import { getIndianFinancialYear } from '../constants';
 import { supabase } from '../supabaseClient';
 import { logger } from '../utils/logger';
 import {
-  compareISODate,
   normalizeISODate
 } from '../utils/date';
 import { getSpecialLoanOutstandingFromEvents } from '../utils/loanMath';
 
 interface FinancialContextType {
-  payments: Payment[];
   loans: Loan[];
   loanRepayments: LoanRepayment[];
   loanTopups: LoanTopup[];
-
-  recordPayment: (payment: Omit<Payment, 'id'>) => Promise<string>;
-  deletePayment: (id: string) => Promise<void>;
-  getMemberPayments: (memberId: string) => Payment[];
-  getPaymentById: (id: string) => Payment | undefined;
 
   createLoan: (loan: Omit<Loan, 'id'>) => Promise<void>;
   updateLoan: (loan: Loan) => Promise<void>;
@@ -34,8 +27,8 @@ interface FinancialContextType {
   wipeLoanInterest: (loanId: string) => Promise<void>;
   getSpecialLoanOutstanding: (loanId: string, asOfDate?: string) => number;
 
-  setFinancialData: (data: { payments?: Payment[], loans?: Loan[], loanRepayments?: LoanRepayment[] }) => void;
-  importFinancials: (data: { payments?: Payment[], loans?: Loan[], loanRepayments?: LoanRepayment[] }) => Promise<void>;
+  setFinancialData: (data: { loans?: Loan[], loanRepayments?: LoanRepayment[] }) => void;
+  importFinancials: (data: { loans?: Loan[], loanRepayments?: LoanRepayment[] }) => Promise<void>;
   deleteAllFinancials: () => Promise<void>;
   resetFinancials: () => void;
   isLoading: boolean;
@@ -44,7 +37,6 @@ interface FinancialContextType {
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
 
 export const FinancialProvider = ({ children }: { children: React.ReactNode }) => {
-  const [payments, setPayments] = useState<Payment[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanRepayments, setLoanRepayments] = useState<LoanRepayment[]>([]);
   const [loanTopups, setLoanTopups] = useState<LoanTopup[]>([]);
@@ -57,35 +49,15 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       setIsLoading(true);
       logger.info('Fetching initial financial data from Supabase');
 
-      const [paymentsRes, loansRes, repaymentsRes, topupsRes] = await Promise.all([
-        supabase.from('payments').select('*'),
+      const [loansRes, repaymentsRes, topupsRes] = await Promise.all([
         supabase.from('loans').select('*').order('created_at', { ascending: false }),
         supabase.from('loan_repayments').select('*'),
         supabase.from('loan_topups').select('*')
       ]);
 
-      if (paymentsRes.error) throw paymentsRes.error;
       if (loansRes.error) throw loansRes.error;
       if (repaymentsRes.error) throw repaymentsRes.error;
       if (topupsRes.error) throw topupsRes.error;
-
-      if (paymentsRes.data) {
-        setPayments((paymentsRes.data as any[]).map(p => ({
-          id: p.id,
-          memberId: p.member_id,
-          amount: p.amount,
-          lateFee: p.late_fee,
-          category: (p.category || PaymentCategory.LOAN_REPAYMENT) as PaymentCategory,
-          date: p.date,
-          month: p.month,
-          year: p.year,
-          method: p.method as PaymentMethod,
-          notes: p.notes,
-          isLegacy: p.is_legacy,
-          financialYear: p.financial_year,
-          description: p.description
-        })));
-      }
 
       if (loansRes.data) {
         setLoans((loansRes.data as any[]).map(l => ({
@@ -152,43 +124,6 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   useEffect(() => {
     fetchFinancials();
   }, [fetchFinancials]);
-
-  const recordPayment = useCallback(async (p: Omit<Payment, 'id'>) => {
-    const newId = `pay_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const { error } = await supabase.from('payments').insert([{
-      id: newId,
-      member_id: p.memberId,
-      amount: p.amount,
-      late_fee: p.lateFee || 0,
-      category: p.category || PaymentCategory.LOAN_REPAYMENT,
-      date: p.date,
-      month: p.month,
-      year: p.year,
-      method: p.method,
-      notes: p.notes,
-      financial_year: p.financialYear || getIndianFinancialYear(p.date),
-      is_legacy: p.isLegacy || false,
-      description: p.description
-    }]);
-
-    if (error) throw error;
-    fetchFinancials();
-    return newId;
-  }, [fetchFinancials]);
-
-  const deletePayment = useCallback(async (id: string) => {
-    const { error } = await supabase.from('payments').delete().eq('id', id);
-    if (error) throw error;
-    fetchFinancials();
-  }, [fetchFinancials]);
-
-  const getMemberPayments = useCallback((memberId: string) => {
-    return payments.filter((p: Payment) => p.memberId === memberId).sort((a: Payment, b: Payment) => b.date.localeCompare(a.date));
-  }, [payments]);
-
-  const getPaymentById = useCallback((id: string) => {
-    return payments.find((p: Payment) => p.id === id);
-  }, [payments]);
 
   // Loans
   const createLoan = useCallback(async (l: Omit<Loan, 'id'>) => {
@@ -395,32 +330,17 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     );
   }, [loans, loanTopups, loanRepayments]);
 
-  const setFinancialData = useCallback(({ payments, loans, loanRepayments }: any) => {
-    if (payments) setPayments(payments);
+  const setFinancialData = useCallback(({ loans, loanRepayments }: any) => {
     if (loans) setLoans(loans);
     if (loanRepayments) setLoanRepayments(loanRepayments);
   }, []);
 
   const importFinancials = useCallback(async (data: any) => {
-    // Large batch inserts - typically used in admin migration tools
-    if (data.payments?.length) await supabase.from('payments').insert(data.payments.map((p: any) => ({
-      member_id: p.memberId,
-      amount: p.amount,
-      late_fee: p.lateFee || 0,
-      date: p.date,
-      month: p.month,
-      year: p.year,
-      method: p.method,
-      category: p.category || PaymentCategory.LOAN_REPAYMENT,
-      financial_year: p.financialYear || getIndianFinancialYear(p.date)
-    })));
-
     fetchFinancials();
   }, [fetchFinancials]);
 
   const deleteAllFinancials = useCallback(async () => {
     await Promise.all([
-      supabase.from('payments').delete().neq('id', '0'),
       supabase.from('loans').delete().neq('id', '0'),
       supabase.from('loan_repayments').delete().neq('id', '0'),
       supabase.from('loan_topups').delete().neq('id', '0')
@@ -429,7 +349,6 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   }, [fetchFinancials]);
 
   const resetFinancials = useCallback(() => {
-    setPayments([]);
     setLoans([]);
     setLoanRepayments([]);
     setLoanTopups([]);
@@ -437,8 +356,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
 
   return (
     <FinancialContext.Provider value={{
-      payments, loans, loanRepayments, loanTopups,
-      recordPayment, deletePayment, getMemberPayments, getPaymentById,
+      loans, loanRepayments, loanTopups,
       createLoan, updateLoan, deleteLoan, recordLoanRepayment, bulkRecordLoanRepayments, deleteLoanRepayment,
       closeLoan,
       addLoanTopup, deleteLoanTopup, wipeLoanInterest, getSpecialLoanOutstanding,

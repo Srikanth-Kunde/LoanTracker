@@ -13,25 +13,7 @@ CREATE TABLE IF NOT EXISTS members (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. Payments Table
-CREATE TABLE IF NOT EXISTS payments (
-    id TEXT PRIMARY KEY,
-    member_id TEXT REFERENCES members(id) ON DELETE CASCADE,
-    amount NUMERIC NOT NULL,
-    late_fee NUMERIC DEFAULT 0,
-    category TEXT DEFAULT 'LOAN_REPAYMENT',
-    date DATE NOT NULL,
-    month INTEGER,
-    year INTEGER,
-    method TEXT,
-    notes TEXT,
-    financial_year TEXT,
-    is_legacy BOOLEAN DEFAULT FALSE,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- 3. Loans Table
+-- 2. Loans Table
 CREATE TABLE IF NOT EXISTS loans (
     id TEXT PRIMARY KEY,
     member_id TEXT REFERENCES members(id) ON DELETE CASCADE,
@@ -53,7 +35,7 @@ CREATE TABLE IF NOT EXISTS loans (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. Loan Repayments Table
+-- 3. Loan Repayments Table
 CREATE TABLE IF NOT EXISTS loan_repayments (
     id TEXT PRIMARY KEY,
     loan_id TEXT REFERENCES loans(id) ON DELETE CASCADE,
@@ -69,7 +51,7 @@ CREATE TABLE IF NOT EXISTS loan_repayments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 5. Loan Top-ups Table
+-- 4. Loan Top-ups Table
 CREATE TABLE IF NOT EXISTS loan_topups (
     id TEXT PRIMARY KEY,
     loan_id TEXT REFERENCES loans(id) ON DELETE CASCADE,
@@ -80,7 +62,7 @@ CREATE TABLE IF NOT EXISTS loan_topups (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 6. App Settings Table
+-- 5. App Settings Table
 CREATE TABLE IF NOT EXISTS app_settings (
     id TEXT PRIMARY KEY DEFAULT 'default_settings',
     society_name TEXT DEFAULT 'LoanTracker (Special Edition)',
@@ -98,7 +80,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 7. Audit Logs Table
+-- 6. Audit Logs Table
 CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGSERIAL PRIMARY KEY,
     performed_by TEXT,
@@ -120,24 +102,23 @@ ALTER TABLE audit_logs
     ADD COLUMN IF NOT EXISTS record_id TEXT,
     ADD COLUMN IF NOT EXISTS details JSONB;
 
--- 8. Enable Row Level Security (RLS)
+-- Remove legacy table that is no longer part of the product surface
+DROP TABLE IF EXISTS payments CASCADE;
+
+-- 7. Enable Row Level Security (RLS)
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loan_repayments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loan_topups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
--- 9. Add Global Access Policies (allow 'anon' role used by Vite app)
+-- 8. Add Global Access Policies (allow 'anon' role used by Vite app)
 -- Note: 'IF NOT EXISTS' for policies is handled by the block below
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'members' AND policyname = 'Enable all for anon') THEN
         CREATE POLICY "Enable all for anon" ON members FOR ALL TO anon USING (true) WITH CHECK (true);
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'payments' AND policyname = 'Enable all for anon') THEN
-        CREATE POLICY "Enable all for anon" ON payments FOR ALL TO anon USING (true) WITH CHECK (true);
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'loans' AND policyname = 'Enable all for anon') THEN
         CREATE POLICY "Enable all for anon" ON loans FOR ALL TO anon USING (true) WITH CHECK (true);
@@ -259,14 +240,13 @@ BEFORE UPDATE OF start_date ON loans
 FOR EACH ROW
 EXECUTE FUNCTION validate_loan_start_date_update();
 
--- 10. Initial Data
+-- 9. Initial Data
 INSERT INTO app_settings (id, society_name, currency, default_loan_interest_rate)
 VALUES ('default_settings', 'Special Loan Society', '₹', 1.5)
 ON CONFLICT (id) DO NOTHING;
 
--- 11. Performance Indexes
+-- 10. Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_loans_member_id ON loans(member_id);
 CREATE INDEX IF NOT EXISTS idx_repayments_loan_id ON loan_repayments(loan_id);
 CREATE INDEX IF NOT EXISTS idx_topups_loan_id ON loan_topups(loan_id);
-CREATE INDEX IF NOT EXISTS idx_payments_member_id ON payments(member_id);
 CREATE INDEX IF NOT EXISTS idx_loan_repayments_period ON loan_repayments(loan_id, interest_for_year, interest_for_month);

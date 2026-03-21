@@ -5,11 +5,6 @@ export enum PaymentMethod {
   BANK_TRANSFER = 'BANK_TRANSFER'
 }
 
-export enum PaymentCategory {
-  LOAN_REPAYMENT = 'LOAN_REPAYMENT',
-  OTHER = 'OTHER'
-}
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   OPERATOR = 'OPERATOR',
@@ -27,22 +22,6 @@ export interface Member {
   email: string;
   joinDate: string;
   isActive: boolean;
-}
-
-export interface Payment {
-  id: string;
-  memberId: string;
-  amount: number;
-  lateFee?: number;
-  date: string; // ISO Date string
-  month: number; // 1-12
-  year: number;
-  method: PaymentMethod;
-  notes?: string;
-  isLegacy?: boolean;
-  financialYear?: string;
-  description?: string;
-  category?: PaymentCategory;
 }
 
 export enum LoanStatus {
