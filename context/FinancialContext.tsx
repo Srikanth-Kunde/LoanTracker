@@ -84,9 +84,9 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         setLoans((loansRes.data as any[]).map(l => ({
           id: l.id,
           memberId: l.member_id,
-          principalAmount: l.principal_amount,
-          processingFee: l.processing_fee || 0,
-          interestRate: l.interest_rate,
+          principalAmount: Number(l.principal_amount),
+          processingFee: Number(l.processing_fee || 0),
+          interestRate: Number(l.interest_rate),
           startDate: l.start_date,
           endDate: l.end_date,
           status: l.status as LoanStatus,
@@ -107,10 +107,10 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
           id: r.id,
           loanId: r.loan_id,
           date: r.date,
-          amount: r.amount,
-          interestPaid: r.interest_paid || 0,
-          principalPaid: r.principal_paid || (r.interest_paid === 0 ? r.amount : 0),
-          lateFee: r.late_fee || 0,
+          amount: Number(r.amount),
+          interestPaid: Number(r.interest_paid || 0),
+          principalPaid: Number(r.principal_paid || (Number(r.interest_paid) === 0 ? Number(r.amount) : 0)),
+          lateFee: Number(r.late_fee || 0),
           method: r.method as PaymentMethod,
           notes: r.notes
         })));
@@ -120,8 +120,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         setLoanTopups((topupsRes.data as any[]).map(t => ({
           id: t.id,
           loanId: t.loan_id,
-          amount: t.amount,
-          rate: t.rate,
+          amount: Number(t.amount),
+          rate: Number(t.rate),
           date: t.date,
           notes: t.notes,
           createdAt: t.created_at

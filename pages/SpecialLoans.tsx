@@ -632,6 +632,8 @@ const SpecialLoans: React.FC = () => {
         const endYear = today.getFullYear();
         const endMonth = today.getMonth() + 1;
 
+        console.log("DEBUG AutoGen:", { startYear, startMonth, endYear, endMonth, loanId: loan.id });
+
         const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === loan.id);
         
         let currentY = startYear;
@@ -641,6 +643,8 @@ const SpecialLoans: React.FC = () => {
         const missingRecords: Omit<LoanRepayment, 'id'>[] = [];
         let totalInterest = 0;
         
+        console.log("DEBUG Loop Start:", { currentY, currentM });
+
         while (currentY < endYear || (currentY === endYear && currentM <= endMonth)) {
             const hasPayment = loanRepaymentsForLoan.some(r => {
                 const { year: y, month: m } = getISODateMonthYear(r.date);
@@ -653,6 +657,8 @@ const SpecialLoans: React.FC = () => {
                 const isoDateStr = `${prevMDate.getFullYear()}-${String(prevMDate.getMonth() + 1).padStart(2, '0')}-${String(prevMDate.getDate()).padStart(2, '0')}T23:59:59.000Z`;
                 const outstanding = getSpecialLoanOutstanding(loan.id, isoDateStr);
                 
+                console.log(`DEBUG Month ${currentY}-${currentM}: Outstanding=${outstanding}`);
+
                 if (outstanding > 0) {
                     const interestDue = Math.round(outstanding * (loan.interestRate / 100));
                     totalInterest += interestDue;
