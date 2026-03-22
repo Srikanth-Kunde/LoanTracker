@@ -18,6 +18,7 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Legacy Member ID Correction:** Member IDs can now be corrected from the Members edit screen while automatically remapping linked borrower and surety references.
 *   **Safe Loan Closure Validation:** A loan can only be closed when the selected close date has zero outstanding principal and no later principal-affecting activity.
 *   **Audit Report Principal Breakdown:** The Audit Report now shows `Original Loan Disbursed` in the top cards, member balance table, and Full Audit CSV for cleaner reconciliation.
+*   **Audit Report Table Cleanup:** The member balance table now shows the original loan start date instead of a status badge so the visible columns stay calculation-focused.
 *   **Auto-Interest Engine:** Single-click "Zap" button to backfill decades of historical interest records based on dynamically calculated principal balances.
 *   **Admin-Only Audit Log Tab:** Database write-history now lives in its own `Audit Log History` tab and is visible only to admins.
 *   **Reduced Scope UI:** The application is laser-focused on `Special Loans`, `Members`, `Audit Report`, `Audit Log History` (admin only), and `Settings`. No distracting dashboards or bank-sync features.
@@ -211,6 +212,7 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Frontend Member ID Edit Flow**: The Members page now allows legacy member/account ID corrections directly from the edit modal and safely remaps linked borrower and surety references.
 *   **Future-Activity Close Blocking**: Loan closure is now refused if later top-ups or principal recoveries exist after the requested close date, preventing premature closure on long-running legacy ledgers.
 *   **Audit Report Original Disbursal View**: Added `Original Loan Disbursed` to the Audit Report summary cards, member balance table, and Full Audit CSV export for clearer balance math.
+*   **Audit Report Start-Date Column**: Replaced the member status column in the balance table with the original loan start date to make the row-level calculation trail easier to read.
 *   **Interest Wipe Safety**: “Wipe Interest” now preserves principal and mixed repayment rows instead of deleting them wholesale.
 *   **Effective Rate Tracking**: Top-ups can now capture a monthly rate, and the latest effective rate is used in future interest calculations.
 *   **Audit Log Compatibility Fix**: Frontend audit writes were aligned with the real Supabase `audit_logs` schema so audit inserts no longer silently fail due to column mismatches.

@@ -47,6 +47,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   A comprehensive Audit Report tracking every principal disbursement and collection chronologically.
 *   Audit review must support all-time history from 2012 onward.
 *   The Audit Report summary cards and member-balance table must display `Original Loan Disbursed` separately from top-ups so operators can visually reconcile `Original Principal + Top-Ups - Principal Recovered = Outstanding`.
+*   The member-balance table should prioritize calculation fields over profile-state fields, replacing status badges with the original loan start/disbursal date when space is limited.
 *   The audit ledger must expose a deterministic row-by-row running principal balance, even when multiple events occur on the same date.
 *   The Special Loan Audit Ledger must show live summary cards for original principal, top-ups, principal repaid, interest paid, and live balance.
 *   The Special Loan Audit Ledger must support direct per-loan export from the eye-view modal without requiring a separate report screen.
@@ -144,6 +145,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Legacy Member ID Correction**: The Members edit modal now allows changing a member ID from the frontend and safely remaps linked borrower/surety references instead of forcing manual SQL fixes.
 *   **Future-Activity Close Guard**: Loans can no longer be closed on a date that still has later top-ups or principal recoveries in history, which prevents premature closure on legacy books where the same loan resumes years later.
 *   **Audit Report Principal Clarity**: Audit Report now surfaces `Original Loan Disbursed` both in the summary cards and in the member-balance table before outstanding calculations.
+*   **Audit Report Table Cleanup**: The member-balance grid now removes the status column and shows the original disbursal start date instead, keeping the table focused on balance math.
 *   **Database Integrity Guards**: Added DB-level checks for non-negative repayments, component-sum validation, valid interest-period ranges, and trigger-based date validation for top-ups, repayments, and edited loan start dates.
 *   **Regression Harness**: Added deterministic loan-math regression coverage for multi-top-up and partial-repayment scenarios via `npm test`.
 *   **Live Context Sync**: Member, financial, and settings contexts now push local updates immediately and also subscribe/refetch in real time so backend changes surface without manual page reloads.

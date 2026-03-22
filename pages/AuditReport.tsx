@@ -18,6 +18,7 @@ interface AuditRow {
   address: string;
   isActive: boolean;
   loanCount: number;
+  originalLoanStartDate: string | null;
   originalLoanDisbursed: number;
   outstanding: number;
   topupsDisbursed: number;
@@ -126,7 +127,10 @@ const AuditReport: React.FC = () => {
         const interestCollected = memberRepayments.reduce((s, r) => s + (r.interestPaid || 0), 0);
         const originalLoanDisbursed = memberLoans.reduce((s, l) => s + l.principalAmount, 0);
         const outstanding = Math.max(0, originalLoanDisbursed + topupsDisbursed - principalRecovered);
-        
+        const originalLoanStartDate = memberLoans
+          .map(loan => loan.startDate)
+          .sort(compareISODate)[0] || null;
+
         const lastActivity = [
           ...memberLoans.map(l => l.startDate),
           ...memberTopups.map(t => t.date),
@@ -139,6 +143,7 @@ const AuditReport: React.FC = () => {
           address: member.address,
           isActive: member.isActive,
           loanCount: memberLoans.length,
+          originalLoanStartDate,
           originalLoanDisbursed,
           outstanding,
           topupsDisbursed,
@@ -297,14 +302,14 @@ const AuditReport: React.FC = () => {
         <div className="overflow-x-auto max-h-[600px]">
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0">
-              <tr>{['ID', 'Member', 'Status', 'Original Disb.', 'Outstanding', 'Top-ups', 'Principal Rec.', 'Interest Col.', 'Last Activity'].map(header => <th key={header} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">{header}</th>)}</tr>
+              <tr>{['ID', 'Member', 'Original Start Date', 'Original Disb.', 'Outstanding', 'Top-ups', 'Principal Rec.', 'Interest Col.', 'Last Activity'].map(header => <th key={header} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">{header}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
               {filteredData.map(row => (
                 <tr key={row.memberId} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                   <td className="px-4 py-3 text-xs font-mono text-slate-400">{row.memberId}</td>
                   <td className="px-4 py-3"><div className="font-medium text-slate-900 dark:text-white">{row.memberName}</div><div className="text-xs text-slate-500 dark:text-slate-400">{row.address}</div></td>
-                  <td className="px-4 py-3"><span className={`px-2 py-0.5 text-xs font-medium rounded-full ${row.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'}`}>{row.isActive ? 'Active' : 'Inactive'}</span></td>
+                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{row.originalLoanStartDate ? formatDisplayDate(row.originalLoanStartDate) : '-'}</td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatCurrency(row.originalLoanDisbursed, settings.currency)}</td>
                   <td className="px-4 py-3 font-semibold text-violet-700 dark:text-violet-300">{formatCurrency(row.outstanding, settings.currency)}</td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatCurrency(row.topupsDisbursed, settings.currency)}</td>

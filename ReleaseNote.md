@@ -15,6 +15,7 @@ This release improves historical loan correction workflows, audit visibility, an
 - Ledger summary cards now refresh from live transaction data, so edited interest values update immediately.
 - Member IDs can now be corrected from the frontend, and linked borrower/surety loan references are remapped automatically.
 - Audit Report now shows `Original Loan Disbursed` before outstanding calculations in the summary cards, member balance table, and Full Audit CSV.
+- The Audit Report member balance table now replaces `Status` with the original loan start date for a cleaner calculation-first layout.
 
 **Fixes**
 - Fixed stale `Interest Paid` totals in the ledger header after editing an existing interest row.
