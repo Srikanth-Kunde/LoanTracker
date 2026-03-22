@@ -9,11 +9,15 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Dynamic Principal Tracking:** Outstanding balances are calculated on-the-fly based on original principal + top-ups - principal repayments.
 *   **Manual Interest Proration:** Supports overwriting standard monthly interest amounts to account for 15-day or 20-day partial borrowing periods.
 *   **Exact-Day Interest Assistant:** The repayment modal can now calculate prorated interest for exact held-day counts and preserve that basis on the repayment entry for audit review.
+*   **Historical Interest Override:** Existing interest rows can be reopened from the audit ledger and changed from monthly interest to exact-day interest without deleting the repayment record.
 *   **Interest-Period Aware Ledger:** Interest collections are now allocated to an explicit settlement month/year, so back-dated entries, arrears, and principal-only recoveries no longer corrupt monthly status.
 *   **No Auto-Late Fees:** Designed to perfectly match historical handwritten books, the system will never auto-calculate late fees. Late fees are only recorded if explicitly provided by the operator.
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
+*   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
+*   **Closed Loan Correction Workflow:** Editing a historical loan amount can now surface any remaining principal gap and optionally record the balancing principal payment immediately.
 *   **Auto-Interest Engine:** Single-click "Zap" button to backfill decades of historical interest records based on dynamically calculated principal balances.
-*   **Reduced Scope UI:** The application is laser-focused on `Special Loans`, `Members`, `Audit Report`, and `Settings`. No distracting dashboards or bank-sync features.
+*   **Admin-Only Audit Log Tab:** Database write-history now lives in its own `Audit Log History` tab and is visible only to admins.
+*   **Reduced Scope UI:** The application is laser-focused on `Special Loans`, `Members`, `Audit Report`, `Audit Log History` (admin only), and `Settings`. No distracting dashboards or bank-sync features.
 *   **Separate Backend Scripts:** Schema setup and sample data are now split into separate SQL Editor scripts.
 
 ## 🚀 Quick Start
@@ -42,7 +46,7 @@ Open `.env` and fill in:
 npm run dev
 ```
 Navigate to `http://localhost:5173`. The default operator login code is managed within your Supabase `app_settings` table.
-The navigation is intentionally limited to `Special Loans`, `Audit Report`, and `Settings`.
+The navigation is intentionally limited to `Special Loans`, `Members`, `Audit Report`, and `Settings`, with `Audit Log History` visible only to admins.
 
 ---
 
@@ -84,11 +88,22 @@ The application requires a specific schema and security configuration to functio
 - **Yes, if your database was created before the latest ledger hardening update, rerun `migration.sql`.**
 - `migration.sql` now adds new repayment allocation columns, audit-log compatibility columns, repayment validation constraints, and date-validation triggers.
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
+- **No additional SQL is required for the latest release features** such as historical interest-row editing, remaining-principal settlement from the loan edit modal, per-ledger CSV download, or the admin-only audit-log tab. Those changes are application-only and use the existing schema.
 - The script remains **idempotent** and is safe to rerun from the Supabase SQL Editor.
 - **Legacy table removal**: `migration.sql` now drops the obsolete `payments` table because it is no longer part of the live product.
 - **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
 - **Current closure auto-cleanup fix**: No additional SQL is required for the latest post-closure / zero-balance interest cleanup. That behavior is handled entirely in the application logic.
 - **Exact-days proration update**: Rerun `migration.sql` once on existing databases to add the new exact-day repayment metadata columns.
+
+If you want to verify that your database is already on the required schema, these objects must exist:
+
+- `loan_repayments.interest_for_month`
+- `loan_repayments.interest_for_year`
+- `loan_repayments.interest_days`
+- `loan_repayments.interest_calculation_type`
+- `audit_logs.performed_by`
+- `audit_logs.record_id`
+- `audit_logs.details`
 
 ### Full Reset
 
@@ -180,11 +195,17 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Arrears Split Fix**: Backlog interest is now allocated to the correct historical months instead of back-dating artificial cash movements or generating negative current-month rows.
 *   **Collection-Date Driven Interest Preview**: The repayment modal now recalculates arrears and current-period interest from the entered collection date itself, fixing back-dated entries such as `10-03-2013` needing `Feb 2013 + Mar 2013`.
 *   **Prorated Day-Based Interest**: Operators can switch the current-period calculation to `Exact Days`, enter 15 or 20 days, and let the system calculate/store the prorated interest basis directly on the repayment row.
+*   **Historical Interest Row Editing**: Existing interest repayments can now be edited in place from the ledger, preserving audit history while switching between `MONTHLY` and `PRORATED_DAYS`.
+*   **Exact-Day Override Protection**: Auto-generation now identifies exact-day rows and avoids offering destructive wipe/regenerate paths that would overwrite manual overrides.
 *   **Large History UX**: For long-running loans from 2012 onward, the repayment modal now shows a compact arrears summary with month count, date range, and total instead of rendering an unreadable month-by-month list.
 *   **Running Balance Accuracy**: The Special Loan audit ledger now uses deterministic row-by-row balance progression instead of date-only balance reconstruction.
+*   **Live Ledger Summary Cards**: The eye-view audit ledger cards now recompute `Top-Ups`, `Principal Repaid`, `Interest Paid`, and `Live Balance` from live transaction data so edits reflect immediately.
+*   **Per-Ledger CSV Download**: Each Special Loan Audit Ledger modal now has a `Download Ledger` action that exports summary values and transaction rows for the selected member.
+*   **Closed Loan Principal Correction Flow**: Editing a historical loan amount upward now exposes the remaining balance and can immediately post a balancing principal repayment before closing the loan again.
 *   **Interest Wipe Safety**: “Wipe Interest” now preserves principal and mixed repayment rows instead of deleting them wholesale.
 *   **Effective Rate Tracking**: Top-ups can now capture a monthly rate, and the latest effective rate is used in future interest calculations.
 *   **Audit Log Compatibility Fix**: Frontend audit writes were aligned with the real Supabase `audit_logs` schema so audit inserts no longer silently fail due to column mismatches.
+*   **Admin-Only Audit Log History**: Audit log browsing has been moved to a separate `Audit Log History` page and is now hidden and route-blocked for operator/viewer roles.
 *   **Schema Integrity Guards**: Added database checks and triggers to reject negative repayment values, invalid interest period metadata, loan events before loan start, and start-date edits after later transactions exist.
 *   **Admin-Only Settings Mutations**: Non-admin users are now blocked from changing system settings and access codes through the UI.
 *   **Regression Coverage**: Added `npm test` with deterministic loan-math scenarios covering top-ups, partial principal repayments, arrears allocation, and running balances.

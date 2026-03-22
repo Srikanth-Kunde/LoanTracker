@@ -29,12 +29,14 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   The system suggests the standard monthly interest (`Outstanding Principal * Interest Rate`).
 *   **Crucial Override**: Operators can manually overwrite the suggested interest amount. This allows recording prorated interest when a member only took the loan for 15 or 20 days.
 *   **Exact-Day Mode**: The system should allow operators to switch the current-period calculation to an exact day-count basis, store the day count used, and preserve whether the entry was `MONTHLY` or `PRORATED_DAYS` for later audit review.
+*   **Existing-Month Interest Override**: Previously recorded interest rows must remain editable month-by-month so operators can convert a historical monthly charge into an exact-day figure without deleting the repayment row.
 *   **Explicit Settlement Period**: The system must support recording an interest payment against the month it settles, even when the cash is physically collected in a later month.
 
 #### 3.4. Principal Repayment
 *   During interest collection (or independently), members can pay down a portion of the principal.
 *   This instantly reduces the `Outstanding Principal` for the following month's interest calculation.
 *   **Critical Rule**: A principal-only repayment must never mark a month as interest-settled.
+*   **Corrected Principal Delta Recovery**: If a closed loan is later corrected to a higher original principal, the edit workflow must expose the remaining principal gap and allow the operator either to reopen the loan or to immediately record the balancing principal payment and re-close the loan.
 
 #### 3.5. Late Fees (Strictly Manual)
 *   **No Auto-Late Fees**: The system will *not* automatically generate or demand late fees, especially for back-dated entries.
@@ -45,6 +47,9 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   A comprehensive Audit Report tracking every principal disbursement and collection chronologically.
 *   Audit review must support all-time history from 2012 onward.
 *   The audit ledger must expose a deterministic row-by-row running principal balance, even when multiple events occur on the same date.
+*   The Special Loan Audit Ledger must show live summary cards for original principal, top-ups, principal repaid, interest paid, and live balance.
+*   The Special Loan Audit Ledger must support direct per-loan export from the eye-view modal without requiring a separate report screen.
+*   Database write-audit history must be exposed in a separate admin-only screen rather than being mixed into the financial summary report.
 
 #### 3.7. Member Management
 *   A centralized interface to manage the society's 40+ members.
@@ -69,6 +74,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   `loan_repayments` also stores optional `interest_days` and `interest_calculation_type` metadata whenever a repayment is recorded on an exact-day basis.
 *   `app_settings`: Stores the active UI-backed settings used by the app, including `society_name`, `currency`, `loan_processing_fee`, `default_loan_interest_rate`, access codes, and appearance preferences.
 *   `audit_logs`: Stores write-audit metadata for ledger and admin actions.
+*   No new tables or columns are required for the latest month-interest override, remaining-principal settlement, or admin-only audit-log tab. These changes operate on the existing `loan_repayments`, `loans`, and `audit_logs` structures.
 *   The legacy `payments` table is not part of the active product and should not exist after the latest migration.
 *   Sample data is intentionally separated from schema setup so operators can add or remove it directly from the Supabase backend when needed.
 
@@ -99,6 +105,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Operational Note**: `migration.sql` is also the upgrade path for existing deployments. Operators must rerun it after the ledger hardening release so the new repayment-period columns, audit-log compatibility columns, constraints, triggers, and legacy-table cleanup are applied.
 *   **Current Proration Upgrade Note**: Existing deployments must rerun `migration.sql` one more time to add `interest_days` and `interest_calculation_type` for exact-day repayment auditability.
 *   **Current Closure Auto-Cleanup Fix**: No additional schema change is required for the latest post-closure interest cleanup. It is implemented in the shared calculation engine and repayment workflows on top of the existing tables.
+*   **Current Release SQL Requirement**: No new SQL patch is required for the current release beyond a previously-applied `migration.sql`. If your database already contains the exact-day repayment metadata columns and the current `audit_logs` columns, the remaining fixes are application-only.
 
 #### 5.4. Product Scope Corrections
 *   The generic `Dashboard` has been removed from the live app surface to focus on the ledger system.
@@ -118,11 +125,17 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Arrears Posting Fix**: Corrected missed-month posting so arrears are allocated to their actual historical periods without generating negative or mathematically invalid current-period rows.
 *   **Collection-Date Based Due Calculation**: Corrected the repayment modal so interest due is derived from the operator-entered collection date, not merely from the currently selected reporting month.
 *   **Exact-Day Interest Workflow**: Added a current-period interest mode that can calculate and store 15-day / 20-day style proration directly in the repayment form while still clearing arrears month-by-month first.
+*   **Historical Interest Row Override**: Operators can now reopen a specific recorded interest month from the audit ledger, switch it between monthly and exact-day calculation, and update the existing repayment row in place while preserving before/after audit history.
+*   **Exact-Day Recalc Protection**: Auto-generation previews now identify exact-day overrides and protect them from accidental wipe/regenerate flows so manually corrected rows are not overwritten by monthly defaults.
 *   **Long-History Collection UX**: Added a compact arrears summary for loans spanning many years so the operator can review total arrears, month count, and date range without rendering excessively long month lists.
 *   **Safe Interest Wipe**: Refactored “Wipe Interest” so mixed repayment rows keep their principal component and only the interest allocation is removed.
 *   **Running Balance Determinism**: Refactored the audit ledger to compute row-by-row balance progression using event ordering rather than date-only reconstruction.
+*   **Live Ledger Summary Fix**: The audit-ledger summary cards now derive from live repayment/top-up data instead of stale modal snapshots, so interest edits instantly update the displayed totals.
+*   **Per-Loan Ledger Export**: Added a download action inside the Special Loan Audit Ledger modal to export the selected member’s summary and transaction rows directly to CSV.
+*   **Corrected Closed-Loan Principal Adjustment Workflow**: The loan edit modal now surfaces remaining principal when a historical principal amount is corrected upward and lets the operator either keep the loan active or record the balancing principal settlement immediately.
 *   **Top-Up Rate History Support**: Top-ups now preserve a rate value that becomes the effective future monthly rate for subsequent interest calculations.
 *   **Audit Log Schema Alignment**: Fixed the frontend audit payload shape to match the Supabase `audit_logs` table and avoid silent insert failures.
+*   **Admin-Only Audit Log Screen**: Audit Log History has been moved out of the financial Audit Report into a dedicated admin-only navigation tab with both sidebar and route-level access control.
 *   **Database Integrity Guards**: Added DB-level checks for non-negative repayments, component-sum validation, valid interest-period ranges, and trigger-based date validation for top-ups, repayments, and edited loan start dates.
 *   **Regression Harness**: Added deterministic loan-math regression coverage for multi-top-up and partial-repayment scenarios via `npm test`.
 *   **Live Context Sync**: Member, financial, and settings contexts now push local updates immediately and also subscribe/refetch in real time so backend changes surface without manual page reloads.

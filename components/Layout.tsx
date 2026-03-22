@@ -9,6 +9,7 @@ import {
   LogOut,
   WifiOff,
   ClipboardList,
+  History,
   Users
 } from 'lucide-react';
 
@@ -48,8 +49,8 @@ export const Layout = () => {
     { name: 'Special Loans', href: '/', icon: Star },
     { name: 'Members', href: '/members', icon: Users },
     { name: 'Audit Report', href: '/audit', icon: ClipboardList },
+    ...(role === UserRole.ADMIN ? [{ name: 'Audit Log History', href: '/audit-log', icon: History }] : []),
     { name: 'Settings', href: '/settings', icon: Settings },
-
   ];
 
   const isActive = (path: string) => {

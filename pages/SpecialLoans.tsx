@@ -326,6 +326,27 @@ const SpecialLoans: React.FC = () => {
         );
     }, [activeLoan, loanRepayments, loanTopups]);
 
+    const activeLoanSummary = useMemo(() => {
+        if (!activeLoan) return null;
+
+        const topupsTotal = loanTopups
+            .filter(t => t.loanId === activeLoan.id)
+            .reduce((sum, topup) => sum + Number(topup.amount || 0), 0);
+        const principalRepaid = loanRepayments
+            .filter(r => r.loanId === activeLoan.id)
+            .reduce((sum, repayment) => sum + Number(repayment.principalPaid || 0), 0);
+        const interestPaid = loanRepayments
+            .filter(r => r.loanId === activeLoan.id)
+            .reduce((sum, repayment) => sum + Number(repayment.interestPaid || 0), 0);
+
+        return {
+            topupsTotal,
+            principalRepaid,
+            interestPaid,
+            liveBalance: getSpecialLoanOutstanding(activeLoan.id)
+        };
+    }, [activeLoan, getSpecialLoanOutstanding, loanRepayments, loanTopups]);
+
     const editLoanSummary = useMemo(() => {
         if (!activeLoan) return null;
 
@@ -475,6 +496,7 @@ const SpecialLoans: React.FC = () => {
                 records: [],
                 staleInterestCount: 0,
                 staleInterestTotal: 0,
+                exactDayOverrideCount: 0,
                 stopDate: null as string | null
             };
         }
@@ -485,6 +507,9 @@ const SpecialLoans: React.FC = () => {
         const stopDate = getAutoGenerationStopDate(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
         const staleInterestRows = getInvalidInterestRepayments(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
         const missingPeriods = getMissingInterestPeriods(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
+        const exactDayOverrideCount = loanRepaymentsForLoan.filter(r =>
+            (r.interestPaid || 0) > 0 && r.interestCalculationType === 'PRORATED_DAYS'
+        ).length;
 
         const missingRecords: Omit<LoanRepayment, 'id'>[] = missingPeriods.map(period => ({
             loanId: autoGenLoan.id,
@@ -508,6 +533,7 @@ const SpecialLoans: React.FC = () => {
             records: missingRecords,
             staleInterestCount: staleInterestRows.length,
             staleInterestTotal,
+            exactDayOverrideCount,
             stopDate
         };
     }, [autoGenLoan, loanRepayments, loanTopups, getSpecialLoanOutstanding]);
@@ -901,9 +927,8 @@ const SpecialLoans: React.FC = () => {
     };
 
     const downloadActiveLoanLedger = () => {
-        if (!activeLoan) return;
+        if (!activeLoan || !activeLoanSummary) return;
 
-        const topupsTotal = loanTopups.filter(t => t.loanId === activeLoan.id).reduce((sum, topup) => sum + topup.amount, 0);
         const ledgerRows = activeLoanTransactions.map(tx => ([
             formatDisplayDate(tx.date),
             tx.entryType,
@@ -923,10 +948,10 @@ const SpecialLoans: React.FC = () => {
             ['Loan ID', activeLoan.id],
             ['Start Date', formatDisplayDate(activeLoan.startDate)],
             ['Original Principal', activeLoan.principalAmount],
-            ['Top-Ups', topupsTotal],
-            ['Principal Repaid', activeLoan.historicalPrincipalPaid],
-            ['Interest Paid', activeLoan.historicalInterestPaid],
-            ['Live Balance', activeLoan.historicalOutstanding],
+            ['Top-Ups', activeLoanSummary.topupsTotal],
+            ['Principal Repaid', activeLoanSummary.principalRepaid],
+            ['Interest Paid', activeLoanSummary.interestPaid],
+            ['Live Balance', activeLoanSummary.liveBalance],
             [],
             ['Date', 'Type', 'Interest Period', 'Calc Type', 'Days', 'Amount', 'Principal', 'Interest', 'Late Fee', 'Balance', 'Notes'],
             ...ledgerRows
@@ -1735,6 +1760,10 @@ const SpecialLoans: React.FC = () => {
                             <span className="text-slate-500 font-medium">Invalid Interest Rows To Clean</span>
                             <span className="font-bold text-rose-600 text-xl">{autoGenPreview.staleInterestCount}</span>
                         </div>
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                            <span className="text-slate-500 font-medium">Exact-Day Overrides Protected</span>
+                            <span className="font-bold text-blue-600 text-xl">{autoGenPreview.exactDayOverrideCount}</span>
+                        </div>
                         {autoGenPreview.staleInterestCount > 0 && (
                             <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                                 <span className="text-slate-500 font-medium">Invalid Interest Value</span>
@@ -1742,10 +1771,15 @@ const SpecialLoans: React.FC = () => {
                             </div>
                         )}
                         <p className="text-xs text-slate-400 mt-2">Interest is calculated month-by-month from historical outstanding principal. If the cutoff lands inside a month, that month can still be generated, but it will be dated on the actual close/payoff date instead of month-end.</p>
+                        {autoGenPreview.exactDayOverrideCount > 0 && (
+                            <p className="text-xs text-blue-600 dark:text-blue-300">
+                                Exact-day rows are preserved during recalculation. Use wipe/regenerate carefully because it would remove those manual overrides.
+                            </p>
+                        )}
                     </div>
 
                     <div className="flex justify-between gap-3 mt-6">
-                        {autoGenPreview.months === 0 && loanRepayments.filter(r => r.loanId === (autoGenLoan?.id) && (r.interestPaid || 0) > 0).length > 0 && (
+                        {autoGenPreview.months === 0 && autoGenPreview.exactDayOverrideCount === 0 && loanRepayments.filter(r => r.loanId === (autoGenLoan?.id) && (r.interestPaid || 0) > 0).length > 0 && (
                             <Button variant="danger" onClick={handleWipeInterest} className="bg-red-50 text-red-600 hover:bg-red-100 border-red-200">
                                 <Trash2 size={16} className="mr-2" />
                                 Wipe & Re-gen
@@ -1763,7 +1797,7 @@ const SpecialLoans: React.FC = () => {
 
             {/* LOAN DETAILS MODAL — Expanded width for ledger stability */}
             <Modal isOpen={modals.history} onClose={() => setModals({ ...modals, history: false })} title="Special Loan Audit Ledger" maxWidth="4xl">
-                {activeLoan && (
+                {activeLoan && activeLoanSummary && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
                             <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
@@ -1772,19 +1806,19 @@ const SpecialLoans: React.FC = () => {
                             </div>
                             <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-100 dark:border-violet-800 text-center">
                                 <p className="text-violet-500 text-[9px] uppercase font-bold mb-1">Total Top-Ups</p>
-                                <p className="font-black text-violet-800 dark:text-violet-200">{formatCurrency(loanTopups.filter(t => t.loanId === activeLoan.id).reduce((s, t) => s + t.amount, 0), settings.currency)}</p>
+                                <p className="font-black text-violet-800 dark:text-violet-200">{formatCurrency(activeLoanSummary.topupsTotal, settings.currency)}</p>
                             </div>
                             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 text-center">
                                 <p className="text-blue-500 text-[9px] uppercase font-bold mb-1">Principal Repaid</p>
-                                <p className="font-black text-blue-800 dark:text-blue-200">{formatCurrency(activeLoan.historicalPrincipalPaid, settings.currency)}</p>
+                                <p className="font-black text-blue-800 dark:text-blue-200">{formatCurrency(activeLoanSummary.principalRepaid, settings.currency)}</p>
                             </div>
                             <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800 text-center">
                                 <p className="text-emerald-500 text-[9px] uppercase font-bold mb-1">Interest Paid</p>
-                                <p className="font-black text-emerald-800 dark:text-emerald-200">{formatCurrency(activeLoan.historicalInterestPaid, settings.currency)}</p>
+                                <p className="font-black text-emerald-800 dark:text-emerald-200">{formatCurrency(activeLoanSummary.interestPaid, settings.currency)}</p>
                             </div>
                             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800 text-center shadow-inner">
                                 <p className="text-amber-600 text-[9px] uppercase font-bold mb-1">Live Balance</p>
-                                <p className="font-black text-xl text-amber-900 dark:text-amber-200">{formatCurrency(activeLoan.historicalOutstanding, settings.currency)}</p>
+                                <p className="font-black text-xl text-amber-900 dark:text-amber-200">{formatCurrency(activeLoanSummary.liveBalance, settings.currency)}</p>
                             </div>
                         </div>
 
