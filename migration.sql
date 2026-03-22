@@ -35,6 +35,48 @@ CREATE TABLE IF NOT EXISTS loans (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'loans_member_id_fkey'
+          AND conrelid = 'loans'::regclass
+          AND pg_get_constraintdef(oid) NOT ILIKE '%ON UPDATE CASCADE%'
+    ) THEN
+        ALTER TABLE loans DROP CONSTRAINT loans_member_id_fkey;
+        ALTER TABLE loans
+            ADD CONSTRAINT loans_member_id_fkey
+            FOREIGN KEY (member_id) REFERENCES members(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'loans_surety1_id_fkey'
+          AND conrelid = 'loans'::regclass
+          AND pg_get_constraintdef(oid) NOT ILIKE '%ON UPDATE CASCADE%'
+    ) THEN
+        ALTER TABLE loans DROP CONSTRAINT loans_surety1_id_fkey;
+        ALTER TABLE loans
+            ADD CONSTRAINT loans_surety1_id_fkey
+            FOREIGN KEY (surety1_id) REFERENCES members(id) ON UPDATE CASCADE;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'loans_surety2_id_fkey'
+          AND conrelid = 'loans'::regclass
+          AND pg_get_constraintdef(oid) NOT ILIKE '%ON UPDATE CASCADE%'
+    ) THEN
+        ALTER TABLE loans DROP CONSTRAINT loans_surety2_id_fkey;
+        ALTER TABLE loans
+            ADD CONSTRAINT loans_surety2_id_fkey
+            FOREIGN KEY (surety2_id) REFERENCES members(id) ON UPDATE CASCADE;
+    END IF;
+END $$;
+
 -- 3. Loan Repayments Table
 CREATE TABLE IF NOT EXISTS loan_repayments (
     id TEXT PRIMARY KEY,

@@ -6,7 +6,7 @@ import { logger } from '../utils/logger';
 import {
   normalizeISODate
 } from '../utils/date';
-import { getInvalidInterestRepayments, getSpecialLoanOutstandingFromEvents } from '../utils/loanMath';
+import { getInvalidInterestRepayments, getSpecialLoanOutstandingFromEvents, validateLoanCanCloseOnDate } from '../utils/loanMath';
 
 interface FinancialContextType {
   loans: Loan[];
@@ -372,6 +372,22 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
 
   const closeLoan = useCallback(async (loanId: string, endDate?: string) => {
     const normalizedEndDate = normalizeISODate(endDate || new Date().toISOString().split('T')[0]);
+    const loan = loans.find(existingLoan => existingLoan.id === loanId);
+    if (!loan) {
+      throw new Error('Loan record not found.');
+    }
+
+    const closeValidation = validateLoanCanCloseOnDate(
+      loan,
+      loanTopups.filter(topup => topup.loanId === loanId),
+      loanRepayments.filter(repayment => repayment.loanId === loanId),
+      normalizedEndDate
+    );
+
+    if (!closeValidation.canClose) {
+      throw new Error(closeValidation.reason);
+    }
+
     const { error } = await supabase.from('loans').update({
       status: LoanStatus.CLOSED,
       end_date: normalizedEndDate
@@ -379,17 +395,14 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
 
     if (error) throw error;
 
-    const loan = loans.find(existingLoan => existingLoan.id === loanId);
-    if (loan) {
-      await cleanupInvalidInterestRowsForLoan({
-        ...loan,
-        status: LoanStatus.CLOSED,
-        endDate: normalizedEndDate
-      });
-    }
+    await cleanupInvalidInterestRowsForLoan({
+      ...loan,
+      status: LoanStatus.CLOSED,
+      endDate: normalizedEndDate
+    });
 
     await fetchFinancials(false);
-  }, [cleanupInvalidInterestRowsForLoan, fetchFinancials, loans]);
+  }, [cleanupInvalidInterestRowsForLoan, fetchFinancials, loanRepayments, loanTopups, loans]);
 
   // Top-ups
   const addLoanTopup = useCallback(async (t: Omit<LoanTopup, 'id' | 'createdAt'>) => {

@@ -23,6 +23,20 @@ export interface LoanLedgerRow {
   interestCalculationType?: string;
 }
 
+export interface FuturePrincipalActivity {
+  id: string;
+  date: string;
+  entryType: 'TOPUP' | 'REPAYMENT';
+  amount: number;
+}
+
+export interface LoanClosureValidation {
+  canClose: boolean;
+  outstandingAtClose: number;
+  futurePrincipalActivity: FuturePrincipalActivity[];
+  reason?: string;
+}
+
 const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
 
 const compareCreatedAt = (a?: string, b?: string) => {
@@ -78,6 +92,9 @@ const isPeriodAfter = (left: InterestPeriod, right: InterestPeriod) =>
 const isSamePeriod = (left: InterestPeriod, right: InterestPeriod) =>
   left.year === right.year && left.month === right.month;
 
+const formatAmountForMessage = (amount: number) =>
+  Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+
 export const getEffectiveLoanRate = (loan: Loan, topups: LoanTopup[], asOfDate?: string) => {
   const cutoff = asOfDate ? normalizeISODate(asOfDate) : null;
   let effectiveRate = Number(loan.interestRate || 0);
@@ -128,6 +145,68 @@ export const getSpecialLoanOutstandingFromEvents = (
 
   const result = roundCurrency(totalPrincipal);
   return result > 1 ? result : 0;
+};
+
+export const getFuturePrincipalActivityAfterDate = (
+  loan: Loan,
+  topups: LoanTopup[],
+  repayments: LoanRepayment[],
+  closeDate: string
+): FuturePrincipalActivity[] => {
+  const cutoff = normalizeISODate(closeDate);
+
+  return buildLoanLedger(loan, topups, repayments)
+    .filter(row => compareISODate(row.date, cutoff) > 0)
+    .filter(row =>
+      row.entryType === 'TOPUP' ||
+      (row.entryType === 'REPAYMENT' && Number(row.principalPaid || 0) > 0)
+    )
+    .map(row => ({
+      id: row.id,
+      date: row.date,
+      entryType: row.entryType === 'TOPUP' ? 'TOPUP' : 'REPAYMENT',
+      amount: row.entryType === 'TOPUP'
+        ? Number(row.amount || 0)
+        : Number(row.principalPaid || 0)
+    }));
+};
+
+export const validateLoanCanCloseOnDate = (
+  loan: Loan,
+  topups: LoanTopup[],
+  repayments: LoanRepayment[],
+  closeDate: string
+): LoanClosureValidation => {
+  const normalizedCloseDate = normalizeISODate(closeDate);
+  const outstandingAtClose = getSpecialLoanOutstandingFromEvents(loan, topups, repayments, normalizedCloseDate);
+
+  if (outstandingAtClose > 1) {
+    return {
+      canClose: false,
+      outstandingAtClose,
+      futurePrincipalActivity: [],
+      reason: `Loan cannot be closed on ${normalizedCloseDate} because outstanding principal is Rs.${formatAmountForMessage(outstandingAtClose)}.`
+    };
+  }
+
+  const futurePrincipalActivity = getFuturePrincipalActivityAfterDate(loan, topups, repayments, normalizedCloseDate);
+  if (futurePrincipalActivity.length > 0) {
+    const firstFutureEntry = futurePrincipalActivity[0];
+    const entryLabel = firstFutureEntry.entryType === 'TOPUP' ? 'top-up' : 'principal repayment';
+
+    return {
+      canClose: false,
+      outstandingAtClose,
+      futurePrincipalActivity,
+      reason: `Loan cannot be closed on ${normalizedCloseDate} because later principal activity exists (${entryLabel} on ${firstFutureEntry.date}). Choose a later close date or remove the future entry first.`
+    };
+  }
+
+  return {
+    canClose: true,
+    outstandingAtClose,
+    futurePrincipalActivity: []
+  };
 };
 
 export const getInterestDueForPeriod = (

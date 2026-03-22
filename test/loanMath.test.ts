@@ -3,12 +3,14 @@ import { Loan, LoanRepayment, LoanStatus, LoanTopup, LoanType, PaymentMethod } f
 import {
     buildLoanLedger,
     getAutoGenerationStopDate,
+    getFuturePrincipalActivityAfterDate,
     getInterestDueForPeriod,
     getInvalidInterestRepayments,
     getInterestPaidForPeriod,
     getMissingInterestPeriods,
     getProratedInterestForDays,
-    getSpecialLoanOutstandingFromEvents
+    getSpecialLoanOutstandingFromEvents,
+    validateLoanCanCloseOnDate
 } from '../utils/loanMath';
 
 const makeLoan = (overrides: Partial<Loan> = {}): Loan => ({
@@ -180,6 +182,46 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
   assert.equal(prorated.fullMonthInterest, 750, 'Full month interest should still be based on monthly rate');
   assert.equal(prorated.proratedInterest, 483.87, 'Exact-day proration should use actual days held in the month');
   assert.equal(tenthMarchProrated.proratedInterest, 241.94, '10 March 2013 should recalculate to 10/31 of the monthly interest');
+}
+
+{
+  const loan = makeLoan({
+    startDate: '2017-06-10',
+    principalAmount: 50000
+  });
+  const topups = [
+    makeTopup('top_2019', 200000, '2019-01-10')
+  ];
+  const repayments = [
+    makeRepayment('rep_2017_close', {
+      date: '2017-08-10',
+      amount: 50000,
+      principalPaid: 50000
+    }),
+    makeRepayment('rep_2019_close', {
+      date: '2019-10-10',
+      amount: 200000,
+      principalPaid: 200000
+    })
+  ];
+
+  const futureActivity = getFuturePrincipalActivityAfterDate(loan, topups, repayments, '2017-08-10');
+  assert.deepEqual(
+    futureActivity.map(entry => `${entry.entryType}@${entry.date}@${entry.amount}`),
+    ['TOPUP@2019-01-10@200000', 'REPAYMENT@2019-10-10@200000'],
+    'Future principal-affecting events should be detected after a proposed close date'
+  );
+
+  const earlyCloseValidation = validateLoanCanCloseOnDate(loan, topups, repayments, '2017-08-10');
+  assert.equal(earlyCloseValidation.canClose, false, 'Loan should not close before later top-up activity');
+  assert.match(
+    earlyCloseValidation.reason || '',
+    /later principal activity exists/,
+    'Validation should explain why the close is blocked'
+  );
+
+  const finalCloseValidation = validateLoanCanCloseOnDate(loan, topups, repayments, '2019-10-10');
+  assert.equal(finalCloseValidation.canClose, true, 'Loan can close on the final zero-balance date');
 }
 
 console.log('loanMath regression tests passed');

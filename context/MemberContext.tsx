@@ -7,6 +7,7 @@ interface MemberContextType {
   members: Member[];
   addMember: (member: Omit<Member, 'id'> & { id?: string }) => Promise<void>;
   updateMember: (id: string, data: Partial<Member>) => Promise<void>;
+  changeMemberId: (currentId: string, nextId: string, data?: Partial<Member>) => Promise<void>;
   deleteMember: (id: string) => Promise<void>;
   getMember: (id: string) => Member | undefined;
   isLoading: boolean;
@@ -26,6 +27,16 @@ const mapDbMember = (m: any): Member => ({
 
 const sortMembersByName = (list: Member[]) =>
   [...list].sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+
+const toMemberInsertPayload = (member: Member) => ({
+  id: member.id,
+  name: member.name,
+  phone: member.phone || null,
+  address: member.address || null,
+  email: member.email || null,
+  join_date: member.joinDate,
+  is_active: member.isActive
+});
 
 export const MemberProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [members, setMembers] = useState<Member[]>([]);
@@ -133,6 +144,105 @@ export const MemberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     await fetchMembers(false);
   }, [fetchMembers]);
 
+  const changeMemberId = useCallback(async (currentId: string, nextId: string, data: Partial<Member> = {}) => {
+    const sourceId = String(currentId || '').trim();
+    const targetId = String(nextId || '').trim();
+
+    if (!sourceId) {
+      throw new Error('Current member ID is missing.');
+    }
+
+    if (!targetId) {
+      throw new Error('Member ID is required.');
+    }
+
+    if (sourceId === targetId) {
+      await updateMember(sourceId, data);
+      return;
+    }
+
+    const existingMember = members.find(member => member.id === sourceId);
+    if (!existingMember) {
+      throw new Error('Member not found.');
+    }
+
+    const { data: duplicateMember, error: duplicateError } = await supabase
+      .from('members')
+      .select('id')
+      .eq('id', targetId)
+      .maybeSingle();
+
+    if (duplicateError) {
+      logger.error('Error validating new member ID:', duplicateError);
+      throw duplicateError;
+    }
+
+    if (duplicateMember) {
+      throw new Error(`Member ID ${targetId} already exists.`);
+    }
+
+    const replacementMember: Member = {
+      ...existingMember,
+      ...data,
+      id: targetId
+    };
+
+    const { error: insertError } = await supabase
+      .from('members')
+      .insert([toMemberInsertPayload(replacementMember)]);
+
+    if (insertError) {
+      logger.error('Error creating replacement member:', insertError);
+      throw insertError;
+    }
+
+    try {
+      const loanReferenceColumns = ['member_id', 'surety1_id', 'surety2_id'] as const;
+
+      for (const column of loanReferenceColumns) {
+        const { error } = await supabase
+          .from('loans')
+          .update({ [column]: targetId })
+          .eq(column, sourceId);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      const { error: deleteError } = await supabase
+        .from('members')
+        .delete()
+        .eq('id', sourceId);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+    } catch (error) {
+      for (const column of ['member_id', 'surety1_id', 'surety2_id'] as const) {
+        await supabase
+          .from('loans')
+          .update({ [column]: sourceId })
+          .eq(column, targetId);
+      }
+
+      await supabase
+        .from('members')
+        .delete()
+        .eq('id', targetId);
+
+      logger.error('Error remapping member ID:', error);
+      throw error;
+    }
+
+    setMembers(prev => sortMembersByName([
+      ...prev.filter(member => member.id !== sourceId),
+      replacementMember
+    ]));
+
+    await fetchMembers(false);
+  }, [fetchMembers, members, updateMember]);
+
   const deleteMember = useCallback(async (id: string) => {
     const { error } = await supabase.from('members').delete().eq('id', id);
     if (error) {
@@ -149,7 +259,7 @@ export const MemberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [members]);
 
   return (
-    <MemberContext.Provider value={{ members, addMember, updateMember, deleteMember, getMember, isLoading }}>
+    <MemberContext.Provider value={{ members, addMember, updateMember, changeMemberId, deleteMember, getMember, isLoading }}>
       {children}
     </MemberContext.Provider>
   );

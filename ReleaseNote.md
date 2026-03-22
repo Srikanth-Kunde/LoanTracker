@@ -13,15 +13,19 @@ This release improves historical loan correction workflows, audit visibility, an
 - Audit Log History is now restricted to `Admin` users only. Operators and viewers cannot see or open it.
 - Auto-generation now protects exact-day override rows from being unintentionally wiped or replaced by monthly defaults.
 - Ledger summary cards now refresh from live transaction data, so edited interest values update immediately.
+- Member IDs can now be corrected from the frontend, and linked borrower/surety loan references are remapped automatically.
+- Audit Report now shows `Original Loan Disbursed` before outstanding calculations in the summary cards, member balance table, and Full Audit CSV.
 
 **Fixes**
 - Fixed stale `Interest Paid` totals in the ledger header after editing an existing interest row.
 - Fixed auto-recalculation behavior that could overwrite exact-day interest overrides.
 - Fixed historical loan correction flow so remaining principal is surfaced and can be settled properly.
 - Fixed route and sidebar access so audit-log browsing is admin-only.
+- Fixed the member-ID correction gap that previously required manual backend edits and triggered foreign-key failures.
+- Fixed loan closure logic so a loan cannot be closed while future top-ups or later principal recoveries still exist in history.
 
 **Database / Deployment Note**
-- No new SQL patch is required for this release if `migration.sql` has already been applied previously.
+- Existing deployments should rerun `migration.sql` once if they want direct backend edits of `members.id` to work cleanly. The migration now upgrades member-linked loan foreign keys to `ON UPDATE CASCADE`.
 - If your deployment is older and does not yet include:
   - `loan_repayments.interest_for_month`
   - `loan_repayments.interest_for_year`

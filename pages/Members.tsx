@@ -20,7 +20,7 @@ import { formatCurrency } from '../constants';
 import { logger } from '../utils/logger';
 
 const Members: React.FC = () => {
-    const { members, addMember, updateMember, deleteMember, isLoading } = useMembers();
+    const { members, addMember, updateMember, changeMemberId, deleteMember, isLoading } = useMembers();
     const { loans, loanRepayments, loanTopups, getSpecialLoanOutstanding } = useFinancials();
     const { settings } = useSettings();
     const { role } = useAuth();
@@ -147,21 +147,43 @@ const Members: React.FC = () => {
             setErrorMsg('Name is required');
             return;
         }
+        const nextMemberId = memberForm.id.trim();
+        if (!nextMemberId) {
+            setErrorMsg('Member ID is required');
+            return;
+        }
+
+        const updatedMember = {
+            name: memberForm.name,
+            phone: memberForm.phone,
+            email: memberForm.email,
+            address: memberForm.address,
+            joinDate: memberForm.joinDate,
+            isActive: memberForm.isActive
+        };
+
         try {
             setPendingAction(`edit:${editingMember.id}`);
-            await updateMember(editingMember.id, {
-                name: memberForm.name,
-                phone: memberForm.phone,
-                email: memberForm.email,
-                address: memberForm.address,
-                joinDate: memberForm.joinDate,
-                isActive: memberForm.isActive
+            if (editingMember.id !== nextMemberId) {
+                await changeMemberId(editingMember.id, nextMemberId, updatedMember);
+            } else {
+                await updateMember(editingMember.id, updatedMember);
+            }
+            log('UPDATE_MEMBER', 'members', nextMemberId, {
+                before: {
+                    id: editingMember.id,
+                    name: editingMember.name
+                },
+                after: {
+                    id: nextMemberId,
+                    name: memberForm.name
+                }
             });
-            log('UPDATE_MEMBER', 'members', editingMember.id, { name: memberForm.name });
             setModals({ ...modals, edit: false });
         } catch (error) {
-            logger.error('Error updating member:', error);
-            setErrorMsg('Failed to update member');
+            const e = error as Error;
+            logger.error('Error updating member:', e);
+            setErrorMsg(e.message || 'Failed to update member');
         } finally {
             setPendingAction(null);
         }
@@ -532,8 +554,12 @@ const Members: React.FC = () => {
                                 placeholder="Auto-generated if empty"
                                 value={memberForm.id}
                                 onChange={e => setMemberForm({ ...memberForm, id: e.target.value })}
-                                disabled={modals.edit}
                             />
+                            {modals.edit && (
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                    Changing the member ID will remap linked loans and surety references.
+                                </p>
+                            )}
                         </div>
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-slate-500 uppercase">Phone Number</label>

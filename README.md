@@ -15,6 +15,9 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
 *   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
 *   **Closed Loan Correction Workflow:** Editing a historical loan amount can now surface any remaining principal gap and optionally record the balancing principal payment immediately.
+*   **Legacy Member ID Correction:** Member IDs can now be corrected from the Members edit screen while automatically remapping linked borrower and surety references.
+*   **Safe Loan Closure Validation:** A loan can only be closed when the selected close date has zero outstanding principal and no later principal-affecting activity.
+*   **Audit Report Principal Breakdown:** The Audit Report now shows `Original Loan Disbursed` in the top cards, member balance table, and Full Audit CSV for cleaner reconciliation.
 *   **Auto-Interest Engine:** Single-click "Zap" button to backfill decades of historical interest records based on dynamically calculated principal balances.
 *   **Admin-Only Audit Log Tab:** Database write-history now lives in its own `Audit Log History` tab and is visible only to admins.
 *   **Reduced Scope UI:** The application is laser-focused on `Special Loans`, `Members`, `Audit Report`, `Audit Log History` (admin only), and `Settings`. No distracting dashboards or bank-sync features.
@@ -88,7 +91,8 @@ The application requires a specific schema and security configuration to functio
 - **Yes, if your database was created before the latest ledger hardening update, rerun `migration.sql`.**
 - `migration.sql` now adds new repayment allocation columns, audit-log compatibility columns, repayment validation constraints, and date-validation triggers.
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
-- **No additional SQL is required for the latest release features** such as historical interest-row editing, remaining-principal settlement from the loan edit modal, per-ledger CSV download, or the admin-only audit-log tab. Those changes are application-only and use the existing schema.
+- **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors. The latest migration upgrades the member-linked loan foreign keys to `ON UPDATE CASCADE`.
+- The most recent UI fixes such as member-ID editing from the frontend, close-date validation against future top-ups/repayments, and the Audit Report `Original Loan Disbursed` view are application-layer changes on top of the existing schema.
 - The script remains **idempotent** and is safe to rerun from the Supabase SQL Editor.
 - **Legacy table removal**: `migration.sql` now drops the obsolete `payments` table because it is no longer part of the live product.
 - **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
@@ -104,6 +108,8 @@ If you want to verify that your database is already on the required schema, thes
 - `audit_logs.performed_by`
 - `audit_logs.record_id`
 - `audit_logs.details`
+
+If you also need direct manual SQL edits of `members.id`, the `loans_member_id_fkey`, `loans_surety1_id_fkey`, and `loans_surety2_id_fkey` constraints should include `ON UPDATE CASCADE`.
 
 ### Full Reset
 
@@ -202,6 +208,9 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Live Ledger Summary Cards**: The eye-view audit ledger cards now recompute `Top-Ups`, `Principal Repaid`, `Interest Paid`, and `Live Balance` from live transaction data so edits reflect immediately.
 *   **Per-Ledger CSV Download**: Each Special Loan Audit Ledger modal now has a `Download Ledger` action that exports summary values and transaction rows for the selected member.
 *   **Closed Loan Principal Correction Flow**: Editing a historical loan amount upward now exposes the remaining balance and can immediately post a balancing principal repayment before closing the loan again.
+*   **Frontend Member ID Edit Flow**: The Members page now allows legacy member/account ID corrections directly from the edit modal and safely remaps linked borrower and surety references.
+*   **Future-Activity Close Blocking**: Loan closure is now refused if later top-ups or principal recoveries exist after the requested close date, preventing premature closure on long-running legacy ledgers.
+*   **Audit Report Original Disbursal View**: Added `Original Loan Disbursed` to the Audit Report summary cards, member balance table, and Full Audit CSV export for clearer balance math.
 *   **Interest Wipe Safety**: “Wipe Interest” now preserves principal and mixed repayment rows instead of deleting them wholesale.
 *   **Effective Rate Tracking**: Top-ups can now capture a monthly rate, and the latest effective rate is used in future interest calculations.
 *   **Audit Log Compatibility Fix**: Frontend audit writes were aligned with the real Supabase `audit_logs` schema so audit inserts no longer silently fail due to column mismatches.

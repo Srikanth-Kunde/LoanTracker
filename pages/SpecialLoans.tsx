@@ -1020,16 +1020,17 @@ const SpecialLoans: React.FC = () => {
                 throw new Error("This loan still has outstanding principal. Change status to Active or enable the remaining payment option.");
             }
 
-            if (editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0) {
+            const shouldRecordRemainingSettlement = editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0;
+            const shouldCloseAfterSave = editForm.status === LoanStatus.CLOSED || shouldRecordRemainingSettlement;
+
+            if (shouldCloseAfterSave) {
                 if (compareISODate(editForm.settlementDate, newStartDate) < 0) {
-                    throw new Error("Remaining payment date cannot be before the loan start date.");
+                    throw new Error("Close date cannot be before the loan start date.");
                 }
             }
 
-            const nextStatus = editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0
-                ? LoanStatus.ACTIVE
-                : editForm.status;
-            const nextEndDate = nextStatus === LoanStatus.CLOSED ? activeLoan.endDate : undefined;
+            const nextStatus = shouldCloseAfterSave ? LoanStatus.ACTIVE : editForm.status;
+            const nextEndDate = shouldCloseAfterSave ? undefined : activeLoan.endDate;
 
             await updateLoan({
                 ...activeLoan,
@@ -1053,13 +1054,13 @@ const SpecialLoans: React.FC = () => {
                 after: {
                     principalAmount: revisedPrincipal,
                     rate: revisedRate,
-                    status: editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0 ? LoanStatus.CLOSED : editForm.status,
+                    status: shouldCloseAfterSave ? LoanStatus.CLOSED : editForm.status,
                     remainingPrincipal: editLoanSummary.remainingPrincipal
                 },
-                settleRemaining: editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0
+                settleRemaining: shouldRecordRemainingSettlement
             });
 
-            if (editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0) {
+            if (shouldRecordRemainingSettlement) {
                 await recordLoanRepayment({
                     loanId: activeLoan.id,
                     date: editForm.settlementDate,
@@ -1076,6 +1077,9 @@ const SpecialLoans: React.FC = () => {
                     source: 'EDIT_LOAN_REMAINING_SETTLEMENT',
                     date: editForm.settlementDate
                 });
+            }
+
+            if (shouldCloseAfterSave) {
                 await closeLoan(activeLoan.id, editForm.settlementDate);
                 log('CLOSE_LOAN', 'loans', activeLoan.id, {
                     memberName: activeLoan.memberName,

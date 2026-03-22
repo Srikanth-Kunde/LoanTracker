@@ -46,6 +46,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   A clean audit workspace to review total capital deployed and interest collected across all legacy records.
 *   A comprehensive Audit Report tracking every principal disbursement and collection chronologically.
 *   Audit review must support all-time history from 2012 onward.
+*   The Audit Report summary cards and member-balance table must display `Original Loan Disbursed` separately from top-ups so operators can visually reconcile `Original Principal + Top-Ups - Principal Recovered = Outstanding`.
 *   The audit ledger must expose a deterministic row-by-row running principal balance, even when multiple events occur on the same date.
 *   The Special Loan Audit Ledger must show live summary cards for original principal, top-ups, principal repaid, interest paid, and live balance.
 *   The Special Loan Audit Ledger must support direct per-loan export from the eye-view modal without requiring a separate report screen.
@@ -55,6 +56,8 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   A centralized interface to manage the society's 40+ members.
 *   Operators can create, update, and deactivate member profiles (Name, Phone, Address, Join Date).
 *   *Rule*: Member IDs can be manual (to match legacy books) or auto-generated.
+*   Operators must be able to correct a member's legacy member/account ID from the frontend without breaking linked loans or surety references.
+*   A member ID correction must preserve dependent `loans.member_id`, `surety1_id`, and `surety2_id` relationships.
 
 
 ---
@@ -74,7 +77,8 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   `loan_repayments` also stores optional `interest_days` and `interest_calculation_type` metadata whenever a repayment is recorded on an exact-day basis.
 *   `app_settings`: Stores the active UI-backed settings used by the app, including `society_name`, `currency`, `loan_processing_fee`, `default_loan_interest_rate`, access codes, and appearance preferences.
 *   `audit_logs`: Stores write-audit metadata for ledger and admin actions.
-*   No new tables or columns are required for the latest month-interest override, remaining-principal settlement, or admin-only audit-log tab. These changes operate on the existing `loan_repayments`, `loans`, and `audit_logs` structures.
+*   Member-linked foreign keys on `loans.member_id`, `loans.surety1_id`, and `loans.surety2_id` should support `ON UPDATE CASCADE` so direct backend member-ID corrections do not violate referential integrity.
+*   No new tables or columns are required for the latest month-interest override, remaining-principal settlement, admin-only audit-log tab, member-ID edit flow, or audit-report disbursal view. These changes operate on the existing `members`, `loans`, `loan_repayments`, and `audit_logs` structures.
 *   The legacy `payments` table is not part of the active product and should not exist after the latest migration.
 *   Sample data is intentionally separated from schema setup so operators can add or remove it directly from the Supabase backend when needed.
 
@@ -82,6 +86,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   All calculations are derived dynamically on the client side from the Supabase tables.
 *   `getSpecialLoanOutstanding(loanId, asOfDate?)`: Calculates the exact principal balance by netting the original principal, top-ups up to the date, and principal repayments up to the date.
 *   Shared loan math utilities now drive arrears detection, current-month due, auto-generation, running balances, and interest-settlement status from the same event model.
+*   Shared loan math utilities also validate whether a loan can be closed on a selected date by checking both outstanding principal at that date and any future principal-affecting activity.
 
 ---
 
@@ -105,7 +110,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Operational Note**: `migration.sql` is also the upgrade path for existing deployments. Operators must rerun it after the ledger hardening release so the new repayment-period columns, audit-log compatibility columns, constraints, triggers, and legacy-table cleanup are applied.
 *   **Current Proration Upgrade Note**: Existing deployments must rerun `migration.sql` one more time to add `interest_days` and `interest_calculation_type` for exact-day repayment auditability.
 *   **Current Closure Auto-Cleanup Fix**: No additional schema change is required for the latest post-closure interest cleanup. It is implemented in the shared calculation engine and repayment workflows on top of the existing tables.
-*   **Current Release SQL Requirement**: No new SQL patch is required for the current release beyond a previously-applied `migration.sql`. If your database already contains the exact-day repayment metadata columns and the current `audit_logs` columns, the remaining fixes are application-only.
+*   **Current Release SQL Requirement**: Existing deployments should rerun `migration.sql` once more so the member-linked loan foreign keys are upgraded to `ON UPDATE CASCADE`. This is required if operators or backend admins need direct member-ID corrections to work without FK errors. The remaining latest fixes are application-only.
 
 #### 5.4. Product Scope Corrections
 *   The generic `Dashboard` has been removed from the live app surface to focus on the ledger system.
@@ -136,6 +141,9 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Top-Up Rate History Support**: Top-ups now preserve a rate value that becomes the effective future monthly rate for subsequent interest calculations.
 *   **Audit Log Schema Alignment**: Fixed the frontend audit payload shape to match the Supabase `audit_logs` table and avoid silent insert failures.
 *   **Admin-Only Audit Log Screen**: Audit Log History has been moved out of the financial Audit Report into a dedicated admin-only navigation tab with both sidebar and route-level access control.
+*   **Legacy Member ID Correction**: The Members edit modal now allows changing a member ID from the frontend and safely remaps linked borrower/surety references instead of forcing manual SQL fixes.
+*   **Future-Activity Close Guard**: Loans can no longer be closed on a date that still has later top-ups or principal recoveries in history, which prevents premature closure on legacy books where the same loan resumes years later.
+*   **Audit Report Principal Clarity**: Audit Report now surfaces `Original Loan Disbursed` both in the summary cards and in the member-balance table before outstanding calculations.
 *   **Database Integrity Guards**: Added DB-level checks for non-negative repayments, component-sum validation, valid interest-period ranges, and trigger-based date validation for top-ups, repayments, and edited loan start dates.
 *   **Regression Harness**: Added deterministic loan-math regression coverage for multi-top-up and partial-repayment scenarios via `npm test`.
 *   **Live Context Sync**: Member, financial, and settings contexts now push local updates immediately and also subscribe/refetch in real time so backend changes surface without manual page reloads.
