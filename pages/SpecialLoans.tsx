@@ -19,7 +19,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Card } from '../components/ui/Card';
 import { LoanCalculator } from '../components/LoanCalculator';
-import { compareISODate, formatDisplayDate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp } from '../utils/date';
+import { compareISODate, formatDisplayDate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp, parseISODateParts } from '../utils/date';
 import {
     getAutoGenerationStopDate,
     buildLoanLedger,
@@ -55,12 +55,12 @@ const SpecialLoans: React.FC = () => {
     const { settings } = useSettings();
     const { members } = useMembers();
     const {
-        loans, loanRepayments, createLoan, updateLoan, deleteLoan,
-        recordLoanRepayment, closeLoan,
-        deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, bulkRecordLoanRepayments
+        loans, loanRepayments, loanTopups, createLoan, updateLoan, deleteLoan,
+        recordLoanRepayment, updateLoanRepayment, closeLoan,
+        addLoanTopup, deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, bulkRecordLoanRepayments,
+        getSpecialLoanOutstanding
     } = useFinancials();
     const { role } = useAuth();
-    const { loanTopups, addLoanTopup, getSpecialLoanOutstanding } = useFinancials();
     const { log } = useAuditLog();
 
     // State
@@ -77,9 +77,10 @@ const SpecialLoans: React.FC = () => {
         calc: boolean;
         history: boolean;
         edit: boolean;
+        editInterest: boolean;
         topup: boolean;
         autoGen: boolean;
-    }>({ create: false, repay: false, calc: false, history: false, edit: false, topup: false, autoGen: false });
+    }>({ create: false, repay: false, calc: false, history: false, edit: false, editInterest: false, topup: false, autoGen: false });
 
     const [printScheduleLoan, setPrintScheduleLoan] = useState<EnrichedLoan | null>(null);
 
@@ -104,6 +105,7 @@ const SpecialLoans: React.FC = () => {
     const [topupLoan, setTopupLoan] = useState<EnrichedLoan | null>(null);
 
     const [autoGenLoan, setAutoGenLoan] = useState<EnrichedLoan | null>(null);
+    const [interestEditTarget, setInterestEditTarget] = useState<LoanRepayment | null>(null);
 
     const [repayForm, setRepayForm] = useState({
         principal: '',
@@ -116,6 +118,12 @@ const SpecialLoans: React.FC = () => {
         notes: ''
     });
 
+    const [interestEditForm, setInterestEditForm] = useState({
+        interestCalculationType: 'MONTHLY' as InterestCalculationType,
+        interestDays: '',
+        notes: ''
+    });
+
     const [activeLoan, setActiveLoan] = useState<EnrichedLoan | null>(null); // For Repay/History
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -124,10 +132,79 @@ const SpecialLoans: React.FC = () => {
         amount: '',
         rate: '',
         date: '',
-        status: LoanStatus.ACTIVE
+        status: LoanStatus.ACTIVE,
+        settleRemaining: false,
+        settlementDate: new Date().toISOString().split('T')[0],
+        settlementMethod: PaymentMethod.CASH,
+        settlementNotes: ''
     });
 
     const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
+    const escapeCsvValue = (value: string | number | null | undefined) => {
+        const normalized = value == null ? '' : String(value);
+        if (/[",\n]/.test(normalized)) {
+            return `"${normalized.replace(/"/g, '""')}"`;
+        }
+        return normalized;
+    };
+    const getDefaultInterestDays = (repayment: LoanRepayment, year: number, month: number) =>
+        repayment.interestDays || Math.min(parseISODateParts(repayment.date).day, getDaysInMonth(year, month));
+
+    const getInterestEditPreview = (
+        loan: EnrichedLoan,
+        repayment: LoanRepayment,
+        interestCalculationType: InterestCalculationType,
+        rawInterestDays = ''
+    ) => {
+        const interestPeriod = getRepaymentInterestPeriod(repayment);
+        if (!interestPeriod) {
+            return null;
+        }
+
+        const currentLoanTopups = loanTopups.filter(t => t.loanId === loan.id);
+        const currentLoanRepayments = loanRepayments.filter(r => r.loanId === loan.id);
+        const periodDue = getInterestDueForPeriod(
+            loan,
+            currentLoanTopups,
+            currentLoanRepayments,
+            interestPeriod
+        );
+        const defaultInterestDays = getDefaultInterestDays(repayment, interestPeriod.year, interestPeriod.month);
+        const parsedInterestDays = Number.parseInt(rawInterestDays || '', 10);
+        const requestedInterestDays = Number.isFinite(parsedInterestDays) && parsedInterestDays > 0
+            ? parsedInterestDays
+            : defaultInterestDays;
+        const monthDays = getDaysInMonth(interestPeriod.year, interestPeriod.month);
+        const proration = interestCalculationType === 'PRORATED_DAYS'
+            ? getProratedInterestForDays(
+                periodDue.openingOutstanding,
+                periodDue.rate,
+                interestPeriod.year,
+                interestPeriod.month,
+                requestedInterestDays
+            )
+            : null;
+        const nextInterestAmount = interestCalculationType === 'PRORATED_DAYS'
+            ? proration?.proratedInterest || 0
+            : periodDue.interestDue;
+
+        return {
+            interestPeriod,
+            periodLabel: `${MONTHS[interestPeriod.month - 1]} ${interestPeriod.year}`,
+            openingOutstanding: periodDue.openingOutstanding,
+            monthlyRate: periodDue.rate,
+            monthlyInterest: periodDue.interestDue,
+            currentInterest: Number(repayment.interestPaid || 0),
+            currentAmount: Number(repayment.amount || 0),
+            nextInterest: roundCurrency(nextInterestAmount),
+            nextAmount: roundCurrency(Number(repayment.principalPaid || 0) + nextInterestAmount),
+            daysHeld: proration?.daysHeld || requestedInterestDays,
+            monthDays,
+            formula: proration
+                ? `${formatCurrency(periodDue.openingOutstanding, settings.currency)} × ${periodDue.rate}% × ${proration.daysHeld}/${proration.monthDays}`
+                : null
+        };
+    };
 
     const getRepaymentPreview = (
         loan: EnrichedLoan,
@@ -230,6 +307,16 @@ const SpecialLoans: React.FC = () => {
         return `Arrears: ${missed.length} month${missed.length > 1 ? 's' : ''} (${arrearsRange}) = ${formatCurrency(repaymentPreview.arrearsInterest, settings.currency)}. Current period ${currentPeriodLabel} = ${currentPeriodSummary}.`;
     }, [repaymentPreview, settings.currency]);
 
+    const interestEditPreview = useMemo(() => {
+        if (!activeLoan || !interestEditTarget) return null;
+        return getInterestEditPreview(
+            activeLoan,
+            interestEditTarget,
+            interestEditForm.interestCalculationType,
+            interestEditForm.interestDays
+        );
+    }, [activeLoan, interestEditForm.interestCalculationType, interestEditForm.interestDays, interestEditTarget, loanRepayments, loanTopups]);
+
     const activeLoanTransactions = useMemo(() => {
         if (!activeLoan) return [];
         return buildLoanLedger(
@@ -238,6 +325,27 @@ const SpecialLoans: React.FC = () => {
             loanRepayments.filter(r => r.loanId === activeLoan.id)
         );
     }, [activeLoan, loanRepayments, loanTopups]);
+
+    const editLoanSummary = useMemo(() => {
+        if (!activeLoan) return null;
+
+        const revisedPrincipal = parseFloat(editForm.amount) || 0;
+        const topupsTotal = loanTopups
+            .filter(t => t.loanId === activeLoan.id)
+            .reduce((sum, topup) => sum + Number(topup.amount || 0), 0);
+        const principalRecovered = loanRepayments
+            .filter(r => r.loanId === activeLoan.id)
+            .reduce((sum, repayment) => sum + Number(repayment.principalPaid || 0), 0);
+        const rawRemaining = roundCurrency(revisedPrincipal + topupsTotal - principalRecovered);
+
+        return {
+            revisedPrincipal,
+            topupsTotal,
+            principalRecovered,
+            rawRemaining,
+            remainingPrincipal: rawRemaining > 1 ? rawRemaining : 0
+        };
+    }, [activeLoan, editForm.amount, loanRepayments, loanTopups]);
 
     // Permissions
     const canCreateLoan = role === UserRole.ADMIN;
@@ -626,6 +734,77 @@ const SpecialLoans: React.FC = () => {
         }
     };
 
+    const openInterestEditModal = (repaymentId: string) => {
+        if (!activeLoan) return;
+        const repayment = loanRepayments.find(row => row.id === repaymentId && row.loanId === activeLoan.id);
+        if (!repayment || (repayment.interestPaid || 0) <= 0) return;
+
+        const interestPeriod = getRepaymentInterestPeriod(repayment);
+        if (!interestPeriod) return;
+
+        setInterestEditTarget(repayment);
+        setInterestEditForm({
+            interestCalculationType: repayment.interestCalculationType || 'MONTHLY',
+            interestDays: String(getDefaultInterestDays(repayment, interestPeriod.year, interestPeriod.month)),
+            notes: repayment.notes || ''
+        });
+        setErrorMsg('');
+        setModals({ ...modals, editInterest: true });
+    };
+
+    const handleUpdateInterestForMonth = async () => {
+        if (!activeLoan || !interestEditTarget || !interestEditPreview) return;
+        setErrorMsg('');
+
+        try {
+            if (interestEditForm.interestCalculationType === 'PRORATED_DAYS') {
+                const dayCount = Number.parseInt(interestEditForm.interestDays || '', 10);
+                if (!Number.isFinite(dayCount) || dayCount <= 0 || dayCount > interestEditPreview.monthDays) {
+                    throw new Error(`Exact days must be between 1 and ${interestEditPreview.monthDays} for ${interestEditPreview.periodLabel}.`);
+                }
+            }
+
+            const updatedRepayment: LoanRepayment = {
+                ...interestEditTarget,
+                amount: interestEditPreview.nextAmount,
+                interestPaid: interestEditPreview.nextInterest,
+                interestDays: interestEditForm.interestCalculationType === 'PRORATED_DAYS'
+                    ? interestEditPreview.daysHeld
+                    : undefined,
+                interestCalculationType: interestEditForm.interestCalculationType,
+                notes: interestEditForm.notes.trim() || undefined
+            };
+
+            await updateLoanRepayment(updatedRepayment);
+            log('UPDATE_REPAYMENT', 'loan_repayments', interestEditTarget.id, {
+                loanId: activeLoan.id,
+                memberName: activeLoan.memberName,
+                interestPeriod: interestEditPreview.periodLabel,
+                before: {
+                    amount: interestEditTarget.amount,
+                    interestPaid: interestEditTarget.interestPaid,
+                    interestDays: interestEditTarget.interestDays || null,
+                    interestCalculationType: interestEditTarget.interestCalculationType || 'MONTHLY',
+                    notes: interestEditTarget.notes || null
+                },
+                after: {
+                    amount: updatedRepayment.amount,
+                    interestPaid: updatedRepayment.interestPaid,
+                    interestDays: updatedRepayment.interestDays || null,
+                    interestCalculationType: updatedRepayment.interestCalculationType || 'MONTHLY',
+                    notes: updatedRepayment.notes || null
+                }
+            });
+
+            setModals({ ...modals, editInterest: false });
+            setInterestEditTarget(null);
+        } catch (error) {
+            const e = error as Error;
+            logger.error("Error updating monthly interest", e);
+            setErrorMsg(e.message);
+        }
+    };
+
     // ── Top-up handlers ──────────────────────────────────────────────────────
     const openTopupModal = (loan: EnrichedLoan) => {
         if (!canCreateLoan) return;
@@ -721,6 +900,54 @@ const SpecialLoans: React.FC = () => {
         document.body.removeChild(link);
     };
 
+    const downloadActiveLoanLedger = () => {
+        if (!activeLoan) return;
+
+        const topupsTotal = loanTopups.filter(t => t.loanId === activeLoan.id).reduce((sum, topup) => sum + topup.amount, 0);
+        const ledgerRows = activeLoanTransactions.map(tx => ([
+            formatDisplayDate(tx.date),
+            tx.entryType,
+            tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '',
+            tx.interestCalculationType || '',
+            tx.interestDays || '',
+            tx.amount || 0,
+            tx.principalPaid || 0,
+            tx.interestPaid || 0,
+            tx.lateFee || 0,
+            tx.balanceAfter || 0,
+            tx.notes || ''
+        ]));
+
+        const csvRows = [
+            ['Member Name', activeLoan.memberName],
+            ['Loan ID', activeLoan.id],
+            ['Start Date', formatDisplayDate(activeLoan.startDate)],
+            ['Original Principal', activeLoan.principalAmount],
+            ['Top-Ups', topupsTotal],
+            ['Principal Repaid', activeLoan.historicalPrincipalPaid],
+            ['Interest Paid', activeLoan.historicalInterestPaid],
+            ['Live Balance', activeLoan.historicalOutstanding],
+            [],
+            ['Date', 'Type', 'Interest Period', 'Calc Type', 'Days', 'Amount', 'Principal', 'Interest', 'Late Fee', 'Balance', 'Notes'],
+            ...ledgerRows
+        ];
+
+        const csvContent = csvRows
+            .map(row => row.map(value => escapeCsvValue(value as string | number | null | undefined)).join(','))
+            .join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeName = activeLoan.memberName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || activeLoan.id;
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Special_Loan_Audit_Ledger_${safeName}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const openEditModal = (loan: EnrichedLoan) => {
         setActiveLoan(loan);
         setEditForm({
@@ -728,7 +955,11 @@ const SpecialLoans: React.FC = () => {
             amount: loan.principalAmount.toString(),
             rate: loan.interestRate.toString(),
             date: loan.startDate,
-            status: loan.status
+            status: loan.status,
+            settleRemaining: false,
+            settlementDate: loan.endDate || new Date().toISOString().split('T')[0],
+            settlementMethod: PaymentMethod.CASH,
+            settlementNotes: ''
         });
         setModals({ ...modals, edit: true });
     };
@@ -736,21 +967,98 @@ const SpecialLoans: React.FC = () => {
     const handleUpdateLoan = async () => {
         if (!activeLoan) return;
         try {
+            if (!editLoanSummary) {
+                throw new Error("Unable to calculate the revised loan balance.");
+            }
+
+            const revisedPrincipal = parseFloat(editForm.amount);
+            const revisedRate = parseFloat(editForm.rate);
+            if (!Number.isFinite(revisedPrincipal) || revisedPrincipal <= 0) {
+                throw new Error("Please enter a valid loan amount.");
+            }
+            if (!Number.isFinite(revisedRate) || revisedRate <= 0) {
+                throw new Error("Please enter a valid monthly rate.");
+            }
+
             const newStartDate = editForm.date;
             const earliestEventDate = [...loanTopups.filter(t => t.loanId === activeLoan.id).map(t => t.date), ...loanRepayments.filter(r => r.loanId === activeLoan.id).map(r => r.date)]
                 .sort(compareISODate)[0];
             if (earliestEventDate && compareISODate(newStartDate, earliestEventDate) > 0) {
                 throw new Error(`Loan start date cannot be after the earliest transaction (${formatDisplayDate(earliestEventDate)}).`);
             }
+
+            if (editLoanSummary.rawRemaining < -1) {
+                throw new Error("Revised loan amount cannot be less than the principal already recovered.");
+            }
+
+            if (editForm.status === LoanStatus.CLOSED && editLoanSummary.remainingPrincipal > 0 && !editForm.settleRemaining) {
+                throw new Error("This loan still has outstanding principal. Change status to Active or enable the remaining payment option.");
+            }
+
+            if (editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0) {
+                if (compareISODate(editForm.settlementDate, newStartDate) < 0) {
+                    throw new Error("Remaining payment date cannot be before the loan start date.");
+                }
+            }
+
+            const nextStatus = editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0
+                ? LoanStatus.ACTIVE
+                : editForm.status;
+            const nextEndDate = nextStatus === LoanStatus.CLOSED ? activeLoan.endDate : undefined;
+
             await updateLoan({
                 ...activeLoan,
-                principalAmount: parseFloat(editForm.amount),
-                interestRate: parseFloat(editForm.rate),
+                principalAmount: revisedPrincipal,
+                interestRate: revisedRate,
                 startDate: newStartDate,
-                status: editForm.status,
+                endDate: nextEndDate,
+                status: nextStatus,
                 durationMonths: 0,
                 calculationMethod: 'INTEREST_ONLY'
             });
+
+            log('UPDATE_LOAN', 'loans', activeLoan.id, {
+                memberName: activeLoan.memberName,
+                before: {
+                    principalAmount: activeLoan.principalAmount,
+                    rate: activeLoan.interestRate,
+                    status: activeLoan.status,
+                    endDate: activeLoan.endDate || null
+                },
+                after: {
+                    principalAmount: revisedPrincipal,
+                    rate: revisedRate,
+                    status: editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0 ? LoanStatus.CLOSED : editForm.status,
+                    remainingPrincipal: editLoanSummary.remainingPrincipal
+                },
+                settleRemaining: editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0
+            });
+
+            if (editForm.settleRemaining && editLoanSummary.remainingPrincipal > 0) {
+                await recordLoanRepayment({
+                    loanId: activeLoan.id,
+                    date: editForm.settlementDate,
+                    amount: editLoanSummary.remainingPrincipal,
+                    principalPaid: editLoanSummary.remainingPrincipal,
+                    interestPaid: 0,
+                    lateFee: 0,
+                    method: editForm.settlementMethod,
+                    notes: editForm.settlementNotes || 'Remaining principal settled after correcting loan amount'
+                });
+                log('RECORD_REPAYMENT', 'loan_repayments', activeLoan.id, {
+                    memberName: activeLoan.memberName,
+                    principal: editLoanSummary.remainingPrincipal,
+                    source: 'EDIT_LOAN_REMAINING_SETTLEMENT',
+                    date: editForm.settlementDate
+                });
+                await closeLoan(activeLoan.id, editForm.settlementDate);
+                log('CLOSE_LOAN', 'loans', activeLoan.id, {
+                    memberName: activeLoan.memberName,
+                    date: editForm.settlementDate,
+                    source: 'EDIT_LOAN_REMAINING_SETTLEMENT'
+                });
+            }
+
             setModals({ ...modals, edit: false });
         } catch (error) {
             const e = error as Error;
@@ -1457,7 +1765,7 @@ const SpecialLoans: React.FC = () => {
             <Modal isOpen={modals.history} onClose={() => setModals({ ...modals, history: false })} title="Special Loan Audit Ledger" maxWidth="4xl">
                 {activeLoan && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
                             <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
                                 <p className="text-slate-400 text-[9px] uppercase font-bold mb-1">Original Principal</p>
                                 <p className="font-black text-slate-800 dark:text-white">{formatCurrency(activeLoan.principalAmount, settings.currency)}</p>
@@ -1470,6 +1778,10 @@ const SpecialLoans: React.FC = () => {
                                 <p className="text-blue-500 text-[9px] uppercase font-bold mb-1">Principal Repaid</p>
                                 <p className="font-black text-blue-800 dark:text-blue-200">{formatCurrency(activeLoan.historicalPrincipalPaid, settings.currency)}</p>
                             </div>
+                            <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800 text-center">
+                                <p className="text-emerald-500 text-[9px] uppercase font-bold mb-1">Interest Paid</p>
+                                <p className="font-black text-emerald-800 dark:text-emerald-200">{formatCurrency(activeLoan.historicalInterestPaid, settings.currency)}</p>
+                            </div>
                             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800 text-center shadow-inner">
                                 <p className="text-amber-600 text-[9px] uppercase font-bold mb-1">Live Balance</p>
                                 <p className="font-black text-xl text-amber-900 dark:text-amber-200">{formatCurrency(activeLoan.historicalOutstanding, settings.currency)}</p>
@@ -1479,7 +1791,13 @@ const SpecialLoans: React.FC = () => {
                         <div className="space-y-2">
                             <div className="flex justify-between shadow-sm items-center">
                                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Transaction Audit Trail</h4>
-                                <Button variant="ghost" size="sm" className="text-[10px] text-red-600" onClick={handleWipeInterest}>Wipe All Interest</Button>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="ghost" size="sm" className="text-[10px] text-slate-600 dark:text-slate-300" onClick={downloadActiveLoanLedger}>
+                                        <Download size={12} className="mr-1" />
+                                        Download Ledger
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="text-[10px] text-red-600" onClick={handleWipeInterest}>Wipe All Interest</Button>
+                                </div>
                             </div>
                             <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
                                 <div className="max-h-[400px] overflow-y-auto">
@@ -1557,22 +1875,35 @@ const SpecialLoans: React.FC = () => {
                                                             {tx.entryType === 'DISBURSAL' ? (
                                                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500" onClick={() => openEditModal(activeLoan)}><Edit size={12} /></Button>
                                                             ) : (
-                                                                <Button 
-                                                                    variant="ghost" 
-                                                                    size="icon" 
-                                                                    className="h-6 w-6 text-red-500" 
-                                                                    onClick={async () => {
-                                                                        if (confirm("Delete this transaction permanently?")) {
-                                                                            try {
-                                                                                if (tx.entryType === 'TOPUP') await deleteLoanTopup(tx.id);
-                                                                                else await deleteLoanRepayment(tx.id);
-                                                                                log('DELETE_TRANSACTION', 'special_loans', activeLoan.id, { date: tx.date, type: tx.entryType, interestPeriod: tx.interestPeriod || null });
-                                                                            } catch (e) { alert("Failed to delete record"); }
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <Trash2 size={12} />
-                                                                </Button>
+                                                                <>
+                                                                    {tx.entryType === 'REPAYMENT' && (tx.interestPaid || 0) > 0 && tx.interestPeriod ? (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-6 w-6 text-blue-500"
+                                                                            onClick={() => openInterestEditModal(tx.id)}
+                                                                            title="Edit interest for this month"
+                                                                        >
+                                                                            <Edit size={12} />
+                                                                        </Button>
+                                                                    ) : null}
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-6 w-6 text-red-500"
+                                                                        onClick={async () => {
+                                                                            if (confirm("Delete this transaction permanently?")) {
+                                                                                try {
+                                                                                    if (tx.entryType === 'TOPUP') await deleteLoanTopup(tx.id);
+                                                                                    else await deleteLoanRepayment(tx.id);
+                                                                                    log('DELETE_TRANSACTION', 'special_loans', activeLoan.id, { date: tx.date, type: tx.entryType, interestPeriod: tx.interestPeriod || null });
+                                                                                } catch (e) { alert("Failed to delete record"); }
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <Trash2 size={12} />
+                                                                    </Button>
+                                                                </>
                                                             )}
                                                         </div>
                                                     </td>
@@ -1587,6 +1918,129 @@ const SpecialLoans: React.FC = () => {
                         <div className="flex gap-3 pt-2">
                              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setModals({ ...modals, history: false })}>Close Ledger</Button>
                              <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl" onClick={() => { setModals({ ...modals, history: false, autoGen: true }); openAutoGenModal(activeLoan); }}>Recalculate Interest</Button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            <Modal
+                isOpen={modals.editInterest && !!activeLoan && !!interestEditTarget}
+                onClose={() => {
+                    setModals({ ...modals, editInterest: false });
+                    setInterestEditTarget(null);
+                }}
+                title="Edit Month Interest"
+                maxWidth="max-w-2xl"
+            >
+                {activeLoan && interestEditTarget && interestEditPreview && (
+                    <div className="space-y-5">
+                        {errorMsg && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{errorMsg}</div>}
+
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Month</p>
+                                <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{interestEditPreview.periodLabel}</p>
+                                <p className="mt-1 text-xs text-slate-500">Recorded on {formatDisplayDate(interestEditTarget.date)}</p>
+                            </div>
+                            <div className="rounded-2xl border border-amber-100 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-300">Opening Principal</p>
+                                <p className="mt-2 text-base font-bold text-amber-900 dark:text-amber-100">{formatCurrency(interestEditPreview.openingOutstanding, settings.currency)}</p>
+                                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{interestEditPreview.monthlyRate}% monthly rate</p>
+                            </div>
+                            <div className="rounded-2xl border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Current Saved Interest</p>
+                                <p className="mt-2 text-base font-bold text-blue-900 dark:text-blue-100">{formatCurrency(interestEditPreview.currentInterest, settings.currency)}</p>
+                                <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">Repayment amount {formatCurrency(interestEditPreview.currentAmount, settings.currency)}</p>
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 p-4 space-y-4">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">Calculation Mode</p>
+                                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Switch a recorded month between default monthly interest and exact-day proration. Saving updates the existing repayment row in place.</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { label: 'Monthly Default', value: 'MONTHLY' as InterestCalculationType },
+                                    { label: 'Exact Days', value: 'PRORATED_DAYS' as InterestCalculationType }
+                                ].map(option => (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => setInterestEditForm({
+                                            ...interestEditForm,
+                                            interestCalculationType: option.value
+                                        })}
+                                        className={`rounded-2xl border px-4 py-3 text-left transition-all ${interestEditForm.interestCalculationType === option.value
+                                            ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-400 dark:bg-blue-900/20 dark:text-blue-200'
+                                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                                            }`}
+                                    >
+                                        <div className="text-sm font-bold">{option.label}</div>
+                                        <div className="mt-1 text-xs opacity-80">
+                                            {option.value === 'MONTHLY'
+                                                ? `Use the stored monthly amount ${formatCurrency(interestEditPreview.monthlyInterest, settings.currency)}`
+                                                : `Prorate for up to ${interestEditPreview.monthDays} exact days`}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {interestEditForm.interestCalculationType === 'PRORATED_DAYS' && (
+                                <Input
+                                    label="Exact Days Held"
+                                    type="number"
+                                    min={1}
+                                    max={interestEditPreview.monthDays}
+                                    value={interestEditForm.interestDays}
+                                    onChange={e => setInterestEditForm({
+                                        ...interestEditForm,
+                                        interestDays: e.target.value
+                                    })}
+                                    description={interestEditPreview.formula
+                                        ? `${interestEditPreview.daysHeld} of ${interestEditPreview.monthDays} days. ${interestEditPreview.formula}`
+                                        : `Use 1-${interestEditPreview.monthDays} days for ${interestEditPreview.periodLabel}.`}
+                                />
+                            )}
+
+                            <Input
+                                label="Notes"
+                                type="text"
+                                value={interestEditForm.notes}
+                                onChange={e => setInterestEditForm({
+                                    ...interestEditForm,
+                                    notes: e.target.value
+                                })}
+                                placeholder="Optional note for this repayment row"
+                                description="Any save is appended to the audit log with before/after values for this month."
+                            />
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Monthly Default</p>
+                                <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{formatCurrency(interestEditPreview.monthlyInterest, settings.currency)}</p>
+                            </div>
+                            <div className="rounded-2xl border border-emerald-100 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-300">Updated Interest</p>
+                                <p className="mt-2 text-lg font-black text-emerald-900 dark:text-emerald-100">{formatCurrency(interestEditPreview.nextInterest, settings.currency)}</p>
+                                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Repayment amount becomes {formatCurrency(interestEditPreview.nextAmount, settings.currency)}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setModals({ ...modals, editInterest: false });
+                                    setInterestEditTarget(null);
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button onClick={handleUpdateInterestForMonth}>
+                                Save Month Interest
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -1614,6 +2068,12 @@ const SpecialLoans: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
+                        <Input
+                            label="Start Date"
+                            type="date"
+                            value={editForm.date}
+                            onChange={e => setEditForm({ ...editForm, date: e.target.value })}
+                        />
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
                             <select
@@ -1627,6 +2087,91 @@ const SpecialLoans: React.FC = () => {
                             </select>
                         </div>
                     </div>
+
+                    {editLoanSummary && (
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4 space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-3">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Revised Principal</p>
+                                    <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{formatCurrency(editLoanSummary.revisedPrincipal, settings.currency)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Already Recovered</p>
+                                    <p className="mt-2 text-base font-bold text-blue-700 dark:text-blue-300">{formatCurrency(editLoanSummary.principalRecovered, settings.currency)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Remaining Principal</p>
+                                    <p className={`mt-2 text-base font-bold ${editLoanSummary.remainingPrincipal > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                                        {formatCurrency(Math.max(0, editLoanSummary.rawRemaining), settings.currency)}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {editLoanSummary.remainingPrincipal > 0 ? (
+                                <div className="space-y-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+                                    <div className="flex items-start gap-3">
+                                        <input
+                                            id="settleRemaining"
+                                            type="checkbox"
+                                            checked={editForm.settleRemaining}
+                                            onChange={e => setEditForm({ ...editForm, settleRemaining: e.target.checked })}
+                                            className="mt-1 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                                        />
+                                        <label htmlFor="settleRemaining" className="text-sm text-slate-700 dark:text-slate-200">
+                                            Record the remaining principal payment and close the loan after saving this correction.
+                                        </label>
+                                    </div>
+
+                                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                                        Example: if a closed loan was entered as {formatCurrency(50000, settings.currency)} but should be {formatCurrency(100000, settings.currency)}, this option lets you save the correction and immediately collect the extra {formatCurrency(editLoanSummary.remainingPrincipal, settings.currency)}.
+                                    </p>
+
+                                    {editForm.settleRemaining && (
+                                        <div className="grid gap-4 sm:grid-cols-2">
+                                            <Input
+                                                label="Remaining Payment Date"
+                                                type="date"
+                                                value={editForm.settlementDate}
+                                                onChange={e => setEditForm({ ...editForm, settlementDate: e.target.value })}
+                                            />
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Payment Method</label>
+                                                <select
+                                                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                                                    value={editForm.settlementMethod}
+                                                    onChange={(e) => setEditForm({ ...editForm, settlementMethod: e.target.value as PaymentMethod })}
+                                                >
+                                                    <option value={PaymentMethod.CASH}>Cash</option>
+                                                    <option value={PaymentMethod.UPI}>UPI</option>
+                                                    <option value={PaymentMethod.BANK_TRANSFER}>Bank Transfer</option>
+                                                </select>
+                                            </div>
+                                            <div className="sm:col-span-2">
+                                                <Input
+                                                    label="Settlement Notes"
+                                                    type="text"
+                                                    value={editForm.settlementNotes}
+                                                    onChange={e => setEditForm({ ...editForm, settlementNotes: e.target.value })}
+                                                    placeholder="Optional note for the balancing payment"
+                                                    description="Saving will add a principal repayment for the remaining balance and then close the loan."
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!editForm.settleRemaining && editForm.status === LoanStatus.CLOSED && (
+                                        <p className="text-xs font-medium text-rose-700 dark:text-rose-300">
+                                            A closed loan cannot keep this remaining balance. Set status to Active or enable the remaining payment option.
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                                    This correction does not leave any principal pending.
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     <Button
                         className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white shadow-lg"

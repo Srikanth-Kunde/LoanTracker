@@ -174,10 +174,12 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
 
 {
   const prorated = getProratedInterestForDays(50000, 1.5, 2013, 3, 20);
+  const tenthMarchProrated = getProratedInterestForDays(50000, 1.5, 2013, 3, 10);
 
   assert.equal(prorated.monthDays, 31, 'March 2013 should have 31 days for proration');
   assert.equal(prorated.fullMonthInterest, 750, 'Full month interest should still be based on monthly rate');
   assert.equal(prorated.proratedInterest, 483.87, 'Exact-day proration should use actual days held in the month');
+  assert.equal(tenthMarchProrated.proratedInterest, 241.94, '10 March 2013 should recalculate to 10/31 of the monthly interest');
 }
 
 console.log('loanMath regression tests passed');

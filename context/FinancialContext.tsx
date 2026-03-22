@@ -17,6 +17,7 @@ interface FinancialContextType {
   updateLoan: (loan: Loan) => Promise<void>;
   deleteLoan: (id: string) => Promise<void>;
   recordLoanRepayment: (repayment: Omit<LoanRepayment, 'id'>) => Promise<void>;
+  updateLoanRepayment: (repayment: LoanRepayment) => Promise<void>;
   bulkRecordLoanRepayments: (repayments: Omit<LoanRepayment, 'id'>[]) => Promise<void>;
   deleteLoanRepayment: (id: string) => Promise<void>;
   closeLoan: (loanId: string, endDate?: string) => Promise<void>;
@@ -253,6 +254,46 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     await fetchFinancials(false);
   }, [fetchFinancials, validateRepayment]);
 
+  const updateLoanRepayment = useCallback(async (repayment: LoanRepayment) => {
+    const existingRepayment = loanRepayments.find(row => row.id === repayment.id);
+    if (!existingRepayment) {
+      throw new Error('Repayment record not found.');
+    }
+
+    validateRepayment({
+      loanId: repayment.loanId,
+      date: repayment.date,
+      amount: repayment.amount,
+      interestPaid: repayment.interestPaid,
+      principalPaid: repayment.principalPaid,
+      lateFee: repayment.lateFee,
+      interestForMonth: repayment.interestForMonth,
+      interestForYear: repayment.interestForYear,
+      interestDays: repayment.interestDays,
+      interestCalculationType: repayment.interestCalculationType,
+      method: repayment.method,
+      notes: repayment.notes
+    });
+
+    const { error } = await supabase.from('loan_repayments').update({
+      loan_id: repayment.loanId,
+      date: repayment.date,
+      amount: repayment.amount,
+      interest_paid: repayment.interestPaid,
+      principal_paid: repayment.principalPaid,
+      late_fee: repayment.lateFee || 0,
+      interest_for_month: repayment.interestForMonth ?? null,
+      interest_for_year: repayment.interestForYear ?? null,
+      interest_days: repayment.interestDays ?? null,
+      interest_calculation_type: repayment.interestCalculationType ?? null,
+      method: repayment.method,
+      notes: repayment.notes ?? null
+    }).eq('id', existingRepayment.id);
+
+    if (error) throw error;
+    await fetchFinancials(false);
+  }, [fetchFinancials, loanRepayments, validateRepayment]);
+
   const bulkRecordLoanRepayments = useCallback(async (repayments: Omit<LoanRepayment, 'id'>[]) => {
     if (!repayments.length) return;
     
@@ -318,7 +359,9 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         amount: roundCurrency(Number(row.principalPaid || 0)),
         interest_paid: 0,
         interest_for_month: null,
-        interest_for_year: null
+        interest_for_year: null,
+        interest_days: null,
+        interest_calculation_type: null
       }).eq('id', row.id);
 
       if (error) throw error;
@@ -389,7 +432,9 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         amount: roundCurrency(Number(row.principalPaid || 0)),
         interest_paid: 0,
         interest_for_month: null,
-        interest_for_year: null
+        interest_for_year: null,
+        interest_days: null,
+        interest_calculation_type: null
       }).eq('id', row.id);
 
       if (error) throw error;
@@ -450,7 +495,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   return (
     <FinancialContext.Provider value={{
       loans, loanRepayments, loanTopups,
-      createLoan, updateLoan, deleteLoan, recordLoanRepayment, bulkRecordLoanRepayments, deleteLoanRepayment,
+      createLoan, updateLoan, deleteLoan, recordLoanRepayment, updateLoanRepayment, bulkRecordLoanRepayments, deleteLoanRepayment,
       closeLoan,
       addLoanTopup, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, getSpecialLoanOutstanding,
       setFinancialData, importFinancials, deleteAllFinancials, resetFinancials,
