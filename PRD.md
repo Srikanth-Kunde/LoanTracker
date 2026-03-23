@@ -52,6 +52,8 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   The Special Loan Audit Ledger must show live summary cards for original principal, top-ups, principal repaid, interest paid, and live balance.
 *   **Web & Mobile Compatibility**: All financial tables must be horizontally scrollable on small screens using `overflow-x-auto`. Metric grids must adapt to single or double-column layouts on mobile viewports.
 *   **Integrated Search & Filter**: The audit ledger modal must provide real-time search (by notes/period) and transaction-type filtering.
+*   **Audit Ledger Sorting**: Operators can sort transactions by Date or Amount (Ascending/Descending) for easier reconciliation.
+*   **Top-up Recording Edit**: Existing top-up records can be edited directly from the audit ledger to correct historical entry errors.
 *   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
 *   **Advanced Multi-Type Ledger Filtering:** Upgraded the audit ledger to support selecting multiple transaction types simultaneously (Disbursal, Top-up, Principal, Interest) using interactive toggle chips.
 *   **Full Mobile Responsiveness:** Application is now optimized for mobile viewing with horizontally scrollable tables and adaptive metric grids.
@@ -164,6 +166,8 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Auto-Gen Stability (Fix for React Error #321)**: Resolved a critical "Minified Hooks Error" by refactoring the `handleGenerateInterest` function to eliminate illegal hook calls within callbacks.
 *   **Reactive Auto-Gen Preview**: Migrated the "Missing Months" calculation to a `useMemo` hook. This ensures that the count refreshes instantly in the UI after a user performs a "Wipe & Re-gen" action, providing immediate visual confirmation.
 *   **Audit Ledger Running Balance**: Implemented a new "Balance" column in the Special Loan Audit Ledger. This provides a row-by-row mathematical audit trail, showing the exact outstanding principal remaining after every individual transaction.
+*   **Top-up & Sorting Enhancements**: Added the ability to edit historical top-up records and sort the audit ledger by Date/Amount.
+*   **TypeScript & JSX Stability**: Resolved critical build errors related to JSX nesting, missing type imports, and unimplemented context functions for a 100% clean production build.
 
 
 

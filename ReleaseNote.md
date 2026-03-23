@@ -8,7 +8,9 @@ This release improves historical loan correction workflows, audit visibility, an
 - Exact-day overrides now preserve audit history with before/after repayment values.
 - Closed loans corrected to a higher original principal now support immediate remaining-balance settlement from the loan edit flow.
 - The Special Loan Audit Ledger now shows a live `Interest Paid` summary card.
-- **New Feature**: Added multi-type transaction selection (Disbursal, Top-up, Principal, Interest) to the Special Loan Audit Ledger using interactive toggle chips.
+- **New Feature**: Top-up Loan Editing — Existing top-up records can now be edited directly from the Special Loan Audit Ledger.
+- **New Feature**: Audit Ledger Sorting — Transactions can now be sorted by Date and Amount (Ascending/Descending).
+- **New Feature**: Multi-type transaction selection (Disbursal, Top-up, Principal, Interest) to the Special Loan Audit Ledger using interactive toggle chips.
 - **New Feature**: Full Mobile Responsiveness — Added horizontal scrolling for tables and adaptive grids for metric cards.
 - **New Feature**: Added a footer to the Audit Ledger table showing the sum of Amount, Principal, and Interest for filtered transactions.
 - The ledger modal now supports direct `Download Ledger` CSV export per member.
@@ -21,6 +23,7 @@ This release improves historical loan correction workflows, audit visibility, an
 - The Audit Report member balance table now replaces `Status` with the original loan start date for a cleaner calculation-first layout.
 
 **Fixes**
+- Fixed critical CSS/JSX nesting errors in `SpecialLoans.tsx` that caused build failures.
 - Fixed stale `Interest Paid` totals in the ledger header after editing an existing interest row.
 - Fixed auto-recalculation behavior that could overwrite exact-day interest overrides.
 - Fixed historical loan correction flow so remaining principal is surfaced and can be settled properly.

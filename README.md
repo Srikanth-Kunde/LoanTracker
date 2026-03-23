@@ -13,8 +13,9 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Interest-Period Aware Ledger:** Interest collections are now allocated to an explicit settlement month/year, so back-dated entries, arrears, and principal-only recoveries no longer corrupt monthly status.
 *   **No Auto-Late Fees:** Designed to perfectly match historical handwritten books, the system will never auto-calculate late fees. Late fees are only recorded if explicitly provided by the operator.
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
+*   **Top-up Loan Editing:** Existing top-up records can now be edited directly from the Special Loan Audit Ledger, ensuring historical record accuracy.
+*   **Audit Ledger Sorting:** Operators can sort transactions by Date or Amount (Ascending/Descending) for easier reconciliation.
 *   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
-*   **Advanced Multi-Type Ledger Filtering:** Upgraded the audit ledger to support selecting multiple transaction types simultaneously (Disbursal, Top-up, Principal, Interest) using interactive toggle chips.
 *   **Full Mobile Responsiveness:** Application is now optimized for mobile viewing with horizontally scrollable tables and adaptive metric grids.
 *   **Ledger Column Totals:** The audit ledger now features a footer that automatically sums visible "Amount", "Principal", and "Interest" columns.
 *   **Closed Loan Correction Workflow:** Editing a historical loan amount can now surface any remaining principal gap and optionally record the balancing principal payment immediately.
@@ -243,6 +244,9 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Precision Interest Logic**: Validated the "zero-balance" logic, ensuring interest is only generated for months where an actual principal liability exists.
 *   **Mobile Optimized UI**: Implemented horizontal scrolling for all wide tables and adaptive grid systems for financial metric cards.
 *   **Multi-Select Ledger Filtering**: Redesigned the audit ledger filter to support multi-select transaction types with color-coded interactive chips for better financial tracking.
+*   **Audit Ledger Sorting**: Added the ability to sort transaction rows by Date or Amount (Asc/Desc) directly from the audit ledger header.
+*   **Top-up Record Editing**: Operators can now correct and update existing top-up records from the ledger without database manual intervention.
+*   **Stability & Build Integrity**: Resolved persistent JSX/TSX syntax errors and TypeScript compilation issues, ensuring 100% build compatibility.
 
 
 *   **Audit Reports**: Extended the Audit Tally and CSV exports to handle historical data from 2012.

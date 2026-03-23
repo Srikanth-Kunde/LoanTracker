@@ -24,6 +24,7 @@ interface FinancialContextType {
 
   // Top-up actions (Special / Interest-Only loans)
   addLoanTopup: (topup: Omit<LoanTopup, 'id' | 'createdAt'>) => Promise<void>;
+  updateLoanTopup: (topup: LoanTopup) => Promise<void>;
   deleteLoanTopup: (id: string) => Promise<void>;
   wipeLoanInterest: (loanId: string) => Promise<void>;
   cleanupInvalidLoanInterest: (loanId: string) => Promise<number>;
@@ -425,6 +426,18 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     await fetchFinancials(false);
   }, [fetchFinancials]);
 
+  const updateLoanTopup = useCallback(async (t: LoanTopup) => {
+    const { error } = await supabase.from('loan_topups').update({
+      amount: t.amount,
+      rate: t.rate,
+      date: t.date,
+      notes: t.notes
+    }).eq('id', t.id);
+
+    if (error) throw error;
+    await fetchFinancials(false);
+  }, [fetchFinancials]);
+
   const wipeLoanInterest = useCallback(async (loanId: string) => {
     const interestRows = loanRepayments.filter(r => r.loanId === loanId && (r.interestPaid || 0) > 0);
     const fullDeleteIds = interestRows
@@ -510,7 +523,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       loans, loanRepayments, loanTopups,
       createLoan, updateLoan, deleteLoan, recordLoanRepayment, updateLoanRepayment, bulkRecordLoanRepayments, deleteLoanRepayment,
       closeLoan,
-      addLoanTopup, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, getSpecialLoanOutstanding,
+      addLoanTopup, updateLoanTopup, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, getSpecialLoanOutstanding,
       setFinancialData, importFinancials, deleteAllFinancials, resetFinancials,
       isLoading
     }}>

@@ -5,7 +5,7 @@ import { useMembers } from '../context/MemberContext';
 import { useFinancials } from '../context/FinancialContext';
 import { useAuth } from '../context/AuthContext';
 import { useAuditLog } from '../context/AuditLogContext';
-import { InterestCalculationType, Loan, LoanStatus, LoanRepayment, PaymentMethod, UserRole, LoanCalculationMethod, LoanType } from '../types';
+import { InterestCalculationType, Loan, LoanStatus, LoanRepayment, PaymentMethod, UserRole, LoanCalculationMethod, LoanType, LoanTopup } from '../types';
 import { MONTHS, formatCurrency } from '../constants';
 import {
     ChevronLeft, ChevronRight, Calculator, Eye, Banknote, Filter, AlertTriangle, FileText, Star,
@@ -57,7 +57,7 @@ const SpecialLoans: React.FC = () => {
     const {
         loans, loanRepayments, loanTopups, createLoan, updateLoan, deleteLoan,
         recordLoanRepayment, updateLoanRepayment, closeLoan,
-        addLoanTopup, deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, bulkRecordLoanRepayments,
+        addLoanTopup, updateLoanTopup, deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, bulkRecordLoanRepayments,
         getSpecialLoanOutstanding
     } = useFinancials();
     const { role } = useAuth();
@@ -103,6 +103,7 @@ const SpecialLoans: React.FC = () => {
         notes: ''
     });
     const [topupLoan, setTopupLoan] = useState<EnrichedLoan | null>(null);
+    const [topupEditTarget, setTopupEditTarget] = useState<LoanTopup | null>(null);
 
     const [autoGenLoan, setAutoGenLoan] = useState<EnrichedLoan | null>(null);
     const [interestEditTarget, setInterestEditTarget] = useState<LoanRepayment | null>(null);
@@ -142,6 +143,7 @@ const SpecialLoans: React.FC = () => {
     // Ledger Filter & Sum State
     const [ledgerSearchTerm, setLedgerSearchTerm] = useState('');
     const [ledgerTypeFilters, setLedgerTypeFilters] = useState<string[]>([]);
+    const [ledgerSortConfig, setLedgerSortConfig] = useState<{ key: 'DATE' | 'AMOUNT', direction: 'ASC' | 'DESC' }>({ key: 'DATE', direction: 'ASC' });
 
     const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
     const escapeCsvValue = (value: string | number | null | undefined) => {
@@ -344,8 +346,18 @@ const SpecialLoans: React.FC = () => {
             }
             
             return matchesSearch && matchesType;
+        }).sort((a, b) => {
+            if (ledgerSortConfig.key === 'DATE') {
+                const cmp = compareISODate(a.date, b.date);
+                return ledgerSortConfig.direction === 'ASC' ? cmp : -cmp;
+            } else if (ledgerSortConfig.key === 'AMOUNT') {
+                const amtA = (a.amount || 0) + (a.principalPaid || 0) + (a.interestPaid || 0);
+                const amtB = (b.amount || 0) + (b.principalPaid || 0) + (b.interestPaid || 0);
+                return ledgerSortConfig.direction === 'ASC' ? amtA - amtB : amtB - amtA;
+            }
+            return 0;
         });
-    }, [activeLoanTransactions, ledgerTypeFilters, ledgerSearchTerm]);
+    }, [activeLoanTransactions, ledgerTypeFilters, ledgerSearchTerm, ledgerSortConfig]);
 
     const ledgerTotals = useMemo(() => {
         return filteredLedgerTransactions.reduce((acc, tx) => {
@@ -880,6 +892,23 @@ const SpecialLoans: React.FC = () => {
         setModals({ ...modals, topup: true });
     };
 
+    const handleEditTopup = (tx: any) => {
+        if (!activeLoan) return;
+        const topup = loanTopups.find(t => t.id === tx.id);
+        if (!topup) return;
+
+        setTopupLoan(activeLoan);
+        setTopupEditTarget(topup);
+        setTopupForm({
+            amount: topup.amount.toString(),
+            rate: topup.rate.toString(),
+            date: topup.date,
+            notes: topup.notes || ''
+        });
+        setErrorMsg('');
+        setModals({ ...modals, topup: true });
+    };
+
     const handleTopup = async () => {
         if (!topupLoan) return;
         setErrorMsg('');
@@ -893,18 +922,30 @@ const SpecialLoans: React.FC = () => {
                 throw new Error("Top-up date cannot be before the loan start date");
             }
 
-            await addLoanTopup({
-                loanId: topupLoan.id,
-                amount: amt,
-                rate,
-                date: topupForm.date,
-                notes: topupForm.notes || undefined
-            });
-            log('ADD_TOPUP', 'loan_topups', topupLoan.id, { memberName: topupLoan.memberName, amount: amt, rate, date: topupForm.date });
+            if (topupEditTarget) {
+                await updateLoanTopup({
+                    ...topupEditTarget,
+                    amount: amt,
+                    rate,
+                    date: topupForm.date,
+                    notes: topupForm.notes || undefined
+                });
+                log('UPDATE_TOPUP', 'loan_topups', topupLoan.id, { memberName: topupLoan.memberName, amount: amt, rate, date: topupForm.date });
+            } else {
+                await addLoanTopup({
+                    loanId: topupLoan.id,
+                    amount: amt,
+                    rate,
+                    date: topupForm.date,
+                    notes: topupForm.notes || undefined
+                });
+                log('ADD_TOPUP', 'loan_topups', topupLoan.id, { memberName: topupLoan.memberName, amount: amt, rate, date: topupForm.date });
+            }
             setModals({ ...modals, topup: false });
+            setTopupEditTarget(null);
         } catch (error) {
             const e = error as Error;
-            logger.error("Error adding top-up", e);
+            logger.error("Error saving top-up", e);
             setErrorMsg(e.message);
         }
     };
@@ -1450,7 +1491,7 @@ const SpecialLoans: React.FC = () => {
                         />
                     </div>
                 )}
-            </Card >
+            </Card>
 
             {/* CREATE SPECIAL LOAN MODAL */}
             <Modal isOpen={modals.create} onClose={() => setModals({ ...modals, create: false })} title="Disburse Special Loan" >
@@ -1709,21 +1750,24 @@ const SpecialLoans: React.FC = () => {
                 )}
             </Modal>
 
-            {/* TOP-UP MODAL */}
-            <Modal isOpen={modals.topup} onClose={() => setModals({ ...modals, topup: false })} title="Add Top-Up to Special Loan">
-                {topupLoan && (
+            <Modal isOpen={modals.topup} onClose={() => { setModals({ ...modals, topup: false }); setTopupEditTarget(null); }} title={topupEditTarget ? "Edit Top-Up Record" : "Add Top-Up to Special Loan"}>
+                {topupForm && (
                     <div className="space-y-4">
-                        <div className="bg-violet-50 dark:bg-violet-900/20 p-3 rounded-lg border border-violet-100 dark:border-violet-800">
-                            <div className="text-xs text-violet-500 uppercase font-bold mb-1">Disbursing Top-Up For</div>
-                            <div className="flex justify-between">
-                                <span className="font-bold text-slate-800 dark:text-white">{topupLoan.memberName}</span>
+                        <div className={`p-4 rounded-2xl border ${topupEditTarget ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800' : 'bg-violet-50 dark:bg-violet-900/20 border-violet-100 dark:border-violet-800'}`}>
+                            <div className={`text-[10px] uppercase font-black tracking-widest mb-1 ${topupEditTarget ? 'text-amber-600' : 'text-violet-500'}`}>
+                                {topupEditTarget ? 'Editing Existing Top-Up' : 'Disbursing Top-Up For'}
+                            </div>
+                            <div className="flex justify-between items-end">
+                                <span className="font-black text-lg text-slate-800 dark:text-white leading-tight">{topupLoan?.memberName}</span>
                                 <div className="text-right">
-                                    <div className="text-xs text-slate-500">Current outstanding</div>
-                                    <div className="font-black text-amber-600">{formatCurrency(getSpecialLoanOutstanding(topupLoan.id), settings.currency)}</div>
+                                    <div className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">Current Portfolio Balance</div>
+                                    <div className="font-black text-xl text-amber-600 dark:text-amber-400">
+                                        {topupLoan && formatCurrency(getSpecialLoanOutstanding(topupLoan.id) - (topupEditTarget?.amount || 0), settings.currency)}
+                                    </div>
                                 </div>
                             </div>
-                            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                                Current effective rate: <span className="font-semibold text-violet-600">{topupLoan.interestRate}% / month</span>
+                            <div className="mt-2 pt-2 border-t border-slate-200/50 dark:border-slate-700/50 text-xs text-slate-500 dark:text-slate-400">
+                                Current effective rate: <span className="font-semibold text-violet-600">{topupLoan?.interestRate}% / month</span>
                             </div>
                         </div>
 
@@ -1908,7 +1952,23 @@ const SpecialLoans: React.FC = () => {
                                         )}
                                     </div>
 
-                                    <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800" />
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            value={`${ledgerSortConfig.key}_${ledgerSortConfig.direction}`}
+                                            onChange={(e) => {
+                                                const [key, direction] = e.target.value.split('_');
+                                                setLedgerSortConfig({ key: key as any, direction: direction as any });
+                                            }}
+                                            className="px-2 py-1.5 text-[10px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer text-slate-600 dark:text-slate-300"
+                                        >
+                                            <option value="DATE_ASC">Date: Oldest First</option>
+                                            <option value="DATE_DESC">Date: Newest First</option>
+                                            <option value="AMOUNT_DESC">Amount: Highest First</option>
+                                            <option value="AMOUNT_ASC">Amount: Lowest First</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
 
                                     <div className="flex items-center gap-2">
                                         <Button 
@@ -2014,7 +2074,17 @@ const SpecialLoans: React.FC = () => {
                                                                             size="icon"
                                                                             className="h-6 w-6 text-blue-500"
                                                                             onClick={() => openInterestEditModal(tx.id)}
-                                                                            title="Edit interest for this month"
+                                                                            title="Edit interest"
+                                                                        >
+                                                                            <Edit size={12} />
+                                                                        </Button>
+                                                                    ) : tx.entryType === 'TOPUP' ? (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-6 w-6 text-violet-500"
+                                                                            onClick={() => handleEditTopup(tx)}
+                                                                            title="Edit Top-Up"
                                                                         >
                                                                             <Edit size={12} />
                                                                         </Button>
@@ -2194,7 +2264,7 @@ const SpecialLoans: React.FC = () => {
             </Modal>
 
             {/* EDIT LOAN MODAL */}
-            < Modal isOpen={modals.edit} onClose={() => setModals({ ...modals, edit: false })} title="Edit Special Loan" >
+            <Modal isOpen={modals.edit} onClose={() => setModals({ ...modals, edit: false })} title="Edit Special Loan" >
                 <div className="space-y-4">
                     {errorMsg && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{errorMsg}</div>}
 
