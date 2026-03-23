@@ -50,7 +50,9 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   The member-balance table should prioritize calculation fields over profile-state fields, replacing status badges with the original loan start/disbursal date when space is limited.
 *   The audit ledger must expose a deterministic row-by-row running principal balance, even when multiple events occur on the same date.
 *   The Special Loan Audit Ledger must show live summary cards for original principal, top-ups, principal repaid, interest paid, and live balance.
-*   The Special Loan Audit Ledger must support direct per-loan export from the eye-view modal without requiring a separate report screen.
+*   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
+*   **Advanced Ledger Filtering:** Added real-time search and type-based filters (Disbursal, Top-Up, Repayment, Interest) to the audit ledger for better reconciliation.
+*   **Ledger Column Totals:** The audit ledger now features a footer that automatically sums visible "Amount", "Principal", and "Interest" columns.
 *   Database write-audit history must be exposed in a separate admin-only screen rather than being mixed into the financial summary report.
 
 #### 3.7. Member Management
@@ -124,6 +126,9 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Enhanced Date Navigation**: Replaced linear month-switchers with direct Month/Year dropdown selectors in the Special Loans view, enabling instant jumps to historical data (e.g., 2012).
 *   **Auto-Generate Historical Interest**: Added a single-click "Auto-Gen" tool to automatically traverse a legacy loan's history month-by-month and backfill all missing interest payment records based on dynamically calculated outstanding principal balances.
 *   **Auto-Generate Interest Edge-Case Handling**: Fortified mathematical calculations to strictly evaluate liability across months where only partial principal was recovered, gracefully handle missing SQL `principal_paid` mappings for manual test entries, perfectly align output timestamps to the end of the month (e.g. `31-08-2017`), and allowed auto-generation to seamlessly function on historic legacy loans that are already marked as Closed.
+*   **Auto-Gen Stability**: Resolved a critical "React Error #321" in the interest generator and refactored it for better performance and real-time UI updates after data wipes.
+*   **Precision Interest Logic**: Validated the "zero-balance" logic, ensuring interest is only generated for months where an actual principal liability exists.
+*   **Ledger Filtering & Totals**: Added integrated search and transaction-type filtering to the Special Loan Audit Ledger, along with a dynamic footer for column-level totals.
 *   **Auto-Gen Closure / Payoff Control**: The generator now stops at the earlier of today, the loan close date, or the sustained zero-balance date. If the last valid interest month ends on a mid-month closure/payoff, the generated record is dated on that actual closure date instead of month-end, and any stale post-cutoff interest entries are automatically cleaned.
 *   **Closed-Loan Repair Workflow**: Operators can open the same Auto-Gen workflow on closed loans to repair stale historical interest rows without directly editing the database.
 *   **Interest Allocation Model**: Reworked repayment storage so an interest collection can be assigned to a specific settlement month/year instead of inferring the liability month from the payment date alone.

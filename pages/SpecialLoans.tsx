@@ -139,6 +139,10 @@ const SpecialLoans: React.FC = () => {
         settlementNotes: ''
     });
 
+    // Ledger Filter & Sum State
+    const [ledgerSearchTerm, setLedgerSearchTerm] = useState('');
+    const [ledgerTypeFilter, setLedgerTypeFilter] = useState<'ALL' | 'DISBURSAL' | 'TOPUP' | 'REPAYMENT' | 'INTEREST'>('ALL');
+
     const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
     const escapeCsvValue = (value: string | number | null | undefined) => {
         const normalized = value == null ? '' : String(value);
@@ -325,6 +329,37 @@ const SpecialLoans: React.FC = () => {
             loanRepayments.filter(r => r.loanId === activeLoan.id)
         );
     }, [activeLoan, loanRepayments, loanTopups]);
+
+    const filteredLedgerTransactions = useMemo(() => {
+        return activeLoanTransactions.filter(tx => {
+            const matchesType = ledgerTypeFilter === 'ALL' || (
+                ledgerTypeFilter === 'REPAYMENT'
+                    ? (tx.entryType === 'REPAYMENT' && (tx.principalPaid || 0) > 0 && (tx.interestPaid || 0) === 0)
+                    : ledgerTypeFilter === 'INTEREST'
+                        ? (tx.entryType === 'REPAYMENT' && (tx.interestPaid || 0) > 0)
+                        : tx.entryType === ledgerTypeFilter
+            );
+            const matchesSearch = !ledgerSearchTerm.trim() ||
+                (tx.notes || '').toLowerCase().includes(ledgerSearchTerm.toLowerCase()) ||
+                (tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '').toLowerCase().includes(ledgerSearchTerm.toLowerCase());
+
+            return matchesType && matchesSearch;
+        });
+    }, [activeLoanTransactions, ledgerTypeFilter, ledgerSearchTerm]);
+
+    const ledgerTotals = useMemo(() => {
+        return filteredLedgerTransactions.reduce((acc, tx) => {
+            const isOutflow = tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP';
+            const amt = Number(tx.amount || 0);
+            const p = Number(tx.principalPaid || 0);
+            const i = Number(tx.interestPaid || 0);
+
+            acc.amount += isOutflow ? amt : -amt;
+            acc.principal += isOutflow ? amt : -p; // amt for disbursal/topup is principal
+            acc.interest += i;
+            return acc;
+        }, { amount: 0, principal: 0, interest: 0 });
+    }, [filteredLedgerTransactions]);
 
     const activeLoanSummary = useMemo(() => {
         if (!activeLoan) return null;
@@ -1827,14 +1862,36 @@ const SpecialLoans: React.FC = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <div className="flex justify-between shadow-sm items-center">
+                            <div className="flex flex-col sm:flex-row justify-between shadow-sm items-center gap-4">
                                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Transaction Audit Trail</h4>
-                                <div className="flex items-center gap-2">
-                                    <Button variant="ghost" size="sm" className="text-[10px] text-slate-600 dark:text-slate-300" onClick={downloadActiveLoanLedger}>
+                                <div className="flex items-center gap-3">
+                                    <div className="relative">
+                                        <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search ledger..."
+                                            value={ledgerSearchTerm}
+                                            onChange={e => setLedgerSearchTerm(e.target.value)}
+                                            className="pl-7 pr-3 py-1.5 text-[10px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <select
+                                        value={ledgerTypeFilter}
+                                        onChange={e => setLedgerTypeFilter(e.target.value as any)}
+                                        className="px-2 py-1.5 text-[10px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                    >
+                                        <option value="ALL">All Types</option>
+                                        <option value="DISBURSAL">Disbursal</option>
+                                        <option value="TOPUP">Top-Up</option>
+                                        <option value="REPAYMENT">Principal Repay</option>
+                                        <option value="INTEREST">Interest Paid</option>
+                                    </select>
+                                    <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+                                    <Button variant="ghost" size="sm" className="text-[10px] text-slate-600 dark:text-slate-300 h-8" onClick={downloadActiveLoanLedger}>
                                         <Download size={12} className="mr-1" />
                                         Download Ledger
                                     </Button>
-                                    <Button variant="ghost" size="sm" className="text-[10px] text-red-600" onClick={handleWipeInterest}>Wipe All Interest</Button>
+                                    <Button variant="ghost" size="sm" className="text-[10px] text-red-600 h-8" onClick={handleWipeInterest}>Wipe All Interest</Button>
                                 </div>
                             </div>
                             <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
@@ -1854,7 +1911,7 @@ const SpecialLoans: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                            {activeLoanTransactions.map((tx: any) => (
+                                            {filteredLedgerTransactions.map((tx: any) => (
                                                 <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/20 transition-colors">
                                                     <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{formatDisplayDate(tx.date)}</td>
                                                     <td className="px-4 py-3">
@@ -1948,6 +2005,21 @@ const SpecialLoans: React.FC = () => {
                                                 </tr>
                                             ))}
                                         </tbody>
+                                        <tfoot className="bg-slate-50 dark:bg-slate-900/50 sticky bottom-0 z-10 border-t border-slate-200 dark:border-slate-700">
+                                            <tr className="font-black">
+                                                <td colSpan={3} className="px-4 py-3 text-left uppercase tracking-widest text-[9px] text-slate-400">Ledger Totals (Filtered)</td>
+                                                <td className="px-4 py-3 text-right text-slate-900 dark:text-white">
+                                                    {ledgerTotals.amount >= 0 ? '+' : ''}{formatCurrency(ledgerTotals.amount, settings.currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-blue-600 dark:text-blue-400">
+                                                    {ledgerTotals.principal >= 0 ? '+' : ''}{formatCurrency(ledgerTotals.principal, settings.currency)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">
+                                                    -{formatCurrency(ledgerTotals.interest, settings.currency)}
+                                                </td>
+                                                <td colSpan={3} className="px-4 py-3 bg-white dark:bg-slate-800"></td>
+                                            </tr>
+                                        </tfoot>
                                     </table>
                                 </div>
                             </div>
