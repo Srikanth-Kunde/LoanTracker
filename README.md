@@ -15,6 +15,7 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Chronological Audit Trail:** Dedicated views to track every disbursement and repayment event historically.
 *   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
 *   **Advanced Ledger Filtering:** Added real-time search and type-based filters (Disbursal, Top-Up, Repayment, Interest) to the audit ledger for better reconciliation.
+*   **Full Mobile Responsiveness:** Application is now optimized for mobile viewing with horizontally scrollable tables and adaptive metric grids.
 *   **Ledger Column Totals:** The audit ledger now features a footer that automatically sums visible "Amount", "Principal", and "Interest" columns.
 *   **Closed Loan Correction Workflow:** Editing a historical loan amount can now surface any remaining principal gap and optionally record the balancing principal payment immediately.
 *   **Legacy Member ID Correction:** Member IDs can now be corrected from the Members edit screen while automatically remapping linked borrower and surety references.
@@ -240,6 +241,7 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Auto-Gen Stability**: Resolved reported crashes (`React Error #321` and `Invalid Date 2018-00-31`) and refactored the generator for instant UI updates.
 *   **Auto-Gen Stability**: Resolved a critical "React Error #321" in the interest generator and refactored it for better performance and real-time UI updates after data wipes.
 *   **Precision Interest Logic**: Validated the "zero-balance" logic, ensuring interest is only generated for months where an actual principal liability exists.
+*   **Mobile Optimized UI**: Implemented horizontal scrolling for all wide tables and adaptive grid systems for financial metric cards.
 *   **Ledger Filtering & Totals**: Added integrated search and transaction-type filtering to the Special Loan Audit Ledger, along with a dynamic footer for column-level totals.
 
 

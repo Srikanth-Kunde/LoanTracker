@@ -9,6 +9,7 @@ This release improves historical loan correction workflows, audit visibility, an
 - Closed loans corrected to a higher original principal now support immediate remaining-balance settlement from the loan edit flow.
 - The Special Loan Audit Ledger now shows a live `Interest Paid` summary card.
 - **New Feature**: Added a real-time search filter and transaction-type dropdown (Disbursal, Top-up, Repayment, Interest) to the Special Loan Audit Ledger.
+- **New Feature**: Full Mobile Responsiveness — Added horizontal scrolling for tables and adaptive grids for metric cards.
 - **New Feature**: Added a footer to the Audit Ledger table showing the sum of Amount, Principal, and Interest for filtered transactions.
 - The ledger modal now supports direct `Download Ledger` CSV export per member.
 - Audit Log History has been moved into its own tab.

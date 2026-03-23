@@ -183,7 +183,7 @@ export const Layout = () => {
           >
             <Menu size={24} />
           </button>
-          <span className="font-semibold text-slate-800 dark:text-white">Legacy Loan Tracker</span>
+          <span className="font-semibold text-slate-800 dark:text-white truncate px-2">Legacy Loan Tracker</span>
           <div className="w-6" /> {/* Spacer */}
         </header>
 

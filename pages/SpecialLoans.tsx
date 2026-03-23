@@ -1453,7 +1453,7 @@ const SpecialLoans: React.FC = () => {
             </Card >
 
             {/* CREATE SPECIAL LOAN MODAL */}
-            < Modal isOpen={modals.create} onClose={() => setModals({ ...modals, create: false })} title="Disburse Special Loan" >
+            <Modal isOpen={modals.create} onClose={() => setModals({ ...modals, create: false })} title="Disburse Special Loan" >
                 <div className="space-y-4">
                     <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800 flex items-start">
                         <AlertTriangle size={18} className="text-amber-600 mr-2 mt-0.5" />
@@ -1839,7 +1839,7 @@ const SpecialLoans: React.FC = () => {
                 {activeLoan && activeLoanSummary && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
-                            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                            <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
                                 <p className="text-slate-400 text-[9px] uppercase font-bold mb-1">Original Principal</p>
                                 <p className="font-black text-slate-800 dark:text-white">{formatCurrency(activeLoan.principalAmount, settings.currency)}</p>
                             </div>
@@ -1895,7 +1895,7 @@ const SpecialLoans: React.FC = () => {
                                 </div>
                             </div>
                             <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
-                                <div className="max-h-[400px] overflow-y-auto">
+                                <div className="max-h-[400px] overflow-y-auto overflow-x-auto">
                                     <table className="min-w-full text-xs">
                                         <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
                                             <tr>

@@ -274,7 +274,7 @@ const AuditReport: React.FC = () => {
         <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search name or ID" className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
           <p className="text-xs font-semibold text-slate-500 uppercase">Original Loan Disbursed</p>
           <p className="text-xl font-bold text-slate-900 dark:text-white">{formatCurrency(totals.originalLoanDisbursed, settings.currency)}</p>
