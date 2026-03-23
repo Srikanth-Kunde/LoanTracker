@@ -141,7 +141,7 @@ const SpecialLoans: React.FC = () => {
 
     // Ledger Filter & Sum State
     const [ledgerSearchTerm, setLedgerSearchTerm] = useState('');
-    const [ledgerTypeFilter, setLedgerTypeFilter] = useState<'ALL' | 'DISBURSAL' | 'TOPUP' | 'REPAYMENT' | 'INTEREST'>('ALL');
+    const [ledgerTypeFilters, setLedgerTypeFilters] = useState<string[]>([]);
 
     const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
     const escapeCsvValue = (value: string | number | null | undefined) => {
@@ -331,21 +331,21 @@ const SpecialLoans: React.FC = () => {
     }, [activeLoan, loanRepayments, loanTopups]);
 
     const filteredLedgerTransactions = useMemo(() => {
+        if (!activeLoanTransactions) return [];
         return activeLoanTransactions.filter(tx => {
-            const matchesType = ledgerTypeFilter === 'ALL' || (
-                ledgerTypeFilter === 'REPAYMENT'
-                    ? (tx.entryType === 'REPAYMENT' && (tx.principalPaid || 0) > 0 && (tx.interestPaid || 0) === 0)
-                    : ledgerTypeFilter === 'INTEREST'
-                        ? (tx.entryType === 'REPAYMENT' && (tx.interestPaid || 0) > 0)
-                        : tx.entryType === ledgerTypeFilter
-            );
-            const matchesSearch = !ledgerSearchTerm.trim() ||
-                (tx.notes || '').toLowerCase().includes(ledgerSearchTerm.toLowerCase()) ||
-                (tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '').toLowerCase().includes(ledgerSearchTerm.toLowerCase());
-
-            return matchesType && matchesSearch;
+            const matchesSearch = !ledgerSearchTerm || (tx.notes || '').toLowerCase().includes(ledgerSearchTerm.toLowerCase()) || (tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '').toLowerCase().includes(ledgerSearchTerm.toLowerCase());
+            
+            let matchesType = true;
+            if (ledgerTypeFilters.length > 0) {
+                const type = tx.entryType === 'REPAYMENT'
+                    ? ((tx.interestPaid || 0) > 0 ? 'INTEREST' : 'REPAYMENT')
+                    : tx.entryType;
+                matchesType = ledgerTypeFilters.includes(type);
+            }
+            
+            return matchesSearch && matchesType;
         });
-    }, [activeLoanTransactions, ledgerTypeFilter, ledgerSearchTerm]);
+    }, [activeLoanTransactions, ledgerTypeFilters, ledgerSearchTerm]);
 
     const ledgerTotals = useMemo(() => {
         return filteredLedgerTransactions.reduce((acc, tx) => {
@@ -1861,37 +1861,74 @@ const SpecialLoans: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="flex flex-col sm:flex-row justify-between shadow-sm items-center gap-4">
-                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Transaction Audit Trail</h4>
-                                <div className="flex items-center gap-3">
-                                    <div className="relative">
-                                        <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <div className="space-y-4">
+                            <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-slate-50/50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest shrink-0">Transaction Audit Trail</h4>
+                                
+                                <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+                                    <div className="relative flex-1 lg:flex-none">
+                                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input
                                             type="text"
-                                            placeholder="Search ledger..."
+                                            placeholder="Search ledger entries..."
                                             value={ledgerSearchTerm}
                                             onChange={e => setLedgerSearchTerm(e.target.value)}
-                                            className="pl-7 pr-3 py-1.5 text-[10px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            className="pl-8 pr-3 py-1.5 text-[10px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 w-full lg:w-48"
                                         />
                                     </div>
-                                    <select
-                                        value={ledgerTypeFilter}
-                                        onChange={e => setLedgerTypeFilter(e.target.value as any)}
-                                        className="px-2 py-1.5 text-[10px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                                    >
-                                        <option value="ALL">All Types</option>
-                                        <option value="DISBURSAL">Disbursal</option>
-                                        <option value="TOPUP">Top-Up</option>
-                                        <option value="REPAYMENT">Principal Repay</option>
-                                        <option value="INTEREST">Interest Paid</option>
-                                    </select>
-                                    <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
-                                    <Button variant="ghost" size="sm" className="text-[10px] text-slate-600 dark:text-slate-300 h-8" onClick={downloadActiveLoanLedger}>
-                                        <Download size={12} className="mr-1" />
-                                        Download Ledger
-                                    </Button>
-                                    <Button variant="ghost" size="sm" className="text-[10px] text-red-600 h-8" onClick={handleWipeInterest}>Wipe All Interest</Button>
+                                    
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        {[
+                                            { id: 'DISBURSAL', label: 'Disbursal', activeColor: 'bg-emerald-500 border-emerald-600 text-white', inactiveColor: 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700' },
+                                            { id: 'TOPUP', label: 'Top-up', activeColor: 'bg-violet-500 border-violet-600 text-white', inactiveColor: 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700' },
+                                            { id: 'REPAYMENT', label: 'Principal', activeColor: 'bg-blue-500 border-blue-600 text-white', inactiveColor: 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700' },
+                                            { id: 'INTEREST', label: 'Interest', activeColor: 'bg-amber-500 border-amber-600 text-white', inactiveColor: 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700' }
+                                        ].map(t => {
+                                            const active = ledgerTypeFilters.includes(t.id);
+                                            return (
+                                                <button
+                                                    key={t.id}
+                                                    onClick={() => {
+                                                        if (active) setLedgerTypeFilters(ledgerTypeFilters.filter(f => f !== t.id));
+                                                        else setLedgerTypeFilters([...ledgerTypeFilters, t.id]);
+                                                    }}
+                                                    className={`px-3 py-1 rounded-full text-[9px] font-black tracking-tight transition-all border ${active ? t.activeColor : t.inactiveColor}`}
+                                                >
+                                                    {t.label}
+                                                </button>
+                                            );
+                                        })}
+                                        {ledgerTypeFilters.length > 0 && (
+                                            <button 
+                                                onClick={() => setLedgerTypeFilters([])}
+                                                className="px-2 py-1 text-[9px] font-bold text-slate-400 hover:text-red-500"
+                                            >
+                                                Reset
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800" />
+
+                                    <div className="flex items-center gap-2">
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="text-[10px] h-8 px-2 flex items-center gap-1.5 text-slate-600 dark:text-slate-300" 
+                                            onClick={downloadActiveLoanLedger}
+                                        >
+                                            <Download size={12} />
+                                            <span>CSV</span>
+                                        </Button>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="text-[10px] h-8 px-2 text-red-500 hover:text-red-600" 
+                                            onClick={handleWipeInterest}
+                                        >
+                                            Wipe
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                             <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
