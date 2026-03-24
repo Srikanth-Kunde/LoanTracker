@@ -230,13 +230,14 @@ export const ImportData: React.FC = () => {
     let repaymentCount = 0;
 
     const memberMap = new Map<string, string>(); // Member Name/ImportID -> Real ID
+    const loanMap = new Map<string, string>();   // MemberKey -> New Loan ID
 
     try {
       for (const row of parsedRows) {
         if (row.status === 'INVALID' || row.action === 'SKIP') continue;
 
         let currentMemberId = row.mappedMemberId;
-        const memberKey = row.memberId || row.memberName;
+        const memberKey = (row.memberId || row.memberName).toLowerCase();
 
         // 1. Ensure Member
         if (!currentMemberId && !memberMap.has(memberKey)) {
@@ -258,31 +259,39 @@ export const ImportData: React.FC = () => {
         }
 
         // 2. Ensure / Find Loan
-        let currentLoanId = loans.find(l => l.memberId === currentMemberId && l.status === LoanStatus.ACTIVE)?.id;
+        // Check local map first (loans created in this import)
+        let currentLoanId = loanMap.get(memberKey);
         
-        // If we created a loan earlier in this import, try to find it
+        // Fallback to existing active loans if not in current import
         if (!currentLoanId) {
-           const { data: recentLoans } = await supabase.from('loans').select('id').eq('member_id', currentMemberId).eq('status', 'ACTIVE').order('created_at', { ascending: false }).limit(1);
-           if (recentLoans?.[0]) currentLoanId = recentLoans[0].id;
+           currentLoanId = loans.find(l => l.memberId === currentMemberId && l.status === LoanStatus.ACTIVE)?.id;
         }
 
         if (row.action === 'CREATE_LOAN') {
           const newLoanId = `loan_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
-          await createLoan({
-            memberId: currentMemberId!,
-            principalAmount: row.debit,
-            interestRate: getInterestRateForDate(row.date, settings),
-            startDate: row.date,
+          // Use direct supabase call to get the ID immediately and bypass stale state
+          const { data: newLoan, error } = await supabase.from('loans').insert({
+            id: newLoanId,
+            member_id: currentMemberId!,
+            principal_amount: row.debit,
+            interest_rate: getInterestRateForDate(row.date, settings),
+            start_date: row.date,
             status: LoanStatus.ACTIVE,
-            type: LoanType.SPECIAL,
-            isLegacy: true,
-            financialYear: 'PRE-2026'
-          });
-          loanCount++;
+            loan_type: LoanType.SPECIAL,
+            is_legacy: true,
+            financial_year: 'PRE-2026'
+          }).select().single();
+
+          if (error) throw error;
+          if (newLoan) {
+             loanMap.set(memberKey, newLoan.id);
+             loanCount++;
+          }
         } else if (row.action === 'ADD_TOPUP') {
-          if (currentLoanId) {
+          const targetLoanId = loanMap.get(memberKey) || currentLoanId;
+          if (targetLoanId) {
             await addLoanTopup({
-              loanId: currentLoanId,
+              loanId: targetLoanId,
               amount: row.debit,
               rate: getInterestRateForDate(row.date, settings),
               date: row.date,
@@ -291,12 +300,13 @@ export const ImportData: React.FC = () => {
             topupCount++;
           }
         } else if (row.action === 'ADD_REPAYMENT') {
-          if (currentLoanId) {
+          const targetLoanId = loanMap.get(memberKey) || currentLoanId;
+          if (targetLoanId) {
             await recordLoanRepayment({
-              loanId: currentLoanId,
+              loanId: targetLoanId,
               date: row.date,
               amount: row.credit,
-              principalPaid: row.credit, // Assuming 100% principal for legacy import unless split
+              principalPaid: row.credit, 
               interestPaid: 0,
               method: PaymentMethod.CASH,
               notes: row.narration

@@ -450,7 +450,8 @@ export const buildLoanLedger = (
     });
 
   repayments
-    .filter(r => r.loanId === loan.id)
+    .filter(r => String(r.loanId) === String(loan.id))
+
     .forEach(repayment => {
       rows.push({
         id: repayment.id,
