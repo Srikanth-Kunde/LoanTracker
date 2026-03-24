@@ -95,29 +95,63 @@ export const ImportData: React.FC = () => {
       if (col1.includes('s.no') || col2.includes('date') || col2.includes('member')) return;
 
       try {
-        // Since Debit/Credit might both not exist or one might be empty in the raw pasted text,
-        // we need to intelligently grab them based on the Voucher type and array length.
-        
-        let sno = cols[0] || '';
-        let date = parseImportDate(cols[1]);
-        let memberId = cols[2] || '';
-        let memberName = cols[3] || '';
-        let voucher = cols[4] || '';
-        let debit = 0;
-        let credit = 0;
-        let narration = '';
+        // 3. Robust Column Identification by pivoting on the Voucher type
+        // This handles cases where S.No or Member ID might be missing or merged.
+        const vIdx = cols.findIndex(c => {
+            const lc = c.toLowerCase();
+            return lc === 'loan' || lc === 'payment';
+        });
 
-        // If it's a Loan, index 5 is the amount (Debit).
-        // If it's a Payment, index 5 is the amount (Credit).
-        // Index 6 is usually Narration.
-        const amountStr = cols[5] || '';
-        if (voucher.toLowerCase() === 'loan') {
-            debit = cleanAmount(amountStr);
-        } else if (voucher.toLowerCase() === 'payment') {
-            credit = cleanAmount(amountStr);
-        }
+        if (vIdx === -1 || vIdx < 1) return; // Need at least something before the voucher (Date or Name)
+
+        let voucher = cols[vIdx]; // "Loan" or "Payment"
+        let isLoan = voucher.toLowerCase() === 'loan';
         
-        narration = cols[6] || '';
+        // Narrative is usually after the amount
+        let narration = cols[vIdx + 2] || '';
+        if (!narration && cols[vIdx + 1] && !cols[vIdx + 1].includes('₹') && isNaN(Number(cols[vIdx + 1].replace(/[₹,]/g, '')))) {
+            // If col+1 doesn't look like an amount, maybe it's the narration?
+            // But usually Amount is always there.
+        }
+
+        let amountStr = cols[vIdx + 1] || '';
+        let debit = isLoan ? cleanAmount(amountStr) : 0;
+        let credit = !isLoan ? cleanAmount(amountStr) : 0;
+
+        // Work backwards from vIdx
+        let memberName = cols[vIdx - 1] || '';
+        let memberId = vIdx >= 2 ? cols[vIdx - 2] : '';
+        let dateStr = vIdx >= 3 ? cols[vIdx - 3] : (vIdx === 2 ? cols[0] : '');
+        
+        // If vIdx was 2, it means: [Date, Name, Voucher]
+        // If vIdx was 3, it means: [Date, ID, Name, Voucher]
+        // If vIdx was 4, it means: [SNo, Date, ID, Name, Voucher]
+        
+        // Let's refine the backwards mapping based on common patterns
+        let date = '';
+        let sno = '';
+
+        if (vIdx === 1) {
+            // [Date/Name?, Voucher] -> Too sparse, but let's try
+            date = parseImportDate(cols[0]);
+            memberName = 'Unknown'; 
+        } else if (vIdx === 2) {
+            // [Date, Name, Voucher]
+            date = parseImportDate(cols[0]);
+            memberName = cols[1];
+            memberId = '';
+        } else if (vIdx === 3) {
+            // [Date, ID, Name, Voucher]
+            date = parseImportDate(cols[0]);
+            memberId = cols[1];
+            memberName = cols[2];
+        } else if (vIdx >= 4) {
+            // [SNo, Date, ID, Name, Voucher]
+            sno = cols[0];
+            date = parseImportDate(cols[1]);
+            memberId = cols[2];
+            memberName = cols[3];
+        }
 
         const row: ImportRow = {
           sno,
@@ -133,9 +167,9 @@ export const ImportData: React.FC = () => {
         };
 
         // Validation
-        if (!row.memberName) row.errors.push('Missing Member Name');
+        if (!row.memberName || row.memberName === 'Unknown') row.errors.push('Missing Member Name');
         if (!row.date) row.errors.push('Invalid Date Format');
-        if (row.voucher !== 'Loan' && row.voucher !== 'Payment') {
+        if (row.voucher.toLowerCase() !== 'loan' && row.voucher.toLowerCase() !== 'payment') {
           row.errors.push(`Unknown Voucher: ${row.voucher}`);
         }
 
