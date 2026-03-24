@@ -79,67 +79,83 @@ export const ImportData: React.FC = () => {
     const newlyDiscoveredMembers = new Set<string>();
     
     lines.forEach((line, idx) => {
-      // Split by tab, comma, or 2+ spaces (common for plain-text pastes)
-      const cols = line.split(/\t|,| {2,}/).map(c => c.trim()).filter(c => c !== '');
+      // Intelligently detect delimiter
+      let cols: string[] = [];
+      if (line.includes('\t')) {
+        cols = line.split('\t');
+      } else if (line.includes(',')) {
+        cols = line.split(',');
+      } else {
+        cols = line.split(/ {2,}/);
+      }
+      
+      cols = cols.map(c => c.trim());
       if (cols.length < 5) return; // Skip invalid rows
       
       // Skip headers
-      const col1 = cols[0]?.toLowerCase();
-      const col2 = cols[1]?.toLowerCase();
+      const col1 = (cols[0] || '').toLowerCase();
+      const col2 = (cols[1] || '').toLowerCase();
       if (col1 === 's.no' || col2 === 'date' || col2.includes('member')) return;
 
-      const row: ImportRow = {
-        sno: cols[0] || '',
-        date: parseImportDate(cols[1]),
-        memberId: cols[2] || '',
-        memberName: cols[3] || '',
-        voucher: cols[4] || '',
-        debit: cleanAmount(cols[5] || ''),
-        credit: cleanAmount(cols[6] || ''),
-        narration: cols[7] || '',
-        status: 'PENDING',
-        errors: []
-      };
+      try {
+        const row: ImportRow = {
+          sno: cols[0] || '',
+          date: parseImportDate(cols[1]),
+          memberId: cols[2] || '',
+          memberName: cols[3] || '',
+          voucher: cols[4] || '',
+          debit: cleanAmount(cols[5] || ''),
+          credit: cleanAmount(cols[6] || ''),
+          narration: cols[7] || '',
+          status: 'PENDING',
+          errors: []
+        };
 
-      // Validation
-      if (!row.memberName) row.errors.push('Missing Member Name');
-      if (!row.date) row.errors.push('Invalid Date Format');
-      if (row.voucher !== 'Loan' && row.voucher !== 'Payment') {
-        row.errors.push(`Unknown Voucher: ${row.voucher}`);
-      }
-
-      // Map member
-      const memberKey = row.memberId || row.memberName.toLowerCase();
-      const existingMember = members.find(m => m.id === row.memberId || m.name.toLowerCase() === row.memberName.toLowerCase());
-      
-      if (existingMember) {
-        row.mappedMemberId = existingMember.id;
-      } else if (!newlyDiscoveredMembers.has(memberKey)) {
-        row.action = 'CREATE_MEMBER';
-        newlyDiscoveredMembers.add(memberKey);
-      }
-
-      // Action Refinement (Voucher Logic)
-      if (row.errors.length === 0) {
-        if (row.voucher === 'Loan') {
-          if (row.narration.toLowerCase().includes('top-up') || membersInImport.has(memberKey)) {
-            if (!membersInImport.has(memberKey)) {
-               row.action = 'CREATE_LOAN';
-               membersInImport.add(memberKey);
-            } else {
-               row.action = 'ADD_TOPUP';
-            }
-          } else {
-            row.action = 'CREATE_LOAN';
-            membersInImport.add(memberKey);
-          }
-        } else if (row.voucher === 'Payment') {
-          row.action = 'ADD_REPAYMENT';
+        // Validation
+        if (!row.memberName) row.errors.push('Missing Member Name');
+        if (!row.date) row.errors.push('Invalid Date Format');
+        if (row.voucher !== 'Loan' && row.voucher !== 'Payment') {
+          row.errors.push(`Unknown Voucher: ${row.voucher}`);
         }
-      }
 
-      row.status = row.errors.length > 0 ? 'INVALID' : 'VALID';
-      rows.push(row);
+        // Map member
+        const memberKey = (row.memberId || row.memberName || '').toLowerCase();
+        const existingMember = members.find(m => 
+          (row.memberId && m.id === row.memberId) || 
+          (row.memberName && m.name.toLowerCase() === row.memberName.toLowerCase())
+        );
+        
+        if (existingMember) {
+          row.mappedMemberId = existingMember.id;
+        } else if (memberKey && !newlyDiscoveredMembers.has(memberKey)) {
+          row.action = 'CREATE_MEMBER';
+          newlyDiscoveredMembers.add(memberKey);
+        }
+
+        // Action Refinement (Voucher Logic)
+        if (row.errors.length === 0) {
+          if (row.voucher === 'Loan') {
+            if (row.narration.toLowerCase().includes('top-up') || membersInImport.has(memberKey)) {
+              if (!membersInImport.has(memberKey)) {
+                row.action = 'CREATE_LOAN';
+                membersInImport.add(memberKey);
+              } else {
+                row.action = 'ADD_TOPUP';
+              }
+            } else {
+              row.action = 'CREATE_LOAN';
+              membersInImport.add(memberKey);
+            }
+          } else if (row.voucher === 'Payment') {
+            row.action = 'ADD_REPAYMENT';
+          }
+        }
+
+        row.status = row.errors.length > 0 ? 'INVALID' : 'VALID';
+        rows.push(row);
+      } catch (err) {
+        console.error('Row parsing failed:', err);
+      }
     });
 
     if (rows.length === 0) {
