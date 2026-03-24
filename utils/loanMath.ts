@@ -273,9 +273,11 @@ export const getAutoGenerationStopDate = (
   let stopDate = getLastDayOfMonthISO(endPeriod.year, endPeriod.month);
   const zeroBalanceDate = getSustainedZeroBalanceDate(loan, topups, repayments);
 
-  if (loan.endDate && compareISODate(loan.endDate, stopDate) < 0) {
+  // If loan is active, ignore any historical endDate (it might be stale)
+  if (loan.status === LoanStatus.CLOSED && loan.endDate && compareISODate(loan.endDate, stopDate) < 0) {
     stopDate = normalizeISODate(loan.endDate);
   }
+
 
   if (zeroBalanceDate && compareISODate(zeroBalanceDate, stopDate) < 0) {
     stopDate = zeroBalanceDate;

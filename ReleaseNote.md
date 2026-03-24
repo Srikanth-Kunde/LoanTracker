@@ -1,46 +1,24 @@
-**Release Note**
+**v1.1.0 — Financial Engine Stabilization**
+
+This release resolves critical logic gaps in interest generation and silences authentication-related console noise.
+
+**What’s New**
+- **Interest Resume Logic**: The interest generator now ignores stale `endDate` (Close Date) values if a loan status is `ACTIVE`. This allows interest to successfully resume after a Top-up even if the loan was previously marked as finished.
+- **Automatic Re-activation**: Adding or editing a Top-up now automatically resets a loan's status to `ACTIVE` and clears any historical `endDate`.
+- **Session Polish**: Replaced the heart-beat probe with an authenticated `GET` request to silence misleading `401 Unauthorized` console alarms.
+- **Audit Hardening**: Full integration of the `entry_type` database column to accurately distinguish between `REPAYMENT` and `INTEREST` in the audit ledger.
+
+**Fixes**
+- Fixed a bug where interest generation would stop at the first zero-balance month, even if subsequent Top-ups existed.
+- Fixed "sticky" interest rates by prioritizing the Global Interest Schedule over historical Top-up rates.
+- Fixed date normalization errors during interest rule matching.
+
+---
+
+**v1.0.6 — Ledger Hardening**
 
 This release improves historical loan correction workflows, audit visibility, and ledger safety for Special Loans.
 
-**What’s New**
-- Existing interest rows can now be edited in place from the Special Loan Audit Ledger.
-- Operators can switch a recorded month between `Monthly` and `Exact Days` without deleting the repayment row.
-- Exact-day overrides now preserve audit history with before/after repayment values.
-- Closed loans corrected to a higher original principal now support immediate remaining-balance settlement from the loan edit flow.
-- The Special Loan Audit Ledger now shows a live `Interest Paid` summary card.
-- **New Feature**: Legacy Data Importer — Paste multiple rows directly from Excel/CSV to auto-generate member profiles, loans, top-ups, and repayments.
-- **New Feature**: Top-up Loan Editing — Existing top-up records can now be edited directly from the Special Loan Audit Ledger.
-- **New Feature**: Audit Ledger Sorting — Transactions can now be sorted by Date and Amount (Ascending/Descending).
-- **New Feature**: Multi-type transaction selection (Disbursal, Top-up, Principal, Interest) to the Special Loan Audit Ledger using interactive toggle chips.
-- **New Feature**: Full Mobile Responsiveness — Added horizontal scrolling for tables and adaptive grids for metric cards.
-- **New Feature**: Added a footer to the Audit Ledger table showing the sum of Amount, Principal, and Interest for filtered transactions.
-- **New Feature**: Dynamic Interest Rate Schedule — Define historical or future rate overrides in Settings.
-- **New Enhancement**: Automated Rate Selection — The Legacy Importer and manual Special Loans screen now auto-suggest rates based on the disbursal date.
-- **New Enhancement**: Auto-gen Progress Tracking — Added loading states and better error reporting for bulk interest generation.
-- **New Enhancement**: Descriptive Validation — Financial engine now provides period-specific error messages (e.g., "Batch record #7 failed for 01/2026").
-- The ledger modal now supports direct `Download Ledger` CSV export per member.
-- Audit Log History has been moved into its own tab.
-- Audit Log History is now restricted to `Admin` users only. Operators and viewers cannot see or open it.
-- Auto-generation now protects exact-day override rows from being unintentionally wiped or replaced by monthly defaults.
-- Ledger summary cards now refresh from live transaction data, so edited interest values update immediately.
-- Member IDs can now be corrected from the frontend, and linked borrower/surety loan references are remapped automatically.
-- Audit Report now shows `Original Loan Disbursed` before outstanding calculations in the summary cards, member balance table, and Full Audit CSV.
-- The Audit Report member balance table now replaces `Status` with the original loan start date for a cleaner calculation-first layout.
-
-**Fixes**
-- Fixed critical CSS/JSX nesting errors in `SpecialLoans.tsx` that caused build failures.
-- Fixed stale `Interest Paid` totals in the ledger header after editing an existing interest row.
-- Fixed auto-recalculation behavior that could overwrite exact-day interest overrides.
-- Fixed historical loan correction flow so remaining principal is surfaced and can be settled properly.
-- Fixed route and sidebar access so audit-log browsing is admin-only.
-- Fixed the member-ID correction gap that previously required manual backend edits and triggered foreign-key failures.
-- Fixed loan closure logic so a loan cannot be closed while future top-ups or later principal recoveries still exist in history.
-- Fixed Legacy Data Importer logic to correctly track single-session member discovery and avoid duplicate creation actions across rows.
-- Enhanced Legacy Data Importer parsing to correctly handle inconsistent tabular pastes containing tabs, multiple spaces, and empty columns by inferring Debit/Credit via Voucher Type.
-- Fixed "Unknown Voucher: ₹" bug in the Legacy Importer by implementing pivot-logic column detection.
-- Fixed the latest "Auto-generate Interest" regression by removing invalid auth probes and silencing 401 console noise.
-- **Fixed Interest Rate Switch Bug**: Corrected the calculation engine to prioritize Global Interest Rules over sticky top-up rates, and added ISO date normalization for rule matching.
-- **Audit Hardening**: Implemented the `entry_type` field and mapping to correctly distinguish transaction types in the audit ledger.
 
 
 **Database / Deployment Note**

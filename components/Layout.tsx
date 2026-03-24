@@ -39,8 +39,9 @@ export const Layout = () => {
       try {
         const { error } = await supabase
           .from('app_settings')
-          .select('id', { head: true, count: 'exact' })
+          .select('id')
           .limit(1);
+
 
         if (isMounted) {
           setIsOffline(Boolean(error));

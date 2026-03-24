@@ -944,6 +944,14 @@ const SpecialLoans: React.FC = () => {
             }
 
             if (topupEditTarget) {
+                // If loan was closed or had an end date, re-activate it because activity is resuming
+                if (topupLoan.status === LoanStatus.CLOSED || topupLoan.endDate) {
+                    await updateLoan({
+                        ...topupLoan,
+                        status: LoanStatus.ACTIVE,
+                        endDate: undefined
+                    });
+                }
                 await updateLoanTopup({
                     ...topupEditTarget,
                     amount: amt,
@@ -953,6 +961,14 @@ const SpecialLoans: React.FC = () => {
                 });
                 log('UPDATE_TOPUP', 'loan_topups', topupLoan.id, { memberName: topupLoan.memberName, amount: amt, rate, date: topupForm.date });
             } else {
+                // If loan was closed or had an end date, re-activate it because a brand new top-up implies activity
+                if (topupLoan.status === LoanStatus.CLOSED || topupLoan.endDate) {
+                    await updateLoan({
+                        ...topupLoan,
+                        status: LoanStatus.ACTIVE,
+                        endDate: undefined
+                    });
+                }
                 await addLoanTopup({
                     loanId: topupLoan.id,
                     amount: amt,

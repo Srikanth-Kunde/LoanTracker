@@ -100,8 +100,8 @@ The application requires a specific schema and security configuration to functio
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
 - **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors.
 - **Important Deployment Step**: Run `sql/interest_rules_migration.sql` in your Supabase SQL Editor. This adds the `interest_rate_rules` and `entry_type` columns and initializes the legacy 2012-2015 rules.
-- **Auto-Gen Logic Hardening**: Fixed the "sticky rate" bug in `getEffectiveLoanRate` and date normalization in `interest.ts`.
-- **Liveness Fix**: Removed the invalid `HEAD /rest/v1` probe that was generating misleading `401 Unauthorized` alarms.
+- **Auto-Gen Logic Hardening**: Fixed the "sticky rate" bug in `getEffectiveLoanRate`, added ISO date normalization in `interest.ts`, and implemented **Interest Resume Logic** to ignore stale `endDate` on active loans.
+- **Liveness Fix**: Replaced the invalid `HEAD /rest/v1` probe with an authenticated table-level `GET` ping to silence misleading `401 Unauthorized` alarms.
 
 ### 🛡️ Financial Systems Audit Checklist
 
@@ -251,6 +251,8 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Balance Audit Column**: Added a real-time "Running Balance" column to the loan ledger for row-by-row verification of principal reductions.
 *   **Auto-Gen Stability**: Resolved reported crashes (`React Error #321` and `Invalid Date 2018-00-31`) and refactored the generator for instant UI updates.
 *   **Auto-Gen Stability**: Resolved a critical "React Error #321" in the interest generator and refactored it for better performance and real-time UI updates after data wipes.
+*   **Interest Resume Logic**: Fortified the generator to ignore stale `endDate` (Close Date) values if a loan status is `ACTIVE`. This allows interest to successfully resume after a Top-up even if the loan was previously marked as finished in the legacy books.
+*   **Automatic Re-activation**: The system now detects activity (like Top-ups) on closed/zero-balance loans and automatically clears the `endDate` and resets status to `ACTIVE` to ensure continuous audit accuracy.
 *   **Precision Interest Logic**: Validated the "zero-balance" logic, ensuring interest is only generated for months where an actual principal liability exists.
 *   **Mobile Optimized UI**: Implemented horizontal scrolling for all wide tables and adaptive grid systems for financial metric cards.
 *   **Multi-Select Ledger Filtering**: Redesigned the audit ledger filter to support multi-select transaction types with color-coded interactive chips for better financial tracking.
