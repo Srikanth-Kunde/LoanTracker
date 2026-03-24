@@ -142,7 +142,8 @@ ALTER TABLE loan_repayments
     ADD COLUMN IF NOT EXISTS interest_for_month INTEGER,
     ADD COLUMN IF NOT EXISTS interest_for_year INTEGER,
     ADD COLUMN IF NOT EXISTS interest_days INTEGER,
-    ADD COLUMN IF NOT EXISTS interest_calculation_type TEXT DEFAULT 'MONTHLY';
+    ADD COLUMN IF NOT EXISTS interest_calculation_type TEXT DEFAULT 'MONTHLY',
+    ADD COLUMN IF NOT EXISTS entry_type TEXT DEFAULT 'REPAYMENT';
 
 ALTER TABLE audit_logs
     ADD COLUMN IF NOT EXISTS performed_by TEXT,
