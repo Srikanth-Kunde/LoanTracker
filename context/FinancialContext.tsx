@@ -208,30 +208,34 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     const lateFee = Number(repayment.lateFee || 0);
     const amount = Number(repayment.amount || 0);
 
+    const periodLabel = (repayment.interestForMonth && repayment.interestForYear)
+      ? ` for ${repayment.interestForMonth}/${repayment.interestForYear}`
+      : '';
+
     if (principalPaid < 0 || interestPaid < 0 || lateFee < 0 || amount < 0) {
-      throw new Error('Repayment values cannot be negative.');
+      throw new Error(`Repayment values cannot be negative${periodLabel}.`);
     }
 
     const expectedAmount = roundCurrency(principalPaid + interestPaid);
     if (roundCurrency(amount) !== expectedAmount) {
-      throw new Error(`Repayment amount must equal principal + interest (${expectedAmount}).`);
+      throw new Error(`Repayment amount (${amount}) must equal principal + interest (${expectedAmount})${periodLabel}.`);
     }
 
     const hasInterestPeriod = repayment.interestForMonth != null || repayment.interestForYear != null;
     if (hasInterestPeriod && (!repayment.interestForMonth || !repayment.interestForYear)) {
-      throw new Error('Interest period must include both month and year.');
+      throw new Error(`Interest period must include both month and year${periodLabel}.`);
     }
 
     if (repayment.interestForMonth && (repayment.interestForMonth < 1 || repayment.interestForMonth > 12)) {
-      throw new Error('Interest period month must be between 1 and 12.');
+      throw new Error(`Interest period month must be between 1 and 12 (got ${repayment.interestForMonth})${periodLabel}.`);
     }
 
     if (repayment.interestDays != null && (!Number.isInteger(repayment.interestDays) || repayment.interestDays <= 0)) {
-      throw new Error('Interest days must be a positive whole number.');
+      throw new Error(`Interest days must be a positive whole number${periodLabel}.`);
     }
 
     if (repayment.interestCalculationType === 'PRORATED_DAYS' && !repayment.interestDays) {
-      throw new Error('Prorated interest entries must include the number of days held.');
+      throw new Error(`Prorated interest entries must include the number of days held${periodLabel}.`);
     }
   }, [roundCurrency]);
 
@@ -317,11 +321,21 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       notes: r.notes
     }));
 
-    repayments.forEach(validateRepayment);
+    repayments.forEach((r, idx) => {
+      try {
+        validateRepayment(r);
+      } catch (e) {
+        const err = e as Error;
+        throw new Error(`Batch record #${idx + 1} failed: ${err.message}`);
+      }
+    });
 
     const { error } = await supabase.from('loan_repayments').insert(payload);
 
-    if (error) throw error;
+    if (error) {
+      logger.error("Bulk Insert Failed", error);
+      throw error;
+    }
     await fetchFinancials(false);
   }, [fetchFinancials, validateRepayment]);
 

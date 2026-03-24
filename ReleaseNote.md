@@ -16,6 +16,8 @@ This release improves historical loan correction workflows, audit visibility, an
 - **New Feature**: Added a footer to the Audit Ledger table showing the sum of Amount, Principal, and Interest for filtered transactions.
 - **New Feature**: Dynamic Interest Rate Schedule — Define historical or future rate overrides in Settings.
 - **New Enhancement**: Automated Rate Selection — The Legacy Importer and manual Special Loans screen now auto-suggest rates based on the disbursal date.
+- **New Enhancement**: Auto-gen Progress Tracking — Added loading states and better error reporting for bulk interest generation.
+- **New Enhancement**: Descriptive Validation — Financial engine now provides period-specific error messages (e.g., "Batch record #7 failed for 01/2026").
 - The ledger modal now supports direct `Download Ledger` CSV export per member.
 - Audit Log History has been moved into its own tab.
 - Audit Log History is now restricted to `Admin` users only. Operators and viewers cannot see or open it.
@@ -35,6 +37,9 @@ This release improves historical loan correction workflows, audit visibility, an
 - Fixed loan closure logic so a loan cannot be closed while future top-ups or later principal recoveries still exist in history.
 - Fixed Legacy Data Importer logic to correctly track single-session member discovery and avoid duplicate creation actions across rows.
 - Enhanced Legacy Data Importer parsing to correctly handle inconsistent tabular pastes containing tabs, multiple spaces, and empty columns by inferring Debit/Credit via Voucher Type.
+- Fixed "Unknown Voucher: ₹" bug in the Legacy Importer by implementing pivot-logic column detection.
+- Fixed "Auto-generate Interest" silent failure by adding missing `settings` dependencies and ensuring robust state synchronization.
+- Fixed calculation engine rounding inconsistencies that could trigger validation errors during bulk operations.
 
 
 **Database / Deployment Note**

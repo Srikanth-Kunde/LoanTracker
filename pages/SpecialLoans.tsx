@@ -602,7 +602,9 @@ const SpecialLoans: React.FC = () => {
             exactDayOverrideCount,
             stopDate
         };
-    }, [autoGenLoan, loanRepayments, loanTopups, getSpecialLoanOutstanding]);
+    }, [autoGenLoan, loanRepayments, loanTopups, getSpecialLoanOutstanding, settings, roundCurrency]);
+
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const stats = useMemo(() => {
         const specialLoans = loans.filter(l => l.type === LoanType.SPECIAL && l.status === LoanStatus.ACTIVE);
@@ -1254,9 +1256,9 @@ const SpecialLoans: React.FC = () => {
     };
 
     const handleGenerateInterest = async () => {
+        if (isGenerating || !autoGenLoan) return;
+        setIsGenerating(true);
         try {
-            if (!autoGenLoan) return;
-
             const cleanedCount = await cleanupInvalidLoanInterest(autoGenLoan.id);
             if (autoGenPreview.records.length > 0) {
                 await bulkRecordLoanRepayments(autoGenPreview.records);
@@ -1270,7 +1272,9 @@ const SpecialLoans: React.FC = () => {
         } catch (error) {
             const e = error as Error;
             logger.error("Error generating interest", e);
-            alert("Error generating interest: " + e.message);
+            alert("Interest Generation Failed: " + e.message);
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -1888,9 +1892,14 @@ const SpecialLoans: React.FC = () => {
                             </Button>
                         )}
                         <div className="flex gap-3 ml-auto">
-                            <Button variant="outline" onClick={() => setModals({ ...modals, autoGen: false })}>Cancel</Button>
-                            <Button onClick={handleGenerateInterest} disabled={autoGenPreview.months === 0 && autoGenPreview.staleInterestCount === 0}>
-                                Apply Auto-Fix ({autoGenPreview.months} new, {autoGenPreview.staleInterestCount} clean)
+                            <Button variant="outline" onClick={() => setModals({ ...modals, autoGen: false })} disabled={isGenerating}>Cancel</Button>
+                            <Button 
+                                onClick={handleGenerateInterest} 
+                                disabled={isGenerating || (autoGenPreview.months === 0 && autoGenPreview.staleInterestCount === 0)}
+                                icon={isGenerating ? undefined : Zap}
+                                className={isGenerating ? "animate-pulse" : ""}
+                            >
+                                {isGenerating ? "Processing..." : `Apply Auto-Fix (${autoGenPreview.months} new, ${autoGenPreview.staleInterestCount} clean)`}
                             </Button>
                         </div>
                     </div>
