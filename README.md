@@ -100,7 +100,7 @@ The application requires a specific schema and security configuration to functio
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
 - **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors.
 - **Important Deployment Step**: Run `sql/interest_rules_migration.sql` in your Supabase SQL Editor. This adds the `interest_rate_rules` and `entry_type` columns and initializes the legacy 2012-2015 rules.
-- **Auto-Gen Logic Hardening**: Fixed the "sticky rate" bug in `getEffectiveLoanRate`, added ISO date normalization in `interest.ts`, and implemented **Interest Resume Logic** to ignore stale `endDate` on active loans.
+- **Auto-Gen Logic Hardening**: Fixed the "sticky rate" bug in `getEffectiveLoanRate`, added ISO date normalization in `interest.ts`, and implemented **Interest Resume Logic** (detecting activity on closed loans) + **Principal Fallback Logic** (correctly detecting zero-balance gaps in v1.1.1).
 - **Liveness Fix**: Replaced the invalid `HEAD /rest/v1` probe with an authenticated table-level `GET` ping to silence misleading `401 Unauthorized` alarms.
 
 ### 🛡️ Financial Systems Audit Checklist

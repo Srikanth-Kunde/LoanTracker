@@ -1,4 +1,15 @@
+**v1.1.1 — Principal Overflow & Persistence Fix**
+
+This stabilization release resolves critical calculation overflows and persistence gaps reported in v1.1.0.
+
+- **Principal Fallback Logic**: Fixed a bug where interest was over-calculated (the 117-month issue) because the engine missed principal reductions in generic repayments. It now correctly detects zero-balance gaps.
+- **Hardened Persistence**: Fixed the "Not Applying" issue by snapshotting records and adding explicit success alerts to the Auto-Gen flow.
+- **UI Refresh**: Forced an explicit refetch with a loader to ensure results are visible immediately after "Apply".
+
+---
+
 **v1.1.0 — Financial Engine Stabilization**
+
 
 This release resolves critical logic gaps in interest generation and silences authentication-related console noise.
 

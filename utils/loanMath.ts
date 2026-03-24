@@ -143,10 +143,14 @@ export const getSpecialLoanOutstandingFromEvents = (
   });
 
   repayments.forEach(repayment => {
-    if (repayment.loanId !== loan.id) return;
+    if (repayment.loan_id !== loan.id && repayment.loanId !== loan.id) return;
     const repaymentDate = normalizeISODate(repayment.date);
     if (!cutoff || repaymentDate <= cutoff) {
-      totalPrincipal -= Number(repayment.principalPaid || 0);
+      // For special loans, we treat any amount not allocated to interest as principal reduction
+      // Use || 0 to treat missing or 0 principalPaid as an invitation to check the amount-based residual
+      const principalPart = repayment.principalPaid || 
+        (Number(repayment.amount || 0) - Number(repayment.interestPaid || 0));
+      totalPrincipal -= principalPart;
     }
   });
 
@@ -439,8 +443,9 @@ export const buildLoanLedger = (
         createdAt: repayment.createdAt,
         entryType: 'REPAYMENT',
         amount: Number(repayment.amount || 0),
-        principalDelta: -Number(repayment.principalPaid || 0),
-        principalPaid: Number(repayment.principalPaid || 0),
+        principalDelta: -(repayment.principalPaid || (Number(repayment.amount || 0) - Number(repayment.interestPaid || 0))),
+        principalPaid: repayment.principalPaid || (Number(repayment.amount || 0) - Number(repayment.interestPaid || 0)),
+
         interestPaid: Number(repayment.interestPaid || 0),
         lateFee: Number(repayment.lateFee || 0),
         notes: repayment.notes,
@@ -448,6 +453,7 @@ export const buildLoanLedger = (
         interestPeriod: getRepaymentInterestPeriod(repayment),
         interestDays: repayment.interestDays,
         interestCalculationType: repayment.interestCalculationType
+
       });
     });
 

@@ -1275,16 +1275,29 @@ const SpecialLoans: React.FC = () => {
         if (isGenerating || !autoGenLoan) return;
         setIsGenerating(true);
         try {
+            // 1. Snapshot the records from the memo to ensure we use what the user saw in preview
+            const recordsToSave = [...autoGenPreview.records];
+            const generationCount = autoGenPreview.months;
+            const totalGenAmount = autoGenPreview.totalInterest;
+
+            // 2. Cleanup stale/invalidRows first
             const cleanedCount = await cleanupInvalidLoanInterest(autoGenLoan.id);
-            if (autoGenPreview.records.length > 0) {
-                await bulkRecordLoanRepayments(autoGenPreview.records);
+            
+            // 3. Save new records
+            if (recordsToSave.length > 0) {
+                await bulkRecordLoanRepayments(recordsToSave);
             }
+            
             log('BULK_RECORD_INTEREST', 'loan_repayments', autoGenLoan.id, {
-                generatedCount: autoGenPreview.months,
+                generatedCount: generationCount,
                 cleanedCount,
-                totalAmount: autoGenPreview.totalInterest
+                totalAmount: totalGenAmount
             });
-            await fetchFinancials(false);
+            
+            // 4. Force a full refetch WITH loader to show the user the update is happening
+            await fetchFinancials(true);
+            
+            alert(`SUCCESS: ${generationCount} interest records generated and ${cleanedCount} stale records cleaned.`);
             setModals({ ...modals, autoGen: false });
         } catch (error) {
             const e = error as Error;
