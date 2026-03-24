@@ -94,6 +94,7 @@ export interface LoanRepayment {
   interestDays?: number;
   interestCalculationType?: InterestCalculationType;
   method: PaymentMethod;
+  entryType?: 'REPAYMENT' | 'INTEREST' | 'DISBURSAL' | 'TOPUP';
   notes?: string;
   createdAt?: string;
 }

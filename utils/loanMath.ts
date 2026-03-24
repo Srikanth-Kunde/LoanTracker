@@ -97,10 +97,14 @@ const formatAmountForMessage = (amount: number) =>
   Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
 
 export const getEffectiveLoanRate = (loan: Loan, topups: LoanTopup[], asOfDate?: string, settings?: SocietySettings) => {
+  // If a global schedule is provided and we have an asOfDate, it becomes the authoritative source
+  // for this specific date, overriding any sticky rates from loan or top-ups.
+  if (settings && asOfDate) {
+    return getInterestRateForDate(asOfDate, settings);
+  }
+
   const cutoff = asOfDate ? normalizeISODate(asOfDate) : null;
-  let effectiveRate = (settings && asOfDate)
-    ? getInterestRateForDate(asOfDate, settings)
-    : Number(loan.interestRate || 0);
+  let effectiveRate = Number(loan.interestRate || 0);
 
   topups
     .filter(t => t.loanId === loan.id)

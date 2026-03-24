@@ -109,7 +109,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
             interestDays: r.interest_days ? Number(r.interest_days) : undefined,
             interestCalculationType: (r.interest_calculation_type || 'MONTHLY') as InterestCalculationType,
             method: r.method as PaymentMethod,
-            entryType: r.entry_type as 'REPAYMENT' | 'INTEREST' | 'DISBURSAL' | 'TOPUP',
+            entryType: (r.entry_type || (pPaid > 0 ? 'REPAYMENT' : 'INTEREST')) as any,
             notes: r.notes,
             createdAt: r.created_at
           };
@@ -262,6 +262,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       interest_days: r.interestDays ?? null,
       interest_calculation_type: r.interestCalculationType ?? 'MONTHLY',
       method: r.method,
+      entry_type: r.entryType || (r.principalPaid > 0 ? 'REPAYMENT' : 'INTEREST'),
       notes: r.notes
     }]);
 
@@ -302,6 +303,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       interest_days: repayment.interestDays ?? null,
       interest_calculation_type: repayment.interestCalculationType ?? null,
       method: repayment.method,
+      entry_type: repayment.entryType || (repayment.principalPaid > 0 ? 'REPAYMENT' : 'INTEREST'),
       notes: repayment.notes ?? null
     }).eq('id', existingRepayment.id);
 

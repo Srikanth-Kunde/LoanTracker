@@ -1,4 +1,5 @@
 import { SocietySettings } from '../types';
+import { normalizeISODate } from './date';
 
 /**
  * Returns the applicable interest rate for a specific date based on system rules.
@@ -10,13 +11,15 @@ export const getInterestRateForDate = (date: string, settings: SocietySettings):
     return settings.defaultLoanInterestRate || 1.5;
   }
 
+  const normalizedTarget = normalizeISODate(date);
+
   // Sort rules by end date ascending (earliest first)
   const sortedRules = [...settings.interestRateRules].sort((a, b) => {
     if (!a.endDate) return 1;
     if (!b.endDate) return -1;
-    return a.endDate.localeCompare(b.endDate);
+    return normalizeISODate(a.endDate).localeCompare(normalizeISODate(b.endDate));
   });
 
-  const rule = sortedRules.find(r => !r.endDate || date <= r.endDate);
+  const rule = sortedRules.find(r => !r.endDate || normalizedTarget <= normalizeISODate(r.endDate));
   return rule ? rule.rate : (settings.defaultLoanInterestRate || 1.5);
 };

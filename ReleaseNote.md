@@ -38,11 +38,9 @@ This release improves historical loan correction workflows, audit visibility, an
 - Fixed Legacy Data Importer logic to correctly track single-session member discovery and avoid duplicate creation actions across rows.
 - Enhanced Legacy Data Importer parsing to correctly handle inconsistent tabular pastes containing tabs, multiple spaces, and empty columns by inferring Debit/Credit via Voucher Type.
 - Fixed "Unknown Voucher: ₹" bug in the Legacy Importer by implementing pivot-logic column detection.
-- Fixed the latest "Auto-generate Interest" regression by removing a bad Supabase-session probe from `fetchFinancials` and replacing the invalid REST-root liveness probe that was generating misleading `401 Unauthorized` errors.
-- Fixed calculation engine rounding inconsistencies that could trigger validation errors during bulk operations.
-- Fixed a race condition in Settings synchronization (`SettingsContext.tsx`) which prevented local defaults from overwriting remote rules on load.
-- Hardened the Legacy Data Importer with pivot-logic for dynamic column detection (Voucher Type based) and "₹" symbol stripping.
-- Fixed missing `entryType` mapping in `FinancialContext.tsx` to ensure generated interest correctly appears in the audit ledger.
+- Fixed the latest "Auto-generate Interest" regression by removing invalid auth probes and silencing 401 console noise.
+- **Fixed Interest Rate Switch Bug**: Corrected the calculation engine to prioritize Global Interest Rules over sticky top-up rates, and added ISO date normalization for rule matching.
+- **Audit Hardening**: Implemented the `entry_type` field and mapping to correctly distinguish transaction types in the audit ledger.
 
 
 **Database / Deployment Note**
