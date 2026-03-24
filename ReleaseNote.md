@@ -4,9 +4,11 @@ This release resolves critical logic gaps in interest generation and silences au
 
 **What’s New**
 - **Interest Resume Logic**: The interest generator now ignores stale `endDate` (Close Date) values if a loan status is `ACTIVE`. This allows interest to successfully resume after a Top-up even if the loan was previously marked as finished.
-- **Automatic Re-activation**: Adding or editing a Top-up now automatically resets a loan's status to `ACTIVE` and clears any historical `endDate`.
+- **Automatic Re-activation**: Adding or editing a Top-up now automatically resets a loan's status to `ACTIVE` and clears any historical `endDate` (correctly nullifying the DB field).
 - **Session Polish**: Replaced the heart-beat probe with an authenticated `GET` request to silence misleading `401 Unauthorized` console alarms.
 - **Audit Hardening**: Full integration of the `entry_type` database column to accurately distinguish between `REPAYMENT` and `INTEREST` in the audit ledger.
+- **Bug Fix**: Resolved `ReferenceError: LoanStatus is not defined` in the loan math utility.
+- **Logic Correction**: Fixed a backward condition in the loan edit flow where closure was incorrectly triggering an "Active" status.
 
 **Fixes**
 - Fixed a bug where interest generation would stop at the first zero-balance month, even if subsequent Top-ups existed.

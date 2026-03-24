@@ -1,4 +1,4 @@
-import { Loan, LoanRepayment, LoanTopup, SocietySettings } from '../types';
+import { Loan, LoanRepayment, LoanStatus, LoanTopup, SocietySettings } from '../types';
 import { getInterestRateForDate } from './interest';
 import { compareISODate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, normalizeISODate } from './date';
 

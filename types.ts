@@ -56,8 +56,9 @@ export interface Loan {
   durationMonths?: number;
   calculationMethod?: LoanCalculationMethod;
   startDate: string;
-  endDate?: string;
+  endDate?: string | null;
   status: LoanStatus;
+
   type: LoanType;
   remarks?: string;
   isLegacy?: boolean;

@@ -949,7 +949,7 @@ const SpecialLoans: React.FC = () => {
                     await updateLoan({
                         ...topupLoan,
                         status: LoanStatus.ACTIVE,
-                        endDate: undefined
+                        endDate: null
                     });
                 }
                 await updateLoanTopup({
@@ -966,7 +966,7 @@ const SpecialLoans: React.FC = () => {
                     await updateLoan({
                         ...topupLoan,
                         status: LoanStatus.ACTIVE,
-                        endDate: undefined
+                        endDate: null
                     });
                 }
                 await addLoanTopup({
@@ -1142,8 +1142,8 @@ const SpecialLoans: React.FC = () => {
                 }
             }
 
-            const nextStatus = shouldCloseAfterSave ? LoanStatus.ACTIVE : editForm.status;
-            const nextEndDate = shouldCloseAfterSave ? undefined : activeLoan.endDate;
+            const nextStatus = shouldCloseAfterSave ? LoanStatus.CLOSED : editForm.status;
+            const nextEndDate = shouldCloseAfterSave ? editForm.settlementDate : activeLoan.endDate;
 
             await updateLoan({
                 ...activeLoan,
