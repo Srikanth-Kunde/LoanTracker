@@ -67,6 +67,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       if (topupsRes.error) throw topupsRes.error;
 
       if (loansRes.data) {
+        console.log("CRITICAL: fetchFinancials Loans loaded:", (loansRes.data as any[]).map(l => ({ id: l.id, name: l.memberName || l.member_id })));
         setLoans((loansRes.data as any[]).map(l => ({
           id: l.id,
           memberId: l.member_id,
@@ -88,6 +89,9 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         })));
       }
 
+      if (repaymentsRes.error) {
+        console.error('ERROR: repayments fetch failed', repaymentsRes.error);
+      }
       if (repaymentsRes.data) {
         setLoanRepayments((repaymentsRes.data as any[]).map(r => {
           const amt = Number(r.amount || 0);
@@ -100,18 +104,22 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
             amount: amt,
             interestPaid: iPaid,
             principalPaid: pPaid,
-          lateFee: Number(r.late_fee || 0),
-          interestForMonth: r.interest_for_month ? Number(r.interest_for_month) : undefined,
-          interestForYear: r.interest_for_year ? Number(r.interest_for_year) : undefined,
-          interestDays: r.interest_days ? Number(r.interest_days) : undefined,
-          interestCalculationType: (r.interest_calculation_type || 'MONTHLY') as InterestCalculationType,
-          method: r.method as PaymentMethod,
-          notes: r.notes,
-          createdAt: r.created_at
+            lateFee: Number(r.late_fee || 0),
+            interestForMonth: r.interest_for_month ? Number(r.interest_for_month) : undefined,
+            interestForYear: r.interest_for_year ? Number(r.interest_for_year) : undefined,
+            interestDays: r.interest_days ? Number(r.interest_days) : undefined,
+            interestCalculationType: (r.interest_calculation_type || 'MONTHLY') as InterestCalculationType,
+            method: r.method as PaymentMethod,
+            entryType: r.entry_type as 'REPAYMENT' | 'INTEREST' | 'DISBURSAL' | 'TOPUP',
+            notes: r.notes,
+            createdAt: r.created_at
           };
         }));
       }
 
+      if (topupsRes.error) {
+        console.error('ERROR: topups fetch failed', topupsRes.error);
+      }
       if (topupsRes.data) {
         setLoanTopups((topupsRes.data as any[]).map(t => ({
           id: t.id,
@@ -124,6 +132,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         })));
       }
     } catch (error) {
+      console.error('CRITICAL: fetchFinancials failed details:', error);
       logger.error('Error fetching socials:', error);
     } finally {
       if (showLoader) {
@@ -320,6 +329,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       method: r.method,
       notes: r.notes
     }));
+
+    console.log("CRITICAL: bulkRecordLoanRepayments payload", payload);
 
     repayments.forEach((r, idx) => {
       try {
