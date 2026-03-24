@@ -12,6 +12,17 @@ import {
     getSpecialLoanOutstandingFromEvents,
     validateLoanCanCloseOnDate
 } from '../utils/loanMath';
+import { SocietySettings } from '../types';
+
+const mockSettings: SocietySettings = {
+  societyName: 'Test Society',
+  currency: 'INR',
+  loanProcessingFee: 0,
+  defaultLoanInterestRate: 1.5,
+  interestRateRules: [
+    { id: 'legacy', label: 'Legacy', endDate: '2015-09-30', rate: 2.0 }
+  ]
+};
 
 const makeLoan = (overrides: Partial<Loan> = {}): Loan => ({
   id: 'loan_1',
@@ -63,11 +74,11 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
     'Outstanding should reflect original + top-ups - principal repayments'
   );
 
-  const feb2024 = getInterestDueForPeriod(loan, topups, repayments, { year: 2024, month: 2 });
+  const feb2024 = getInterestDueForPeriod(loan, topups, repayments, { year: 2024, month: 2 }, mockSettings);
   assert.equal(feb2024.openingOutstanding, 250000, 'February 2024 interest should use January closing principal');
   assert.equal(feb2024.interestDue, 3750, 'February 2024 interest should be 1.5% of 250000');
 
-  const mar2024 = getInterestDueForPeriod(loan, topups, repayments, { year: 2024, month: 3 });
+  const mar2024 = getInterestDueForPeriod(loan, topups, repayments, { year: 2024, month: 3 }, mockSettings);
   assert.equal(mar2024.openingOutstanding, 240000, 'March 2024 interest should reflect February principal repayment');
   assert.equal(mar2024.interestDue, 3600, 'March 2024 interest should be 1.5% of 240000');
 }
@@ -96,7 +107,7 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
     'Interest settlement should follow the explicit allocated period'
   );
 
-  const missing = getMissingInterestPeriods(loan, [], repayments, { year: 2024, month: 2 });
+  const missing = getMissingInterestPeriods(loan, [], repayments, { year: 2024, month: 2 }, mockSettings);
   assert.deepEqual(
     missing.map(period => `${period.year}-${String(period.month).padStart(2, '0')}`),
     ['2024-01', '2024-02'],
@@ -159,14 +170,14 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
     'Auto-generation should stop on the actual close/payoff date'
   );
 
-  const invalidRows = getInvalidInterestRepayments(loan, [], repayments, { year: 2013, month: 12 });
+  const invalidRows = getInvalidInterestRepayments(loan, [], repayments, { year: 2013, month: 12 }, mockSettings);
   assert.deepEqual(
     invalidRows.map(row => row.id),
     ['rep_stale_mar', 'rep_stale_apr'],
     'Interest rows dated after the close/payoff date should be flagged for cleanup'
   );
 
-  const missing = getMissingInterestPeriods(loan, [], repayments, { year: 2013, month: 12 });
+  const missing = getMissingInterestPeriods(loan, [], repayments, { year: 2013, month: 12 }, mockSettings);
   assert.deepEqual(
     missing.map(period => `${period.year}-${String(period.month).padStart(2, '0')}@${period.postingDate}`),
     ['2013-02@2013-02-28', '2013-03@2013-03-10'],
@@ -222,6 +233,13 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
 
   const finalCloseValidation = validateLoanCanCloseOnDate(loan, topups, repayments, '2019-10-10');
   assert.equal(finalCloseValidation.canClose, true, 'Loan can close on the final zero-balance date');
+}
+
+{
+  const legacyLoan = makeLoan({ startDate: '2013-01-01', principalAmount: 50000 });
+  const jan2013 = getInterestDueForPeriod(legacyLoan, [], [], { year: 2013, month: 2 }, mockSettings);
+  assert.equal(jan2013.rate, 2.0, 'Historical interest (2013) should follow legacy rule (2%)');
+  assert.equal(jan2013.interestDue, 1000, 'Historical interest should be 2% of 50000');
 }
 
 console.log('loanMath regression tests passed');

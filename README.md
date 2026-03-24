@@ -106,6 +106,17 @@ The application requires a specific schema and security configuration to functio
 - **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
 - **Current closure auto-cleanup fix**: No additional SQL is required for the latest post-closure / zero-balance interest cleanup. That behavior is handled entirely in the application logic.
 - **Exact-days proration update**: Rerun `migration.sql` once on existing databases to add the new exact-day repayment metadata columns.
+- **Dynamic Interest Rate Support**: Rerun `sql/interest_rules_migration.sql` to add the required metadata column to your `app_settings` table.
+
+### 🛡️ Financial Systems Audit Checklist
+
+For Senior Auditors, verify these controls in the application:
+- [x] **Principal Integrity**: Sum of `Original Principal + Top-ups - Principal Recoveries` matches live outstanding.
+- [x] **Interest Determinism**: Monthly dues match either the `loan.interestRate` OR a matching `interest_rate_rules` entry for that date.
+- [x] **Allocation Separation**: `interestPaid` is tracked separately from `principalPaid` to prevent amortized balance corruption.
+- [x] **Zero-Balance Cutoff**: No interest is generated for periods where principal is ≤ 1.00 INR (rounding tolerance).
+- [x] **Immutable Repayment Basis**: Exact-day interest rows preserve their specific `interestDays` and `interestCalculationType` even if global rules change later.
+- [x] **Event-Driven Running Balance**: Every transaction generates a new `balanceAfter` based on deterministic chronological event ordering.
 
 If you want to verify that your database is already on the required schema, these objects must exist:
 

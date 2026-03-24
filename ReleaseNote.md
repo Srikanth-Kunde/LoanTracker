@@ -50,8 +50,8 @@ This release improves historical loan correction workflows, audit visibility, an
   then rerun `migration.sql` once.
 
 **Documentation Updated**
-- `PRD.md`
-- `README.md`
+- `PRD.md` (Updated with historical calculation engine specs)
+- `README.md` (Added Senior Auditor Financial Controls Checklist)
 
 **Verification**
 - `npm test`

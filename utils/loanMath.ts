@@ -1,4 +1,5 @@
-import { Loan, LoanRepayment, LoanTopup } from '../types';
+import { Loan, LoanRepayment, LoanTopup, SocietySettings } from '../types';
+import { getInterestRateForDate } from './interest';
 import { compareISODate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, normalizeISODate } from './date';
 
 export interface InterestPeriod {
@@ -95,9 +96,11 @@ const isSamePeriod = (left: InterestPeriod, right: InterestPeriod) =>
 const formatAmountForMessage = (amount: number) =>
   Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
 
-export const getEffectiveLoanRate = (loan: Loan, topups: LoanTopup[], asOfDate?: string) => {
+export const getEffectiveLoanRate = (loan: Loan, topups: LoanTopup[], asOfDate?: string, settings?: SocietySettings) => {
   const cutoff = asOfDate ? normalizeISODate(asOfDate) : null;
-  let effectiveRate = Number(loan.interestRate || 0);
+  let effectiveRate = (settings && asOfDate)
+    ? getInterestRateForDate(asOfDate, settings)
+    : Number(loan.interestRate || 0);
 
   topups
     .filter(t => t.loanId === loan.id)
@@ -213,7 +216,8 @@ export const getInterestDueForPeriod = (
   loan: Loan,
   topups: LoanTopup[],
   repayments: LoanRepayment[],
-  period: InterestPeriod
+  period: InterestPeriod,
+  settings?: SocietySettings
 ) => {
   const startPeriod = getInterestPeriodFromDate(loan.startDate);
   if (!isPeriodAfter(period, startPeriod)) {
@@ -223,7 +227,7 @@ export const getInterestDueForPeriod = (
   const previousPeriod = getPreviousPeriod(period);
   const asOfDate = getLastDayOfMonthISO(previousPeriod.year, previousPeriod.month);
   const openingOutstanding = getSpecialLoanOutstandingFromEvents(loan, topups, repayments, asOfDate);
-  const rate = getEffectiveLoanRate(loan, topups, asOfDate);
+  const rate = getEffectiveLoanRate(loan, topups, asOfDate, settings);
 
   if (openingOutstanding <= 1) {
     return { openingOutstanding: 0, interestDue: 0, rate };
@@ -280,7 +284,8 @@ const getChargeableInterestPeriods = (
   loan: Loan,
   topups: LoanTopup[],
   repayments: LoanRepayment[],
-  endPeriod: InterestPeriod
+  endPeriod: InterestPeriod,
+  settings?: SocietySettings
 ) => {
   const startPeriod = getInterestPeriodFromDate(loan.startDate);
   const stopDate = getAutoGenerationStopDate(loan, topups, repayments, endPeriod);
@@ -294,7 +299,7 @@ const getChargeableInterestPeriods = (
   }> = [];
 
   while (comparePeriods(cursor, stopPeriod) <= 0) {
-    const periodDue = getInterestDueForPeriod(loan, topups, repayments, cursor);
+    const periodDue = getInterestDueForPeriod(loan, topups, repayments, cursor, settings);
     if (periodDue.interestDue > 0) {
       periods.push({
         ...cursor,
@@ -339,14 +344,15 @@ export const getMissingInterestPeriods = (
   loan: Loan,
   topups: LoanTopup[],
   repayments: LoanRepayment[],
-  endPeriod: InterestPeriod
+  endPeriod: InterestPeriod,
+  settings?: SocietySettings
 ) => {
   const invalidRepaymentIds = new Set(
-    getInvalidInterestRepayments(loan, topups, repayments, endPeriod).map(repayment => repayment.id)
+    getInvalidInterestRepayments(loan, topups, repayments, endPeriod, settings).map(repayment => repayment.id)
   );
   const validRepayments = repayments.filter(repayment => !invalidRepaymentIds.has(repayment.id));
 
-  return getChargeableInterestPeriods(loan, topups, repayments, endPeriod).filter(period =>
+  return getChargeableInterestPeriods(loan, topups, repayments, endPeriod, settings).filter(period =>
     !isInterestSettledForPeriod(validRepayments, loan.id, period)
   );
 };
@@ -355,9 +361,10 @@ export const getInvalidInterestRepayments = (
   loan: Loan,
   topups: LoanTopup[],
   repayments: LoanRepayment[],
-  endPeriod: InterestPeriod
+  endPeriod: InterestPeriod,
+  settings?: SocietySettings
 ) => {
-  const chargeablePeriods = getChargeableInterestPeriods(loan, topups, repayments, endPeriod);
+  const chargeablePeriods = getChargeableInterestPeriods(loan, topups, repayments, endPeriod, settings);
   const validPeriodKeys = new Set(chargeablePeriods.map(getInterestPeriodKey));
   const stopDate = getAutoGenerationStopDate(loan, topups, repayments, endPeriod);
 

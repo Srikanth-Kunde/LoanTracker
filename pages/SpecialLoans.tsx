@@ -189,7 +189,8 @@ const SpecialLoans: React.FC = () => {
             loan,
             currentLoanTopups,
             currentLoanRepayments,
-            interestPeriod
+            interestPeriod,
+            settings
         );
         const defaultInterestDays = getDefaultInterestDays(repayment, interestPeriod.year, interestPeriod.month);
         const parsedInterestDays = Number.parseInt(rawInterestDays || '', 10);
@@ -244,13 +245,15 @@ const SpecialLoans: React.FC = () => {
             loan,
             currentLoanTopups,
             currentLoanRepayments,
-            previousPeriod
+            previousPeriod,
+            settings
         );
         const currentPeriodDue = getInterestDueForPeriod(
             loan,
             currentLoanTopups,
             currentLoanRepayments,
-            collectionPeriod
+            collectionPeriod,
+            settings
         );
         const currentPeriodInterestPaid = getInterestPaidForPeriod(currentLoanRepayments, loan.id, collectionPeriod);
         const currentPeriodAlreadyPaid = currentPeriodInterestPaid > 0;
@@ -501,7 +504,7 @@ const SpecialLoans: React.FC = () => {
             // ── INTEREST-ONLY logic for Special Loans ────────────────────────
             // Outstanding = original + topups before start-of-month − principal repaid before start-of-month
             if (loan.status === LoanStatus.ACTIVE) {
-                const periodDue = getInterestDueForPeriod(loan, topupsForLoan, allRepayments, selectedPeriod);
+                const periodDue = getInterestDueForPeriod(loan, topupsForLoan, allRepayments, selectedPeriod, settings);
                 openingOutstanding = periodDue.openingOutstanding;
                 interestComp = periodDue.interestDue;
                 principalComp = 0;  // No mandatory principal
@@ -568,8 +571,8 @@ const SpecialLoans: React.FC = () => {
         const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === autoGenLoan.id);
         const loanTopupsForLoan = loanTopups.filter(t => t.loanId === autoGenLoan.id);
         const stopDate = getAutoGenerationStopDate(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
-        const staleInterestRows = getInvalidInterestRepayments(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
-        const missingPeriods = getMissingInterestPeriods(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);
+        const staleInterestRows = getInvalidInterestRepayments(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod, settings);
+        const missingPeriods = getMissingInterestPeriods(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod, settings);
         const exactDayOverrideCount = loanRepaymentsForLoan.filter(r =>
             (r.interestPaid || 0) > 0 && r.interestCalculationType === 'PRORATED_DAYS'
         ).length;

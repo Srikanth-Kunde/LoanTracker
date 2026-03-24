@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useSettings } from './SettingsContext';
 import { Loan, LoanRepayment, LoanStatus, PaymentMethod, LoanType, LoanCalculationMethod, LoanTopup, InterestCalculationType } from '../types';
 import { getIndianFinancialYear } from '../constants';
 import { supabase } from '../supabaseClient';
@@ -44,6 +45,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   const [loanRepayments, setLoanRepayments] = useState<LoanRepayment[]>([]);
   const [loanTopups, setLoanTopups] = useState<LoanTopup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { settings } = useSettings();
 
   const roundCurrency = useCallback((value: number) => Math.round(value * 100) / 100, []);
 
@@ -336,7 +338,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       loan,
       loanTopups.filter(t => t.loanId === loan.id),
       loanRepayments.filter(r => r.loanId === loan.id),
-      endPeriod
+      endPeriod,
+      settings
     );
 
     if (!invalidRows.length) {

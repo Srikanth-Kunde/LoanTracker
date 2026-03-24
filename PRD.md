@@ -101,6 +101,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
     *   Automated lookup during spreadsheet analysis.
     *   Reactive rate suggestions in the manual "Create Loan" and "Add Top-up" forms.
     *   *Evaluation Logic*: Rules are checked sequentially by `endDate`. The first matching rule (where `date <= rule.endDate`) wins. If no rule matches, the system falls back to the global `default_loan_interest_rate`.
+    *   *Recalculation Engine*: Core math utilities (`getInterestDueForPeriod`, `getMissingInterestPeriods`) are injected with `SocietySettings` to ensure historical consistency regardless of current-day configuration changes.
 
 *   No new tables or columns are required for the latest month-interest override, remaining-principal settlement, admin-only audit-log tab, member-ID edit flow, or audit-report disbursal view. These changes operate on the existing `members`, `loans`, `loan_repayments`, and `audit_logs` structures.
 *   The legacy `payments` table is not part of the active product and should not exist after the latest migration.
@@ -129,7 +130,18 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 
 #### 5.3. Schema Migrations (Idempotent)
 *   **Source of Truth**: All required schema setup is consolidated in `migration.sql`.
-*   **Safety**: The script is **idempotent** and safe to rerun. It uses `IF NOT EXISTS` for tables and indexes and guarded policy creation.
+*   **Safety**: The script is- **Idempotency**: Safe to run multiple times; it will only add missing pieces.
+- **Audit Verification**: Every financial calculation is deterministic and can be reconciled using the `interest_rate_rules` JSON schedule in `app_settings`.
+
+### 🛡️ Financial Systems Audit Checklist
+For Senior Auditors, verify these controls:
+- [x] **Principal Integrity**: Sum of `Original Principal + Top-ups - Principal Recoveries` matches live outstanding.
+- [x] **Interest Determinism**: Monthly dues match either the `loan.interestRate` OR a matching `interest_rate_rules` entry for that date.
+- [x] **Allocation Separation**: `interestPaid` is tracked separately from `principalPaid` to prevent amortized balance corruption.
+- [x] **Zero-Balance Cutoff**: No interest is generated for periods where principal is ≤ 1.00 INR.
+- [x] **Immutable Repayment Basis**: Exact-day interest rows preserve their `interestDays` and `interestCalculationType` even if global rules change.
+- [x] **Event-Driven Running Balance**: Every transaction generates a new `balanceAfter` based on chronological event ordering (including same-day `created_at` sub-ordering).
+ and indexes and guarded policy creation.
 *   **Access Control**: The script automatically enables Row Level Security (RLS) and adds global permissions for the `anon` role to ensure secure but functional access from the Vite app.
 *   **Operational Note**: `migration.sql` is also the upgrade path for existing deployments. Operators must rerun it after the ledger hardening release so the new repayment-period columns, audit-log compatibility columns, constraints, triggers, and legacy-table cleanup are applied.
 *   **Current Proration Upgrade Note**: Existing deployments must rerun `migration.sql` one more time to add `interest_days` and `interest_calculation_type` for exact-day repayment auditability.
