@@ -99,14 +99,8 @@ The application requires a specific schema and security configuration to functio
 - `migration.sql` now adds new repayment allocation columns, audit-log compatibility columns, repayment validation constraints, and date-validation triggers.
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
 - **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors.
-- **Dynamic Interest Rates Release**: Rerun/Paste `sql/interest_rules_migration.sql`. This adds the `interest_rate_rules` JSONB column to `app_settings` for date-based interest logic.
-- The most recent UI fixes such as member-ID editing from the frontend, close-date validation against future top-ups/repayments, and the Audit Report `Original Loan Disbursed` view are application-layer changes on top of the existing schema.
-- The script remains **idempotent** and is safe to rerun from the Supabase SQL Editor.
-- **Legacy table removal**: `migration.sql` now drops the obsolete `payments` table because it is no longer part of the live product.
-- **Data Cleanup**: To remove sample data (Ajay/Srikanth), run `sql/sample-ajay-remove.sql`.
-- **Current closure auto-cleanup fix**: No additional SQL is required for the latest post-closure / zero-balance interest cleanup. That behavior is handled entirely in the application logic.
-- **Exact-days proration update**: Rerun `migration.sql` once on existing databases to add the new exact-day repayment metadata columns.
-- **Dynamic Interest Rate Support**: Rerun `sql/interest_rules_migration.sql` to add the required metadata column to your `app_settings` table.
+- **Dynamic Interest Rate Support**: Rerun `sql/interest_rules_migration.sql` to add the required metadata column to your `app_settings` table. This is required for the new 2012-2015 legacy interest rules to function.
+- **Auto-Fix Reference Error**: No SQL is required. The `fetchFinancials is not defined` error was a frontend ReferenceError and has been fixed.
 
 ### 🛡️ Financial Systems Audit Checklist
 

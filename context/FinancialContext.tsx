@@ -54,6 +54,10 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       if (showLoader) {
         setIsLoading(true);
       }
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log("CRITICAL: fetchFinancials auth session state:", session ? "ACTIVE" : "NONE (No session)");
+
       logger.info('Fetching initial financial data from Supabase');
 
       const [loansRes, repaymentsRes, topupsRes] = await Promise.all([
@@ -67,7 +71,6 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       if (topupsRes.error) throw topupsRes.error;
 
       if (loansRes.data) {
-        console.log("CRITICAL: fetchFinancials Loans loaded:", (loansRes.data as any[]).map(l => ({ id: l.id, name: l.memberName || l.member_id })));
         setLoans((loansRes.data as any[]).map(l => ({
           id: l.id,
           memberId: l.member_id,
@@ -329,8 +332,6 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       method: r.method,
       notes: r.notes
     }));
-
-    console.log("CRITICAL: bulkRecordLoanRepayments payload", payload);
 
     repayments.forEach((r, idx) => {
       try {

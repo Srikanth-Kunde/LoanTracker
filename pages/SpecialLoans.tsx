@@ -59,7 +59,7 @@ const SpecialLoans: React.FC = () => {
         loans, loanRepayments, loanTopups, createLoan, updateLoan, deleteLoan,
         recordLoanRepayment, updateLoanRepayment, closeLoan,
         addLoanTopup, updateLoanTopup, deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, bulkRecordLoanRepayments,
-        getSpecialLoanOutstanding
+        getSpecialLoanOutstanding, fetchFinancials
     } = useFinancials();
     const { role } = useAuth();
     const { log } = useAuditLog();
@@ -1258,7 +1258,6 @@ const SpecialLoans: React.FC = () => {
     const handleGenerateInterest = async () => {
         if (isGenerating || !autoGenLoan) return;
         setIsGenerating(true);
-        console.log("CRITICAL: handleGenerateInterest start", { loanId: autoGenLoan.id, preview: autoGenPreview });
         try {
             const cleanedCount = await cleanupInvalidLoanInterest(autoGenLoan.id);
             if (autoGenPreview.records.length > 0) {
@@ -1271,7 +1270,6 @@ const SpecialLoans: React.FC = () => {
             });
             await fetchFinancials(false);
             setModals({ ...modals, autoGen: false });
-            alert(`Success: Generated ${autoGenPreview.records.length} records.`);
         } catch (error) {
             const e = error as Error;
             logger.error("Error generating interest", e);
