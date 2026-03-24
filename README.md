@@ -261,4 +261,6 @@ DELETE FROM members WHERE id = 'sample_ajay';
 *   **Stability & Build Integrity**: Resolved persistent JSX/TSX syntax errors and TypeScript compilation issues, ensuring 100% build compatibility.
 
 
+*   **TOP-UP Principal Display Fix**: The loan ledger now correctly displays principal amounts for TOP-UP entries instead of showing "—", making ledger reconciliation clearer after legacy data imports.
+*   **Ledger Totals Accuracy**: The ledger totals footer now explicitly counts TOP-UP amounts in principal calculations.
 *   **Audit Reports**: Extended the Audit Tally and CSV exports to handle historical data from 2012.

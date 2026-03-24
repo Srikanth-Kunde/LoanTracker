@@ -1,3 +1,13 @@
+**v1.1.4 — Ledger Display & Import Integrity**
+
+This release fixes a display bug in the loan ledger that caused principal/top-up mismatch confusion after importing legacy data.
+
+- **TOP-UP Principal Display Fix**: The loan ledger now correctly displays principal amounts for TOP-UP entries in both the transaction rows and ledger totals. Previously, TOP-UP rows showed "—" for principal, making it appear that only the original disbursal was counted.
+- **Ledger Totals Accuracy**: The "Ledger Totals (Filtered)" footer now explicitly includes TOP-UP amounts in the principal calculation, ensuring the totals correctly reflect `Original Principal + Top-ups - Principal Repayments`.
+- **No Database Changes**: This is purely a frontend display fix - no SQL migration required.
+
+---
+
 **v1.1.3 — Sequence & Integrity Hardening**
 
 This release fixes critical data-integrity gaps in the Legacy Data Importer and ledger visibility.
