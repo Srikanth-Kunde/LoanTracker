@@ -40,6 +40,7 @@ This release improves historical loan correction workflows, audit visibility, an
 - Fixed "Unknown Voucher: ₹" bug in the Legacy Importer by implementing pivot-logic column detection.
 - Fixed "Auto-generate Interest" silent failure by adding missing `settings` dependencies and ensuring robust state synchronization.
 - Fixed calculation engine rounding inconsistencies that could trigger validation errors during bulk operations.
+- Fixed a race condition in Settings synchronization that could occasionally clear the Interest Rate Schedule on initial load.
 
 
 **Database / Deployment Note**

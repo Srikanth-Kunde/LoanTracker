@@ -102,7 +102,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     // 2. Fetch from Supabase (to sync across devices)
-    fetchSupabaseSettings();
+    fetchSupabaseSettings().then(() => {
+      setIsLoaded(true);
+    });
 
     const channel = supabase
       .channel('settings_realtime')
@@ -110,9 +112,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         fetchSupabaseSettings();
       })
       .subscribe();
-
-    setIsLoaded(true);
-
     return () => {
       supabase.removeChannel(channel);
     };
