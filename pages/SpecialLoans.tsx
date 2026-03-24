@@ -355,7 +355,7 @@ const SpecialLoans: React.FC = () => {
         if (!activeLoanTransactions) return [];
         return activeLoanTransactions.filter(tx => {
             const matchesSearch = !ledgerSearchTerm || (tx.notes || '').toLowerCase().includes(ledgerSearchTerm.toLowerCase()) || (tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '').toLowerCase().includes(ledgerSearchTerm.toLowerCase());
-            
+
             let matchesType = true;
             if (ledgerTypeFilters.length > 0) {
                 const type = tx.entryType === 'REPAYMENT'
@@ -363,7 +363,7 @@ const SpecialLoans: React.FC = () => {
                     : tx.entryType;
                 matchesType = ledgerTypeFilters.includes(type);
             }
-            
+
             return matchesSearch && matchesType;
         }).sort((a, b) => {
             if (ledgerSortConfig.key === 'DATE') {
@@ -380,13 +380,19 @@ const SpecialLoans: React.FC = () => {
 
     const ledgerTotals = useMemo(() => {
         return filteredLedgerTransactions.reduce((acc, tx) => {
-            const isOutflow = tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP';
+            const isDisbursal = tx.entryType === 'DISBURSAL';
+            const isTopup = tx.entryType === 'TOPUP';
+            const isOutflow = isDisbursal || isTopup;
             const amt = Number(tx.amount || 0);
             const p = Number(tx.principalPaid || 0);
             const i = Number(tx.interestPaid || 0);
 
+            // For disbursals and topups, the amount is principal
+            // For repayments, principalPaid is the principal portion
+            const principalAmount = isOutflow ? amt : p;
+
             acc.amount += isOutflow ? amt : -amt;
-            acc.principal += isOutflow ? amt : -p; // amt for disbursal/topup is principal
+            acc.principal += isOutflow ? amt : -principalAmount;
             acc.interest += i;
             return acc;
         }, { amount: 0, principal: 0, interest: 0 });
@@ -805,10 +811,10 @@ const SpecialLoans: React.FC = () => {
                 splitCount = 1;
             }
 
-            log('RECORD_REPAYMENT', 'loan_repayments', activeLoan.id, { 
-                memberName: activeLoan.memberName, 
-                interest: iAmt, 
-                principal: pAmt, 
+            log('RECORD_REPAYMENT', 'loan_repayments', activeLoan.id, {
+                memberName: activeLoan.memberName,
+                interest: iAmt,
+                principal: pAmt,
                 lateFee: lFee,
                 splitCount
             });
@@ -1009,7 +1015,7 @@ const SpecialLoans: React.FC = () => {
                 .map(r => r.date)
                 .sort(compareISODate)
                 .at(-1);
-            
+
             return [
                 l.memberId,
                 `"${l.memberName}"`,
@@ -1282,21 +1288,21 @@ const SpecialLoans: React.FC = () => {
 
             // 2. Cleanup stale/invalidRows first
             const cleanedCount = await cleanupInvalidLoanInterest(autoGenLoan.id);
-            
+
             // 3. Save new records
             if (recordsToSave.length > 0) {
                 await bulkRecordLoanRepayments(recordsToSave);
             }
-            
+
             log('BULK_RECORD_INTEREST', 'loan_repayments', autoGenLoan.id, {
                 generatedCount: generationCount,
                 cleanedCount,
                 totalAmount: totalGenAmount
             });
-            
+
             // 4. Force a full refetch WITH loader to show the user the update is happening
             await fetchFinancials(true);
-            
+
             alert(`SUCCESS: ${generationCount} interest records generated and ${cleanedCount} stale records cleaned.`);
             setModals({ ...modals, autoGen: false });
         } catch (error) {
@@ -1782,13 +1788,13 @@ const SpecialLoans: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
-                        
-                        <Input
-                            label="Internal Notes"
-                            placeholder="Optional reference notes..."
-                            value={repayForm.notes}
-                            onChange={e => setRepayForm({ ...repayForm, notes: e.target.value })}
-                        />
+
+                            <Input
+                                label="Internal Notes"
+                                placeholder="Optional reference notes..."
+                                value={repayForm.notes}
+                                onChange={e => setRepayForm({ ...repayForm, notes: e.target.value })}
+                            />
                         </div>
 
                         <div className="flex justify-between items-center pt-4 border-t border-slate-200 dark:border-slate-700">
@@ -1923,8 +1929,8 @@ const SpecialLoans: React.FC = () => {
                         )}
                         <div className="flex gap-3 ml-auto">
                             <Button variant="outline" onClick={() => setModals({ ...modals, autoGen: false })} disabled={isGenerating}>Cancel</Button>
-                            <Button 
-                                onClick={handleGenerateInterest} 
+                            <Button
+                                onClick={handleGenerateInterest}
                                 disabled={isGenerating || (autoGenPreview.months === 0 && autoGenPreview.staleInterestCount === 0)}
                                 icon={isGenerating ? undefined : Zap}
                                 className={isGenerating ? "animate-pulse" : ""}
@@ -1966,7 +1972,7 @@ const SpecialLoans: React.FC = () => {
                         <div className="space-y-4">
                             <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-slate-50/50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
                                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest shrink-0">Transaction Audit Trail</h4>
-                                
+
                                 <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
                                     <div className="relative flex-1 lg:flex-none">
                                         <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1978,7 +1984,7 @@ const SpecialLoans: React.FC = () => {
                                             className="pl-8 pr-3 py-1.5 text-[10px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 w-full lg:w-48"
                                         />
                                     </div>
-                                    
+
                                     <div className="flex flex-wrap items-center gap-1.5">
                                         {[
                                             { id: 'DISBURSAL', label: 'Disbursal', activeColor: 'bg-emerald-500 border-emerald-600 text-white', inactiveColor: 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700' },
@@ -2001,7 +2007,7 @@ const SpecialLoans: React.FC = () => {
                                             );
                                         })}
                                         {ledgerTypeFilters.length > 0 && (
-                                            <button 
+                                            <button
                                                 onClick={() => setLedgerTypeFilters([])}
                                                 className="px-2 py-1 text-[9px] font-bold text-slate-400 hover:text-red-500"
                                             >
@@ -2029,19 +2035,19 @@ const SpecialLoans: React.FC = () => {
                                     <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
 
                                     <div className="flex items-center gap-2">
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="text-[10px] h-8 px-2 flex items-center gap-1.5 text-slate-600 dark:text-slate-300" 
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-[10px] h-8 px-2 flex items-center gap-1.5 text-slate-600 dark:text-slate-300"
                                             onClick={downloadActiveLoanLedger}
                                         >
                                             <Download size={12} />
                                             <span>CSV</span>
                                         </Button>
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="text-[10px] h-8 px-2 text-red-500 hover:text-red-600" 
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-[10px] h-8 px-2 text-red-500 hover:text-red-600"
                                             onClick={handleWipeInterest}
                                         >
                                             Wipe
@@ -2100,8 +2106,8 @@ const SpecialLoans: React.FC = () => {
                                                     <td className="px-4 py-3 text-right font-bold">
                                                         {tx.entryType === 'DISBURSAL' ? (
                                                             <span className="text-emerald-700">{formatCurrency(tx.amount, settings.currency)}</span>
-                                                        ) : (tx.principalPaid || 0) > 0 ? (
-                                                            <span className="text-blue-600">-{formatCurrency(tx.principalPaid, settings.currency)}</span>
+                                                        ) : (tx.entryType === 'TOPUP' || (tx.principalPaid || 0) > 0) ? (
+                                                            <span className="text-blue-600">-{formatCurrency(tx.entryType === 'TOPUP' ? tx.amount : tx.principalPaid, settings.currency)}</span>
                                                         ) : '—'}
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-bold">
@@ -2191,8 +2197,8 @@ const SpecialLoans: React.FC = () => {
                         </div>
 
                         <div className="flex gap-3 pt-2">
-                             <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setModals({ ...modals, history: false })}>Close Ledger</Button>
-                             <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl" onClick={() => { setModals({ ...modals, history: false, autoGen: true }); openAutoGenModal(activeLoan); }}>Recalculate Interest</Button>
+                            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setModals({ ...modals, history: false })}>Close Ledger</Button>
+                            <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl" onClick={() => { setModals({ ...modals, history: false, autoGen: true }); openAutoGenModal(activeLoan); }}>Recalculate Interest</Button>
                         </div>
                     </div>
                 )}
