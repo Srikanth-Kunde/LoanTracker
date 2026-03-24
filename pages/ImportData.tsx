@@ -77,36 +77,66 @@ export const ImportData: React.FC = () => {
     const lines = pasteContent.trim().split('\n');
     const membersInImport = new Set<string>();
     const newlyDiscoveredMembers = new Set<string>();
+    const rows: ImportRow[] = [];
     
     lines.forEach((line, idx) => {
-      // Intelligently detect delimiter
-      let cols: string[] = [];
-      if (line.includes('\t')) {
-        cols = line.split('\t');
-      } else if (line.includes(',')) {
-        cols = line.split(',');
-      } else {
-        cols = line.split(/ {2,}/);
+      // 1. Split by tabs first (primary Excel/Web format delimiter)
+      let rawCols = line.split('\t');
+      
+      // If no tabs, try commas
+      if (rawCols.length < 5) {
+         rawCols = line.split(',');
       }
       
-      cols = cols.map(c => c.trim());
+      // If still no tabs or commas, try 2+ spaces as a last resort
+      if (rawCols.length < 5) {
+         rawCols = line.split(/ {2,}/);
+      }
+      
+      // 2. Trim and filter out completely empty cols
+      const cols = rawCols.map(c => c.trim()).filter(c => c !== '');
+      
       if (cols.length < 5) return; // Skip invalid rows
       
       // Skip headers
       const col1 = (cols[0] || '').toLowerCase();
       const col2 = (cols[1] || '').toLowerCase();
-      if (col1 === 's.no' || col2 === 'date' || col2.includes('member')) return;
+      if (col1.includes('s.no') || col2.includes('date') || col2.includes('member')) return;
 
       try {
+        // Since Debit/Credit might both not exist or one might be empty in the raw pasted text,
+        // we need to intelligently grab them based on the Voucher type and array length.
+        
+        let sno = cols[0] || '';
+        let date = parseImportDate(cols[1]);
+        let memberId = cols[2] || '';
+        let memberName = cols[3] || '';
+        let voucher = cols[4] || '';
+        let debit = 0;
+        let credit = 0;
+        let narration = '';
+
+        // If it's a Loan, index 5 is the amount (Debit).
+        // If it's a Payment, index 5 is the amount (Credit).
+        // Index 6 is usually Narration.
+        const amountStr = cols[5] || '';
+        if (voucher.toLowerCase() === 'loan') {
+            debit = cleanAmount(amountStr);
+        } else if (voucher.toLowerCase() === 'payment') {
+            credit = cleanAmount(amountStr);
+        }
+        
+        narration = cols[6] || '';
+
         const row: ImportRow = {
-          sno: cols[0] || '',
-          date: parseImportDate(cols[1]),
-          memberId: cols[2] || '',
-          memberName: cols[3] || '',
-          voucher: cols[4] || '',
-          debit: cleanAmount(cols[5] || ''),
-          credit: cleanAmount(cols[6] || ''),
-          narration: cols[7] || '',
+          sno,
+          date,
+          memberId,
+          memberName,
+          voucher,
+          debit,
+          credit,
+          narration,
           status: 'PENDING',
           errors: []
         };
