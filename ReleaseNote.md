@@ -8,6 +8,7 @@ This release improves historical loan correction workflows, audit visibility, an
 - Exact-day overrides now preserve audit history with before/after repayment values.
 - Closed loans corrected to a higher original principal now support immediate remaining-balance settlement from the loan edit flow.
 - The Special Loan Audit Ledger now shows a live `Interest Paid` summary card.
+- **New Feature**: Legacy Data Importer — Paste multiple rows directly from Excel/CSV to auto-generate member profiles, loans, top-ups, and repayments.
 - **New Feature**: Top-up Loan Editing — Existing top-up records can now be edited directly from the Special Loan Audit Ledger.
 - **New Feature**: Audit Ledger Sorting — Transactions can now be sorted by Date and Amount (Ascending/Descending).
 - **New Feature**: Multi-type transaction selection (Disbursal, Top-up, Principal, Interest) to the Special Loan Audit Ledger using interactive toggle chips.

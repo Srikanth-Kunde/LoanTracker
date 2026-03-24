@@ -86,6 +86,17 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   `app_settings`: Stores the active UI-backed settings used by the app, including `society_name`, `currency`, `loan_processing_fee`, `default_loan_interest_rate`, access codes, and appearance preferences.
 *   `audit_logs`: Stores write-audit metadata for ledger and admin actions.
 *   Member-linked foreign keys on `loans.member_id`, `loans.surety1_id`, and `loans.surety2_id` should support `ON UPDATE CASCADE` so direct backend member-ID corrections do not violate referential integrity.
+
+#### 3.8. Legacy Data Importer (Automated)
+*   **Smart Paste Interface**: Support copying multiple rows from Excel/Google Sheets and pasting them directly into the system.
+*   **Automatic Entity Mapping**:
+    *   **Members**: Automate creation of new member profiles if the ID or Name is not found in the existing database.
+    *   **Loans**: Automatically initialize a "Special Loan" on the member's first "Loan" voucher.
+    *   **Top-ups**: Detect subsequent "Loan" entries (or "Top-up" narrations) and append them as `loan_topups` to the active loan.
+    *   **Repayments**: Map "Payment" vouchers to `loan_repayments` with automated link-to-loan logic.
+*   **Dry-Run Validation**: Provide a mandatory "Preview" step showing all proposed database actions (Create/Add/Skip) before final commitment.
+*   **Date Normalization**: Support `MM-YYYY` (e.g., `01-2013`) by defaulting to the 1st of the month, and standard `DD-MM-YYYY` formats.
+
 *   No new tables or columns are required for the latest month-interest override, remaining-principal settlement, admin-only audit-log tab, member-ID edit flow, or audit-report disbursal view. These changes operate on the existing `members`, `loans`, `loan_repayments`, and `audit_logs` structures.
 *   The legacy `payments` table is not part of the active product and should not exist after the latest migration.
 *   Sample data is intentionally separated from schema setup so operators can add or remove it directly from the Supabase backend when needed.

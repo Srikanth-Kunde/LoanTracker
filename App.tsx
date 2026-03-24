@@ -16,6 +16,7 @@ const AuditReport = lazy(() => import('./pages/AuditReport'));
 const AuditLogHistory = lazy(() => import('./pages/AuditLogHistory'));
 const SettingsPage = lazy(() => import('./pages/Settings.tsx'));
 const Members = lazy(() => import('./pages/Members'));
+const ImportData = lazy(() => import('./pages/ImportData.tsx'));
 
 
 // Wrapper component to handle login state
@@ -37,6 +38,7 @@ const AppRoutes: React.FC = () => {
             <Route path="audit" element={<AuditReport />} />
             <Route path="audit-log" element={role === 'ADMIN' ? <AuditLogHistory /> : <Navigate to="/" replace />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="import" element={<ImportData />} />
 
           </Route>
         </Routes>

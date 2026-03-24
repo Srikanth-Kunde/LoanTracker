@@ -10,7 +10,8 @@ import {
   WifiOff,
   ClipboardList,
   History,
-  Users
+  Users,
+  FileUp
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -48,6 +49,7 @@ export const Layout = () => {
   const navigation = [
     { name: 'Special Loans', href: '/', icon: Star },
     { name: 'Members', href: '/members', icon: Users },
+    { name: 'Import Data', href: '/import', icon: FileUp },
     { name: 'Audit Report', href: '/audit', icon: ClipboardList },
     ...(role === UserRole.ADMIN ? [{ name: 'Audit Log History', href: '/audit-log', icon: History }] : []),
     { name: 'Settings', href: '/settings', icon: Settings },
