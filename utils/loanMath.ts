@@ -228,14 +228,22 @@ export const getInterestDueForPeriod = (
   settings?: SocietySettings
 ) => {
   const startPeriod = getInterestPeriodFromDate(loan.startDate);
-  if (!isPeriodAfter(period, startPeriod)) {
+  if (comparePeriods(period, startPeriod) < 0) {
     return { openingOutstanding: 0, interestDue: 0, rate: Number(loan.interestRate || 0) };
   }
 
-  const previousPeriod = getPreviousPeriod(period);
-  const asOfDate = getLastDayOfMonthISO(previousPeriod.year, previousPeriod.month);
-  const openingOutstanding = getSpecialLoanOutstandingFromEvents(loan, topups, repayments, asOfDate);
-  const rate = getEffectiveLoanRate(loan, topups, asOfDate, settings);
+  let openingOutstanding = 0;
+  if (isSamePeriod(period, startPeriod)) {
+    // For the very first month, the opening balance is the initial principal
+    openingOutstanding = Number(loan.principalAmount || 0);
+  } else {
+    const previousPeriod = getPreviousPeriod(period);
+    const asOfDate = getLastDayOfMonthISO(previousPeriod.year, previousPeriod.month);
+    openingOutstanding = getSpecialLoanOutstandingFromEvents(loan, topups, repayments, asOfDate);
+  }
+
+  const periodEndDate = getLastDayOfMonthISO(period.year, period.month);
+  const rate = getEffectiveLoanRate(loan, topups, periodEndDate, settings);
 
   if (openingOutstanding <= 1) {
     return { openingOutstanding: 0, interestDue: 0, rate };
@@ -277,11 +285,15 @@ export const getAutoGenerationStopDate = (
   let stopDate = getLastDayOfMonthISO(endPeriod.year, endPeriod.month);
   const zeroBalanceDate = getSustainedZeroBalanceDate(loan, topups, repayments);
 
-  // If loan is active, ignore any historical endDate (it might be stale)
+  // If loan is active, we MUST iterate up to the provided endPeriod (usually today)
+  // regardless of historical zero-balance dates, to find periods after Top-ups.
+  if (loan.status === LoanStatus.ACTIVE) {
+    return stopDate;
+  }
+
   if (loan.status === LoanStatus.CLOSED && loan.endDate && compareISODate(loan.endDate, stopDate) < 0) {
     stopDate = normalizeISODate(loan.endDate);
   }
-
 
   if (zeroBalanceDate && compareISODate(zeroBalanceDate, stopDate) < 0) {
     stopDate = zeroBalanceDate;
@@ -289,6 +301,7 @@ export const getAutoGenerationStopDate = (
 
   return stopDate;
 };
+
 
 const getChargeableInterestPeriods = (
   loan: Loan,
@@ -300,7 +313,9 @@ const getChargeableInterestPeriods = (
   const startPeriod = getInterestPeriodFromDate(loan.startDate);
   const stopDate = getAutoGenerationStopDate(loan, topups, repayments, endPeriod);
   const stopPeriod = getInterestPeriodFromDate(stopDate);
-  let cursor = getNextPeriod(startPeriod);
+  // Start from the month the loan began. 
+  // If it's the very first month, getInterestDueForPeriod will pull from the initial disbursal amount.
+  let cursor = { ...startPeriod };
   const periods: Array<InterestPeriod & {
     interestDue: number;
     openingOutstanding: number;
