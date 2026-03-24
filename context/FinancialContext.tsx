@@ -36,6 +36,7 @@ interface FinancialContextType {
   deleteAllFinancials: () => Promise<void>;
   resetFinancials: () => void;
   isLoading: boolean;
+  fetchFinancials: (showLoader?: boolean) => Promise<void>;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
@@ -57,8 +58,6 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       
       const { data: { session } } = await supabase.auth.getSession();
       console.log("CRITICAL: fetchFinancials auth session state:", session ? "ACTIVE" : "NONE (No session)");
-
-      logger.info('Fetching initial financial data from Supabase');
 
       const [loansRes, repaymentsRes, topupsRes] = await Promise.all([
         supabase.from('loans').select('*').order('created_at', { ascending: false }),
@@ -554,7 +553,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       closeLoan,
       addLoanTopup, updateLoanTopup, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, getSpecialLoanOutstanding,
       setFinancialData, importFinancials, deleteAllFinancials, resetFinancials,
-      isLoading
+      isLoading, fetchFinancials
     }}>
       {children}
     </FinancialContext.Provider>

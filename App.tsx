@@ -48,6 +48,7 @@ const AppRoutes: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  console.log("APP VERSION: 1.0.6 - AUTO-GEN FIX LOADED");
   return (
     <ErrorBoundary>
       <SettingsProvider>
