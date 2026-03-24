@@ -31,6 +31,7 @@ This release improves historical loan correction workflows, audit visibility, an
 - Fixed route and sidebar access so audit-log browsing is admin-only.
 - Fixed the member-ID correction gap that previously required manual backend edits and triggered foreign-key failures.
 - Fixed loan closure logic so a loan cannot be closed while future top-ups or later principal recoveries still exist in history.
+- Fixed Legacy Data Importer logic to correctly track single-session member discovery and avoid duplicate creation actions across rows.
 
 **Database / Deployment Note**
 - Existing deployments should rerun `migration.sql` once if they want direct backend edits of `members.id` to work cleanly. The migration now upgrades member-linked loan foreign keys to `ON UPDATE CASCADE`.

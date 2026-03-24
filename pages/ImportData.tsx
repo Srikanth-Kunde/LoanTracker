@@ -75,8 +75,9 @@ export const ImportData: React.FC = () => {
     if (!pasteContent.trim()) return;
 
     const lines = pasteContent.trim().split('\n');
-    const rows: ImportRow[] = [];
-
+    const membersInImport = new Set<string>();
+    const newlyDiscoveredMembers = new Set<string>();
+    
     lines.forEach((line, idx) => {
       // Split by tab (Excel) or comma (CSV)
       const cols = line.includes('\t') ? line.split('\t') : line.split(',');
@@ -108,40 +109,43 @@ export const ImportData: React.FC = () => {
       }
 
       // Map member
+      const memberKey = row.memberId || row.memberName.toLowerCase();
       const existingMember = members.find(m => m.id === row.memberId || m.name.toLowerCase() === row.memberName.toLowerCase());
+      
       if (existingMember) {
         row.mappedMemberId = existingMember.id;
-      } else {
+      } else if (!newlyDiscoveredMembers.has(memberKey)) {
         row.action = 'CREATE_MEMBER';
+        newlyDiscoveredMembers.add(memberKey);
       }
 
-      // Map Loan Logic:
-      // If "Loan" and narration says "Top-up", it's a top-up.
-      // If "Loan" and NO existing loan for this member is found in the import stream yet, it's a new loan.
-      
+      // Action Refinement (Voucher Logic)
+      if (row.errors.length === 0) {
+        if (row.voucher === 'Loan') {
+          if (row.narration.toLowerCase().includes('top-up') || membersInImport.has(memberKey)) {
+            // If it was CREATE_MEMBER, we keep it for the first row, 
+            // but for voucher logic it's a top-up if we already have a loan start.
+            // Actually, if it's the first Loan row, it should be CREATE_LOAN even if we also create a member.
+            if (!membersInImport.has(memberKey)) {
+               row.action = 'CREATE_LOAN';
+               membersInImport.add(memberKey);
+            } else {
+               row.action = 'ADD_TOPUP';
+            }
+          } else {
+            row.action = 'CREATE_LOAN';
+            membersInImport.add(memberKey);
+          }
+        } else if (row.voucher === 'Payment') {
+          row.action = 'ADD_REPAYMENT';
+        }
+      }
+
       row.status = row.errors.length > 0 ? 'INVALID' : 'VALID';
       rows.push(row);
     });
 
-    // Refine actions based on context
-    const membersInImport = new Set<string>();
-    const processedRows = rows.map(row => {
-      const memberKey = row.mappedMemberId || row.memberName;
-      
-      if (row.voucher === 'Loan') {
-        if (row.narration.toLowerCase().includes('top-up') || membersInImport.has(memberKey)) {
-          row.action = row.action || 'ADD_TOPUP';
-        } else {
-          row.action = 'CREATE_LOAN';
-          membersInImport.add(memberKey);
-        }
-      } else if (row.voucher === 'Payment') {
-        row.action = 'ADD_REPAYMENT';
-      }
-      return row;
-    });
-
-    setParsedRows(processedRows);
+    setParsedRows(rows);
     setImportStep('PREVIEW');
   };
 
