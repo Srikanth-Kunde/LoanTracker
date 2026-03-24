@@ -143,7 +143,7 @@ export const getSpecialLoanOutstandingFromEvents = (
   });
 
   repayments.forEach(repayment => {
-    if (repayment.loan_id !== loan.id && repayment.loanId !== loan.id) return;
+    if (repayment.loanId !== loan.id) return;
     const repaymentDate = normalizeISODate(repayment.date);
     if (!cutoff || repaymentDate <= cutoff) {
       // For special loans, we treat any amount not allocated to interest as principal reduction
