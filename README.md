@@ -100,7 +100,7 @@ The application requires a specific schema and security configuration to functio
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
 - **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors.
 - **Dynamic Interest Rate Support**: Rerun `sql/interest_rules_migration.sql` to add the required metadata column to your `app_settings` table. This is required for the new 2012-2015 legacy interest rules to function.
-- **Auto-Fix Reference Error**: No SQL is required. The `fetchFinancials is not defined` error was a frontend ReferenceError and has been fixed.
+- **Recent Auto-Gen Frontend Fix**: No SQL is required. The latest correction removes a bad Supabase-session probe from `fetchFinancials` and replaces the invalid `HEAD /rest/v1` liveness check that could surface misleading `401 Unauthorized` noise while the database itself was healthy.
 
 ### 🛡️ Financial Systems Audit Checklist
 

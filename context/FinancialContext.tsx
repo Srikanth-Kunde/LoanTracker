@@ -55,9 +55,6 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       if (showLoader) {
         setIsLoading(true);
       }
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log("CRITICAL: fetchFinancials auth session state:", session ? "ACTIVE" : "NONE (No session)");
 
       const [loansRes, repaymentsRes, topupsRes] = await Promise.all([
         supabase.from('loans').select('*').order('created_at', { ascending: false }),
@@ -135,7 +132,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       }
     } catch (error) {
       console.error('CRITICAL: fetchFinancials failed details:', error);
-      logger.error('Error fetching socials:', error);
+      logger.error('Error fetching financials:', error);
     } finally {
       if (showLoader) {
         setIsLoading(false);

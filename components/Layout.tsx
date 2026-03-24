@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../supabaseClient';
 import { UserRole } from '../types';
 
 export const Layout = () => {
@@ -25,25 +26,49 @@ export const Layout = () => {
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-    const restEndpoint = supabaseUrl ? `${new URL(supabaseUrl).origin}/rest/v1/` : null;
+    let isMounted = true;
 
     const checkConnection = async () => {
-      if (!restEndpoint) {
-        setIsOffline(false);
+      if (!navigator.onLine) {
+        if (isMounted) {
+          setIsOffline(true);
+        }
         return;
       }
 
       try {
-        await fetch(restEndpoint, { method: 'HEAD', mode: 'no-cors' });
-        setIsOffline(false);
+        const { error } = await supabase
+          .from('app_settings')
+          .select('id', { head: true, count: 'exact' })
+          .limit(1);
+
+        if (isMounted) {
+          setIsOffline(Boolean(error));
+        }
       } catch {
-        setIsOffline(true);
+        if (isMounted) {
+          setIsOffline(true);
+        }
       }
     };
-    checkConnection();
+
+    const handleOnline = () => {
+      setIsOffline(false);
+      void checkConnection();
+    };
+    const handleOffline = () => setIsOffline(true);
+
+    void checkConnection();
     timer = setInterval(checkConnection, 15000); // re-check every 15s
-    return () => clearInterval(timer);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const navigation = [
@@ -193,7 +218,7 @@ export const Layout = () => {
           {isOffline && (
             <div className="mb-4 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-xl text-sm">
               <WifiOff size={16} className="shrink-0" />
-              <span><strong>Database connection lost</strong> — data may be outdated. Check your network or VPN.</span>
+              <span><strong>Live sync unavailable</strong> — automatic refresh may be delayed. Check your network, VPN, or Supabase credentials.</span>
             </div>
           )}
           <div className="mx-auto max-w-[1500px]">
