@@ -262,5 +262,6 @@ DELETE FROM members WHERE id = 'sample_ajay';
 
 
 *   **TOP-UP Principal Display Fix**: The loan ledger now correctly displays principal amounts for TOP-UP entries instead of showing "—", making ledger reconciliation clearer after legacy data imports.
+*   **Auto-Generate Interest Resume Fix**: Interest auto-generation now resumes from the first Top-up date for active loans, handling zero-balance gaps correctly.
 *   **Ledger Totals Accuracy**: The ledger totals footer now explicitly counts TOP-UP amounts in principal calculations.
 *   **Audit Reports**: Extended the Audit Tally and CSV exports to handle historical data from 2012.

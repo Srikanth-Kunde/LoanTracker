@@ -148,7 +148,7 @@ export const getSpecialLoanOutstandingFromEvents = (
     if (!cutoff || repaymentDate <= cutoff) {
       // For special loans, we treat any amount not allocated to interest as principal reduction
       // Use || 0 to treat missing or 0 principalPaid as an invitation to check the amount-based residual
-      const principalPart = repayment.principalPaid || 
+      const principalPart = repayment.principalPaid ||
         (Number(repayment.amount || 0) - Number(repayment.interestPaid || 0));
       totalPrincipal -= principalPart;
     }
@@ -313,9 +313,25 @@ const getChargeableInterestPeriods = (
   const startPeriod = getInterestPeriodFromDate(loan.startDate);
   const stopDate = getAutoGenerationStopDate(loan, topups, repayments, endPeriod);
   const stopPeriod = getInterestPeriodFromDate(stopDate);
-  // Start from the month the loan began. 
+
+  // For active loans with top-ups, find the first top-up date to start from
+  // This handles the case where loan had zero balance but was topped up later
+  let effectiveStartPeriod = startPeriod;
+  const firstTopup = topups
+    .filter(t => t.loanId === loan.id)
+    .sort((a, b) => compareISODate(a.date, b.date))[0];
+
+  if (firstTopup && loan.status === LoanStatus.ACTIVE) {
+    const topupPeriod = getInterestPeriodFromDate(firstTopup.date);
+    // Start from the month of first topup (or start, whichever is later)
+    if (comparePeriods(topupPeriod, startPeriod) > 0) {
+      effectiveStartPeriod = topupPeriod;
+    }
+  }
+
+  // Start from the month the loan began (or first topup for active loans with zero balance gaps)
   // If it's the very first month, getInterestDueForPeriod will pull from the initial disbursal amount.
-  let cursor = { ...startPeriod };
+  let cursor = { ...effectiveStartPeriod };
   const periods: Array<InterestPeriod & {
     interestDue: number;
     openingOutstanding: number;

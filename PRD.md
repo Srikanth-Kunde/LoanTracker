@@ -59,6 +59,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   **Full Mobile Responsiveness:** Application is now optimized for mobile viewing with horizontally scrollable tables and adaptive metric grids.
 *   **Ledger Column Totals:** The audit ledger now features a footer that automatically sums visible "Amount", "Principal", and "Interest" columns.
 *   **TOP-UP Display Fix:** TOP-UP entries now correctly display principal amounts in the ledger rows and totals, eliminating confusion during legacy data import reconciliation.
+*   **Auto-Generate Resume Fix:** Interest auto-generation now detects the first Top-up date for active loans and resumes interest calculation from that point, correctly handling zero-balance gaps in legacy ledgers.
 *   Database write-audit history must be exposed in a separate admin-only screen rather than being mixed into the financial summary report.
 
 #### 3.7. Member Management
