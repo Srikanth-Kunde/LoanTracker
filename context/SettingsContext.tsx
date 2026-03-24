@@ -55,6 +55,7 @@ const mapDbRowToSettings = (row: any): Partial<SocietySettings> => ({
   themeMode: (row.theme_mode as ThemeMode) ?? DEFAULT_SETTINGS.themeMode,
   accentColor: (row.accent_color as AccentColor) ?? DEFAULT_SETTINGS.accentColor,
   bannerImage: row.banner_image ?? DEFAULT_SETTINGS.bannerImage,
+  interestRateRules: row.interest_rate_rules ?? DEFAULT_SETTINGS.interestRateRules,
 });
 
 const mapSettingsToDbRow = (settings: SocietySettings) => ({
@@ -69,6 +70,7 @@ const mapSettingsToDbRow = (settings: SocietySettings) => ({
   theme_mode: settings.themeMode,
   accent_color: settings.accentColor,
   banner_image: settings.bannerImage,
+  interest_rate_rules: settings.interestRateRules,
   updated_at: new Date().toISOString()
 });
 

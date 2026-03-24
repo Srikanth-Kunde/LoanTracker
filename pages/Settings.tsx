@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, RotateCcw, Database } from 'lucide-react';
+import { Save, RotateCcw, Database, Plus, Trash2, Calendar } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { SocietySettings, AccentColor, ThemeMode, UserRole } from '../types';
@@ -40,7 +40,8 @@ const SettingsPage: React.FC = () => {
       viewerCode: form.viewerCode?.trim() || settings.viewerCode,
       themeMode: form.themeMode,
       accentColor: form.accentColor,
-      bannerImage: form.bannerImage?.trim() || ''
+      bannerImage: form.bannerImage?.trim() || '',
+      interestRateRules: form.interestRateRules
     });
     setMessage('Settings saved to app_settings.');
   };
@@ -52,6 +53,26 @@ const SettingsPage: React.FC = () => {
     }
     resetSettings();
     setMessage('Settings reset to defaults.');
+  };
+
+  const addRule = () => {
+    const newRule = {
+      id: `rule_${Date.now()}`,
+      label: 'New Rule',
+      rate: settings.defaultLoanInterestRate || 1.5,
+      endDate: ''
+    };
+    setField('interestRateRules', [...(form.interestRateRules || []), newRule]);
+  };
+
+  const removeRule = (id: string) => {
+    setField('interestRateRules', (form.interestRateRules || []).filter(r => r.id !== id));
+  };
+
+  const updateRule = (id: string, updates: Partial<any>) => {
+    setField('interestRateRules', (form.interestRateRules || []).map(r => 
+      r.id === id ? { ...r, ...updates } : r
+    ));
   };
 
   return (
@@ -107,6 +128,93 @@ const SettingsPage: React.FC = () => {
             className="md:col-span-2"
             disabled={!canEdit}
           />
+        </div>
+      </Card>
+
+      <Card title="Interest Rate Schedule" subtitle="Define historical or future rate overrides based on end dates">
+        <div className="space-y-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <th className="py-2 font-bold text-slate-500 dark:text-slate-400">Rule Label</th>
+                  <th className="py-2 font-bold text-slate-500 dark:text-slate-400">End Date (Inclusive)</th>
+                  <th className="py-2 font-bold text-slate-500 dark:text-slate-400">Monthly Rate (%)</th>
+                  <th className="py-2 text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                {(form.interestRateRules || []).map((rule) => (
+                  <tr key={rule.id}>
+                    <td className="py-3 pr-4">
+                      <input
+                        className="w-full bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white p-0"
+                        value={rule.label}
+                        onChange={e => updateRule(rule.id, { label: e.target.value })}
+                        placeholder="e.g. Legacy Period"
+                        disabled={!canEdit}
+                      />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={14} className="text-slate-400" />
+                        <input
+                          type="date"
+                          className="bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white p-0 text-xs"
+                          value={rule.endDate || ''}
+                          onChange={e => updateRule(rule.id, { endDate: e.target.value })}
+                          disabled={!canEdit}
+                        />
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-20 bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white p-0 font-mono"
+                        value={rule.rate}
+                        onChange={e => updateRule(rule.id, { rate: Number(e.target.value) })}
+                        disabled={!canEdit}
+                      />
+                    </td>
+                    <td className="py-3 text-right">
+                      {canEdit && (
+                        <button 
+                          onClick={() => removeRule(rule.id)}
+                          className="text-rose-500 hover:text-rose-600 p-1"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {(form.interestRateRules || []).length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-400 italic">
+                      No override rules defined. Global default rate applies to all dates.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          {canEdit && (
+            <button
+              onClick={addRule}
+              className="flex items-center gap-2 text-primary-600 hover:text-primary-700 font-bold text-xs mt-2"
+            >
+              <Plus size={14} />
+              Add Interest Rule
+            </button>
+          )}
+          
+          <div className="mt-4 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 text-xs text-blue-700 dark:text-blue-300">
+            <strong>How it works:</strong> Rules are checked in order of their End Date. The first rule whose end date is 
+            greater than or equal to the loan/top-up date will be applied. If no rules match (or no end date is set), 
+            the global default rate is used.
+          </div>
         </div>
       </Card>
 

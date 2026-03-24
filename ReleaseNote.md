@@ -14,6 +14,8 @@ This release improves historical loan correction workflows, audit visibility, an
 - **New Feature**: Multi-type transaction selection (Disbursal, Top-up, Principal, Interest) to the Special Loan Audit Ledger using interactive toggle chips.
 - **New Feature**: Full Mobile Responsiveness — Added horizontal scrolling for tables and adaptive grids for metric cards.
 - **New Feature**: Added a footer to the Audit Ledger table showing the sum of Amount, Principal, and Interest for filtered transactions.
+- **New Feature**: Dynamic Interest Rate Schedule — Define historical or future rate overrides in Settings.
+- **New Enhancement**: Automated Rate Selection — The Legacy Importer and manual Special Loans screen now auto-suggest rates based on the disbursal date.
 - The ledger modal now supports direct `Download Ledger` CSV export per member.
 - Audit Log History has been moved into its own tab.
 - Audit Log History is now restricted to `Admin` users only. Operators and viewers cannot see or open it.

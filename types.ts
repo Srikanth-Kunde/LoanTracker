@@ -98,6 +98,13 @@ export interface LoanRepayment {
   createdAt?: string;
 }
 
+export interface InterestRateRule {
+  id: string;
+  label: string;
+  endDate?: string;        // If null, it's the current/ongoing rule
+  rate: number;
+}
+
 export interface SocietySettings {
   societyName: string;
   loanProcessingFee?: number;
@@ -109,4 +116,5 @@ export interface SocietySettings {
   themeMode?: ThemeMode;
   accentColor?: AccentColor;
   bannerImage?: string;
+  interestRateRules?: InterestRateRule[];
 }

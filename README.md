@@ -21,6 +21,7 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Closed Loan Correction Workflow:** Editing a historical loan amount can now surface any remaining principal gap and optionally record the balancing principal payment immediately.
 *   **Legacy Member ID Correction:** Member IDs can now be corrected from the Members edit screen while automatically remapping linked borrower and surety references.
 *   **Legacy Data Importer:** Paste multiple rows directly from Excel/Google Sheets to auto-generate member profiles, loans, top-ups, and repayments with a dry-run preview.
+*   **Dynamic Interest Rate Schedule:** Define historical or future rate overrides in Settings that apply automatically during data entry.
 *   **Safe Loan Closure Validation:** A loan can only be closed when the selected close date has zero outstanding principal and no later principal-affecting activity.
 *   **Audit Report Principal Breakdown:** The Audit Report now shows `Original Loan Disbursed` in the top cards, member balance table, and Full Audit CSV for cleaner reconciliation.
 *   **Audit Report Table Cleanup:** The member balance table now shows the original loan start date instead of a status badge so the visible columns stay calculation-focused.
@@ -97,7 +98,8 @@ The application requires a specific schema and security configuration to functio
 - **Yes, if your database was created before the latest ledger hardening update, rerun `migration.sql`.**
 - `migration.sql` now adds new repayment allocation columns, audit-log compatibility columns, repayment validation constraints, and date-validation triggers.
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
-- **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors. The latest migration upgrades the member-linked loan foreign keys to `ON UPDATE CASCADE`.
+- **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors.
+- **Dynamic Interest Rates Release**: Rerun/Paste `sql/interest_rules_migration.sql`. This adds the `interest_rate_rules` JSONB column to `app_settings` for date-based interest logic.
 - The most recent UI fixes such as member-ID editing from the frontend, close-date validation against future top-ups/repayments, and the Audit Report `Original Loan Disbursed` view are application-layer changes on top of the existing schema.
 - The script remains **idempotent** and is safe to rerun from the Supabase SQL Editor.
 - **Legacy table removal**: `migration.sql` now drops the obsolete `payments` table because it is no longer part of the live product.
@@ -114,6 +116,7 @@ If you want to verify that your database is already on the required schema, thes
 - `audit_logs.performed_by`
 - `audit_logs.record_id`
 - `audit_logs.details`
+- `app_settings.interest_rate_rules`
 
 If you also need direct manual SQL edits of `members.id`, the `loans_member_id_fkey`, `loans_surety1_id_fkey`, and `loans_surety2_id_fkey` constraints should include `ON UPDATE CASCADE`.
 

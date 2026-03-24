@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import { useFinancials } from '../context/FinancialContext';
 import { useMembers } from '../context/MemberContext';
+import { useSettings } from '../context/SettingsContext';
 import { Member, Loan, LoanStatus, LoanType, PaymentMethod } from '../types';
 import { normalizeISODate } from '../utils/date';
+import { getInterestRateForDate } from '../utils/interest';
 import { logger } from '../utils/logger';
 import { supabase } from '../supabaseClient';
 
@@ -37,6 +39,7 @@ interface ImportRow {
 
 export const ImportData: React.FC = () => {
   const { members, addMember } = useMembers();
+  const { settings } = useSettings();
   const { loans, createLoan, addLoanTopup, recordLoanRepayment } = useFinancials();
   const [pasteContent, setPasteContent] = useState('');
   const [parsedRows, setParsedRows] = useState<ImportRow[]>([]);
@@ -51,19 +54,7 @@ export const ImportData: React.FC = () => {
 
   const parseImportDate = (dateStr: string): string => {
     if (!dateStr) return '';
-    const clean = dateStr.trim();
-    // Handle MM-YYYY (e.g. 01-2013)
-    if (clean.match(/^\d{1,2}-\d{4}$/)) {
-      const [m, y] = clean.split('-');
-      return `${y}-${m.padStart(2, '0')}-01`;
-    }
-    // Handle DD-MM-YYYY
-    if (clean.match(/^\d{1,2}-\d{1,2}-\d{4}$/)) {
-      const [d, m, y] = clean.split('-');
-      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-    }
-    // Fallback to generic normalizer
-    return normalizeISODate(clean);
+    return normalizeISODate(dateStr.trim());
   };
 
   const cleanAmount = (val: string): number => {
@@ -246,7 +237,7 @@ export const ImportData: React.FC = () => {
           await createLoan({
             memberId: currentMemberId!,
             principalAmount: row.debit,
-            interestRate: 2, // Default 2%
+            interestRate: getInterestRateForDate(row.date, settings),
             startDate: row.date,
             status: LoanStatus.ACTIVE,
             type: LoanType.SPECIAL,
@@ -259,7 +250,7 @@ export const ImportData: React.FC = () => {
             await addLoanTopup({
               loanId: currentLoanId,
               amount: row.debit,
-              rate: 2, // Default
+              rate: getInterestRateForDate(row.date, settings),
               date: row.date,
               notes: row.narration
             });

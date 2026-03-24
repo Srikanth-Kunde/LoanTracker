@@ -20,6 +20,7 @@ import { Modal } from '../components/ui/Modal';
 import { Card } from '../components/ui/Card';
 import { LoanCalculator } from '../components/LoanCalculator';
 import { compareISODate, formatDisplayDate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp, parseISODateParts } from '../utils/date';
+import { getInterestRateForDate } from '../utils/interest';
 import {
     getAutoGenerationStopDate,
     buildLoanLedger,
@@ -144,6 +145,21 @@ const SpecialLoans: React.FC = () => {
     const [ledgerSearchTerm, setLedgerSearchTerm] = useState('');
     const [ledgerTypeFilters, setLedgerTypeFilters] = useState<string[]>([]);
     const [ledgerSortConfig, setLedgerSortConfig] = useState<{ key: 'DATE' | 'AMOUNT', direction: 'ASC' | 'DESC' }>({ key: 'DATE', direction: 'ASC' });
+
+    // Sync rates with dates based on rules
+    React.useEffect(() => {
+        if (createForm.date) {
+            const autoRate = getInterestRateForDate(createForm.date, settings);
+            setCreateForm(prev => ({ ...prev, rate: autoRate.toString() }));
+        }
+    }, [createForm.date, settings]);
+
+    React.useEffect(() => {
+        if (topupForm.date) {
+            const autoRate = getInterestRateForDate(topupForm.date, settings);
+            setTopupForm(prev => ({ ...prev, rate: autoRate.toString() }));
+        }
+    }, [topupForm.date, settings]);
 
     const roundCurrency = (amount: number) => Math.round(amount * 100) / 100;
     const escapeCsvValue = (value: string | number | null | undefined) => {

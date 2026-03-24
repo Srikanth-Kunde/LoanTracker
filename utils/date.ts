@@ -5,21 +5,29 @@ export const parseISODateParts = (dateStr: string) => {
   const clean = dateStr.split('T')[0].trim();
   const parts = clean.split(/[-/]/);
   
-  if (parts.length !== 3) {
+  if (parts.length < 2 || parts.length > 3) {
     throw new Error(`Invalid date format: ${dateStr}`);
   }
 
   let year: number, month: number, day: number;
 
-  // Detect format by checking where the 4-digit year is
-  if (parts[0].length === 4) {
+  if (parts.length === 2) {
+    // Treat as MM-YYYY or YYYY-MM
+    if (parts[1].length === 4) {
+      month = Number(parts[0]);
+      year = Number(parts[1]);
+    } else {
+      year = Number(parts[0]);
+      month = Number(parts[1]);
+    }
+    day = 1;
+  } else if (parts[0].length === 4) {
     // Treat as YYYY-MM-DD
     year = Number(parts[0]);
     month = Number(parts[1]);
     day = Number(parts[2]);
   } else if (parts[2].length === 4) {
     // Treat as DD-MM-YYYY or MM-DD-YYYY
-    // Our system assumes Indian format DD-MM-YYYY for legacy manual data
     day = Number(parts[0]);
     month = Number(parts[1]);
     year = Number(parts[2]);
