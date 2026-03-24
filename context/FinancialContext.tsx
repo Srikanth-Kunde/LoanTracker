@@ -329,7 +329,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       interest_days: r.interestDays ?? null,
       interest_calculation_type: r.interestCalculationType ?? 'MONTHLY',
       method: r.method,
-      notes: r.notes
+      notes: r.notes,
+      entry_type: r.principalPaid > 0 ? 'REPAYMENT' : 'INTEREST'
     }));
 
     repayments.forEach((r, idx) => {

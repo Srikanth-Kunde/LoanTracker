@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS loan_repayments (
     interest_calculation_type TEXT DEFAULT 'MONTHLY',
     method TEXT,
     notes TEXT,
+    entry_type TEXT DEFAULT 'REPAYMENT',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
