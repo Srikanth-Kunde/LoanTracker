@@ -1,3 +1,12 @@
+**v1.1.6 — Start Month Interest Calculation Fix**
+
+This release fixes an issue where interest was incorrectly calculated for the loan's start month (partial month).
+
+- **Start Month Interest Fix**: Fixed `getChargeableInterestPeriods` to skip the first partial month when calculating chargeable interest periods. For loans disbursed mid-month (e.g., November 10), the system now correctly starts charging interest from the following full month (December), rather than attempting to charge full month's interest for a partial month. This aligns with standard interest-in-arrears accounting.
+- **No Database Schema Changes**: This is purely a frontend calculation fix.
+
+---
+
 **v1.1.5 — Interest Generation & TypeScript Fixes**
 
 This release fixes a TypeScript type error and improves the interest auto-generation logic to correctly handle loans with zero-balance gaps before top-ups.

@@ -210,6 +210,8 @@ DELETE FROM members WHERE id = 'sample_ajay';
 
 ### Latest Changes
 
+*   **Start Month Interest Calculation Fix**: Fixed `getChargeableInterestPeriods` to skip the first partial month when calculating chargeable interest periods. For loans disbursed mid-month (e.g., November 10), the system now correctly starts charging interest from the following full month (December), rather than attempting to charge full month's interest for a partial month. This aligns with standard interest-in-arrears accounting.
+
 *   **Ledger Hardening Update**: Added a shared event-driven calculation engine to keep monthly dues, arrears detection, running balances, auto-generation, and reporting on the same rule set.
 *   **Explicit Interest Settlement Periods**: Repayment rows can now store `interest_for_month` and `interest_for_year`, allowing operators to record “December interest paid in January” without distorting ledger history.
 *   **Principal-Only Repayment Fix**: Principal recoveries no longer mark a month as “interest collected”, which fixes a major historical-entry bug for voluntary part-payments.

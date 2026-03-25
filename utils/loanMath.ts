@@ -335,9 +335,9 @@ const getChargeableInterestPeriods = (
     }
   }
 
-  // Start from the month the loan began (or first topup for active loans with zero balance gaps)
-  // If it's the very first month, getInterestDueForPeriod will pull from the initial disbursal amount.
-  let cursor = { ...effectiveStartPeriod };
+  // Start from the month AFTER the loan began (or first topup for active loans with zero balance gaps)
+  // Skip the first partial month - interest for the month of disbursal is charged in the following month
+  let cursor = getNextPeriod(effectiveStartPeriod);
   const periods: Array<InterestPeriod & {
     interestDue: number;
     openingOutstanding: number;
