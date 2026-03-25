@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Clipboard, 
-  CheckCircle2, 
-  AlertCircle, 
-  UploadCloud, 
-  Trash2, 
+import {
+  Clipboard,
+  CheckCircle2,
+  AlertCircle,
+  UploadCloud,
+  Trash2,
   ArrowRight,
   UserPlus,
   Zap,
@@ -44,6 +44,8 @@ export const ImportData: React.FC = () => {
   const [pasteContent, setPasteContent] = useState('');
   const [parsedRows, setParsedRows] = useState<ImportRow[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importProgressLabel, setImportProgressLabel] = useState('');
   const [importStep, setImportStep] = useState<'INPUT' | 'PREVIEW' | 'SUCCESS'>('INPUT');
   const [importSummary, setImportSummary] = useState({
     members: 0,
@@ -69,26 +71,26 @@ export const ImportData: React.FC = () => {
     const membersInImport = new Set<string>();
     const newlyDiscoveredMembers = new Set<string>();
     const rows: ImportRow[] = [];
-    
+
     lines.forEach((line, idx) => {
       // 1. Split by tabs first (primary Excel/Web format delimiter)
       let rawCols = line.split('\t');
-      
+
       // If no tabs, try commas
       if (rawCols.length < 5) {
-         rawCols = line.split(',');
+        rawCols = line.split(',');
       }
-      
+
       // If still no tabs or commas, try 2+ spaces as a last resort
       if (rawCols.length < 5) {
-         rawCols = line.split(/ {2,}/);
+        rawCols = line.split(/ {2,}/);
       }
-      
+
       // 2. Trim and filter out completely empty cols
       const cols = rawCols.map(c => c.trim()).filter(c => c !== '');
-      
+
       if (cols.length < 5) return; // Skip invalid rows
-      
+
       // Skip headers
       const col1 = (cols[0] || '').toLowerCase();
       const col2 = (cols[1] || '').toLowerCase();
@@ -98,20 +100,20 @@ export const ImportData: React.FC = () => {
         // 3. Robust Column Identification by pivoting on the Voucher type
         // This handles cases where S.No or Member ID might be missing or merged.
         const vIdx = cols.findIndex(c => {
-            const lc = c.toLowerCase();
-            return lc === 'loan' || lc === 'payment';
+          const lc = c.toLowerCase();
+          return lc === 'loan' || lc === 'payment';
         });
 
         if (vIdx === -1 || vIdx < 1) return; // Need at least something before the voucher (Date or Name)
 
         let voucher = cols[vIdx]; // "Loan" or "Payment"
         let isLoan = voucher.toLowerCase() === 'loan';
-        
+
         // Narrative is usually after the amount
         let narration = cols[vIdx + 2] || '';
         if (!narration && cols[vIdx + 1] && !cols[vIdx + 1].includes('₹') && isNaN(Number(cols[vIdx + 1].replace(/[₹,]/g, '')))) {
-            // If col+1 doesn't look like an amount, maybe it's the narration?
-            // But usually Amount is always there.
+          // If col+1 doesn't look like an amount, maybe it's the narration?
+          // But usually Amount is always there.
         }
 
         let amountStr = cols[vIdx + 1] || '';
@@ -122,35 +124,35 @@ export const ImportData: React.FC = () => {
         let memberName = cols[vIdx - 1] || '';
         let memberId = vIdx >= 2 ? cols[vIdx - 2] : '';
         let dateStr = vIdx >= 3 ? cols[vIdx - 3] : (vIdx === 2 ? cols[0] : '');
-        
+
         // If vIdx was 2, it means: [Date, Name, Voucher]
         // If vIdx was 3, it means: [Date, ID, Name, Voucher]
         // If vIdx was 4, it means: [SNo, Date, ID, Name, Voucher]
-        
+
         // Let's refine the backwards mapping based on common patterns
         let date = '';
         let sno = '';
 
         if (vIdx === 1) {
-            // [Date/Name?, Voucher] -> Too sparse, but let's try
-            date = parseImportDate(cols[0]);
-            memberName = 'Unknown'; 
+          // [Date/Name?, Voucher] -> Too sparse, but let's try
+          date = parseImportDate(cols[0]);
+          memberName = 'Unknown';
         } else if (vIdx === 2) {
-            // [Date, Name, Voucher]
-            date = parseImportDate(cols[0]);
-            memberName = cols[1];
-            memberId = '';
+          // [Date, Name, Voucher]
+          date = parseImportDate(cols[0]);
+          memberName = cols[1];
+          memberId = '';
         } else if (vIdx === 3) {
-            // [Date, ID, Name, Voucher]
-            date = parseImportDate(cols[0]);
-            memberId = cols[1];
-            memberName = cols[2];
+          // [Date, ID, Name, Voucher]
+          date = parseImportDate(cols[0]);
+          memberId = cols[1];
+          memberName = cols[2];
         } else if (vIdx >= 4) {
-            // [SNo, Date, ID, Name, Voucher]
-            sno = cols[0];
-            date = parseImportDate(cols[1]);
-            memberId = cols[2];
-            memberName = cols[3];
+          // [SNo, Date, ID, Name, Voucher]
+          sno = cols[0];
+          date = parseImportDate(cols[1]);
+          memberId = cols[2];
+          memberName = cols[3];
         }
 
         const row: ImportRow = {
@@ -175,11 +177,11 @@ export const ImportData: React.FC = () => {
 
         // Map member
         const memberKey = (row.memberId || row.memberName || '').toLowerCase();
-        const existingMember = members.find(m => 
-          (row.memberId && m.id === row.memberId) || 
+        const existingMember = members.find(m =>
+          (row.memberId && m.id === row.memberId) ||
           (row.memberName && m.name.toLowerCase() === row.memberName.toLowerCase())
         );
-        
+
         if (existingMember) {
           row.mappedMemberId = existingMember.id;
         } else if (memberKey && !newlyDiscoveredMembers.has(memberKey)) {
@@ -224,6 +226,9 @@ export const ImportData: React.FC = () => {
 
   const handleCommit = async () => {
     setIsProcessing(true);
+    setImportProgress(0);
+    setImportProgressLabel('Starting import...');
+
     let memberCount = 0;
     let loanCount = 0;
     let topupCount = 0;
@@ -233,8 +238,31 @@ export const ImportData: React.FC = () => {
     const loanMap = new Map<string, string>();   // MemberKey -> New Loan ID
 
     try {
+      const totalRows = parsedRows.filter(r => r.status !== 'INVALID' && r.action !== 'SKIP').length;
+
+      // Guard against empty import
+      if (totalRows === 0) {
+        setImportProgress(100);
+        setImportProgressLabel('No valid rows to import');
+        setIsProcessing(false);
+        return;
+      }
+
+      let processedRows = 0;
+
       for (const row of parsedRows) {
         if (row.status === 'INVALID' || row.action === 'SKIP') continue;
+
+        // Update progress every 5 rows
+        processedRows++;
+        if ((processedRows - 1) % 5 === 0) {
+          const progress = Math.min(90, Math.round((processedRows / totalRows) * 90));
+          setImportProgress(progress);
+          setImportProgressLabel(`Processing row ${processedRows} of ${totalRows}...`);
+        }
+
+        // Small delay between records to prevent DB overload
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         let currentMemberId = row.mappedMemberId;
         const memberKey = (row.memberId || row.memberName).toLowerCase();
@@ -261,10 +289,10 @@ export const ImportData: React.FC = () => {
         // 2. Ensure / Find Loan
         // Check local map first (loans created in this import)
         let currentLoanId = loanMap.get(memberKey);
-        
+
         // Fallback to existing active loans if not in current import
         if (!currentLoanId) {
-           currentLoanId = loans.find(l => l.memberId === currentMemberId && l.status === LoanStatus.ACTIVE)?.id;
+          currentLoanId = loans.find(l => l.memberId === currentMemberId && l.status === LoanStatus.ACTIVE)?.id;
         }
 
         if (row.action === 'CREATE_LOAN') {
@@ -284,8 +312,8 @@ export const ImportData: React.FC = () => {
 
           if (error) throw error;
           if (newLoan) {
-             loanMap.set(memberKey, newLoan.id);
-             loanCount++;
+            loanMap.set(memberKey, newLoan.id);
+            loanCount++;
           }
         } else if (row.action === 'ADD_TOPUP') {
           const targetLoanId = loanMap.get(memberKey) || currentLoanId;
@@ -306,7 +334,7 @@ export const ImportData: React.FC = () => {
               loanId: targetLoanId,
               date: row.date,
               amount: row.credit,
-              principalPaid: row.credit, 
+              principalPaid: row.credit,
               interestPaid: 0,
               method: PaymentMethod.CASH,
               notes: row.narration
@@ -316,6 +344,9 @@ export const ImportData: React.FC = () => {
         }
       }
 
+      setImportProgress(95);
+      setImportProgressLabel('Refreshing data...');
+
       setImportSummary({
         members: memberCount,
         loans: loanCount,
@@ -323,9 +354,13 @@ export const ImportData: React.FC = () => {
         repayments: repaymentCount
       });
       setImportStep('SUCCESS');
+      setImportProgress(100);
+      setImportProgressLabel('Import complete!');
     } catch (err) {
       logger.error('Import failed:', err);
       alert('Import failed! Check logs.');
+      setImportProgress(0);
+      setImportProgressLabel('');
     } finally {
       setIsProcessing(false);
     }
@@ -351,11 +386,11 @@ export const ImportData: React.FC = () => {
             Legacy Data Importer
           </h1>
           <p className="mt-2 text-slate-500 dark:text-slate-400 max-w-2xl">
-            Digitize your paper ledgers instantly. Copy rows from Excel and paste them below. 
+            Digitize your paper ledgers instantly. Copy rows from Excel and paste them below.
             The system will automatically link members, create loans, and record history.
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2 text-xs font-medium text-slate-400 uppercase tracking-wider">
           <ShieldCheck size={14} className="text-emerald-500" />
           Safe Sandbox Mode
@@ -380,7 +415,7 @@ export const ImportData: React.FC = () => {
                 ].map((step, i) => (
                   <li key={i} className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-400">
                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-600 dark:bg-primary-900/40 dark:text-primary-400 font-bold text-[10px]">
-                      {i+1}
+                      {i + 1}
                     </div>
                     <span>{step.text}</span>
                   </li>
@@ -416,7 +451,7 @@ export const ImportData: React.FC = () => {
                 </div>
               )}
             </div>
-            
+
             <div className="flex justify-end">
               <button
                 onClick={handleParsePaste}
@@ -498,15 +533,15 @@ export const ImportData: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 border-l border-slate-100 dark:border-slate-800">
                         {row.errors.length > 0 ? (
-                           <div className="flex items-center gap-1.5 text-rose-500 text-xs font-medium">
-                              <AlertCircle size={14} />
-                              {row.errors[0]}
-                           </div>
+                          <div className="flex items-center gap-1.5 text-rose-500 text-xs font-medium">
+                            <AlertCircle size={14} />
+                            {row.errors[0]}
+                          </div>
                         ) : (
                           <div className="flex items-center gap-1.5 text-emerald-500 text-xs font-medium">
-                              <CheckCircle2 size={14} />
-                              Ready
-                           </div>
+                            <CheckCircle2 size={14} />
+                            Ready
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -518,11 +553,11 @@ export const ImportData: React.FC = () => {
 
           <div className="flex items-center justify-between pt-4">
             <button
-               onClick={() => setImportStep('INPUT')}
-               className="flex items-center gap-2 rounded-2xl border border-slate-200 px-6 py-3 font-bold text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+              onClick={() => setImportStep('INPUT')}
+              className="flex items-center gap-2 rounded-2xl border border-slate-200 px-6 py-3 font-bold text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
             >
-               <Trash2 size={18} />
-               Discard & Restart
+              <Trash2 size={18} />
+              Discard & Restart
             </button>
 
             <button
@@ -533,6 +568,20 @@ export const ImportData: React.FC = () => {
               {isProcessing ? 'Writing to Ledger...' : 'Commit to Database'}
               {!isProcessing && <Zap size={18} className="fill-white" />}
             </button>
+            {isProcessing && (
+              <div className="mt-4">
+                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                  <span>{importProgressLabel}</span>
+                  <span>{importProgress}%</span>
+                </div>
+                <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary-500 transition-all duration-300 ease-out"
+                    style={{ width: `${importProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -544,7 +593,7 @@ export const ImportData: React.FC = () => {
           </div>
           <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-4">Import Successful!</h2>
           <p className="text-slate-500 dark:text-slate-400 max-w-md mb-8">
-            The legacy records have been successfully digitized and added to the audit ledger. 
+            The legacy records have been successfully digitized and added to the audit ledger.
             All interest calculations have been primed based on these historical milestones.
           </p>
 
@@ -563,21 +612,21 @@ export const ImportData: React.FC = () => {
           </div>
 
           <div className="flex gap-4">
-             <button
-               onClick={() => window.location.hash = '#/'}
-               className="rounded-2xl border border-slate-200 px-8 py-4 font-bold text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-             >
-               Go to Special Loans
-             </button>
-             <button
-               onClick={() => {
-                 setPasteContent('');
-                 setImportStep('INPUT');
-               }}
-               className="rounded-2xl bg-slate-900 px-8 py-4 font-bold text-white shadow-xl transition-all hover:bg-slate-800 dark:bg-primary-600 dark:hover:bg-primary-500"
-             >
-               Import More Data
-             </button>
+            <button
+              onClick={() => window.location.hash = '#/'}
+              className="rounded-2xl border border-slate-200 px-8 py-4 font-bold text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              Go to Special Loans
+            </button>
+            <button
+              onClick={() => {
+                setPasteContent('');
+                setImportStep('INPUT');
+              }}
+              className="rounded-2xl bg-slate-900 px-8 py-4 font-bold text-white shadow-xl transition-all hover:bg-slate-800 dark:bg-primary-600 dark:hover:bg-primary-500"
+            >
+              Import More Data
+            </button>
           </div>
         </div>
       )}

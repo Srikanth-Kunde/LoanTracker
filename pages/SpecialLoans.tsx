@@ -625,6 +625,8 @@ const SpecialLoans: React.FC = () => {
     }, [autoGenLoan, loanRepayments, loanTopups, getSpecialLoanOutstanding, settings, roundCurrency]);
 
     const [isGenerating, setIsGenerating] = useState(false);
+    const [generationProgress, setGenerationProgress] = useState(0);
+    const [generationProgressLabel, setGenerationProgressLabel] = useState('');
 
     const stats = useMemo(() => {
         const specialLoans = loans.filter(l => l.type === LoanType.SPECIAL && l.status === LoanStatus.ACTIVE);
@@ -1294,6 +1296,8 @@ const SpecialLoans: React.FC = () => {
     const handleGenerateInterest = async () => {
         if (isGenerating || !autoGenLoan) return;
         setIsGenerating(true);
+        setGenerationProgress(0);
+        setGenerationProgressLabel('Starting interest generation...');
         try {
             // 1. Snapshot the records from the memo to ensure we use what the user saw in preview
             const recordsToSave = [...autoGenPreview.records];
@@ -1301,11 +1305,35 @@ const SpecialLoans: React.FC = () => {
             const totalGenAmount = autoGenPreview.totalInterest;
 
             // 2. Cleanup stale/invalidRows first
+            setGenerationProgress(20);
             const cleanedCount = await cleanupInvalidLoanInterest(autoGenLoan.id);
+            setGenerationProgress(40);
 
-            // 3. Save new records
+            // 3. Save new records in smaller batches to reduce DB load
             if (recordsToSave.length > 0) {
-                await bulkRecordLoanRepayments(recordsToSave);
+                const batchSize = 10; // Smaller batches to reduce DB load
+
+                for (let i = 0; i < recordsToSave.length; i += batchSize) {
+                    const batch = recordsToSave.slice(i, i + batchSize);
+                    try {
+                        await bulkRecordLoanRepayments(batch);
+                    } catch (batchError) {
+                        // If a batch fails, note the partial success and report
+                        logger.error(`Batch failed during interest generation`, batchError);
+                        const totalBatches = Math.ceil(recordsToSave.length / batchSize);
+                        throw new Error(`Interest generation partially failed. Check console for details.`);
+                    }
+
+                    // Small delay between batches to prevent DB overload
+                    if (i + batchSize < recordsToSave.length) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+
+                    const progress = 40 + Math.min(50, Math.round(((i + batchSize) / recordsToSave.length) * 50));
+                    setGenerationProgress(progress);
+                }
+            } else {
+                setGenerationProgress(90);
             }
 
             log('BULK_RECORD_INTEREST', 'loan_repayments', autoGenLoan.id, {
@@ -1315,8 +1343,10 @@ const SpecialLoans: React.FC = () => {
             });
 
             // 4. Force a full refetch WITH loader to show the user the update is happening
+            setGenerationProgress(95);
             await fetchFinancials(true);
 
+            setGenerationProgress(100);
             alert(`SUCCESS: ${generationCount} interest records generated and ${cleanedCount} stale records cleaned.`);
             setModals({ ...modals, autoGen: false });
         } catch (error) {
@@ -1325,6 +1355,8 @@ const SpecialLoans: React.FC = () => {
             alert("Interest Generation Failed: " + e.message);
         } finally {
             setIsGenerating(false);
+            setGenerationProgress(0);
+            setGenerationProgressLabel('');
         }
     };
 
@@ -1951,6 +1983,20 @@ const SpecialLoans: React.FC = () => {
                             >
                                 {isGenerating ? "Processing..." : `Apply Auto-Fix (${autoGenPreview.months} new, ${autoGenPreview.staleInterestCount} clean)`}
                             </Button>
+                            {isGenerating && (
+                                <div className="mt-3">
+                                    <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                        <span>{generationProgressLabel || 'Generating interest...'}</span>
+                                        <span>{generationProgress}%</span>
+                                    </div>
+                                    <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-amber-500 transition-all duration-300 ease-out"
+                                            style={{ width: `${generationProgress}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
