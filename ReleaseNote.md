@@ -1,6 +1,15 @@
-**v1.1.6 — Principal Calculation Fixes**
+**v1.1.7 — Pagination & Ledger UI Enhancements**
 
-This release fixes issues where principal calculations were incorrect for imported legacy data.
+This release fixes a critical data truncation bug caused by API limits and introduces a cleaner, tabbed layout for the Special Loans Audit Ledger modal.
+
+- **Supabase 1000-Row Pagination Fix**: Upgraded the data-fetching architecture in `FinancialContext.tsx` to automatically paginate through Supabase limits, ensuring that massive datasets (like auto-generated historical interest spanning decades) are fully loaded into the ledger without silent truncation.
+- **Audit Ledger Separation (Tabs)**: The Special Loans eye-icon modal now features two tabs. "Transaction Summary" provides a clean, simplified data table with 5 high-level metric cards, while "Audit Ledger" houses the traditional, complex period-by-period computational logic.
+- **Member ID Search & Sort**: Added the ability to search by Member ID inside the Special Loans tab, along with new `Member ID (Asc)` and `Member ID (Desc)` dropdown sorting options.
+- **No Database Schema Changes**: This is a pure frontend UI and API query fix.
+
+---
+
+**v1.1.6 — Principal Calculation Fixes**
 
 - **Start Month Interest Calculation Fix**: Fixed `getChargeableInterestPeriods` to skip the first partial month when calculating chargeable interest periods. For loans disbursed mid-month (e.g., November 10), the system now correctly starts charging interest from the following full month.
 - **Principal Repaid Fallback Fix**: Fixed the "Principal Repaid" summary calculation to use the fallback formula (amount - interestPaid) when explicit principalPaid is missing. This ensures legacy imported data correctly reflects principal reductions even when the import didn't populate the principalPaid field.

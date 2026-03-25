@@ -210,6 +210,10 @@ DELETE FROM members WHERE id = 'sample_ajay';
 
 ### Latest Changes
 
+*   **Supabase 1000-Row Pagination Fix**: Replaced the default `.select('*')` database query inside `FinancialContext.tsx` with a recursive pagination fetch strategy. This strictly prevents silent row truncation when dealing with heavily back-filled imported data and auto-generated historical interest spanning decades.
+*   **Audit Ledger Tabs**: Reorganized the Special Loans eye-icon modal into explicit "Transaction Summary" and "Detailed Audit Ledger" tabs. The Transaction Summary view provides an operator-friendly breakdown of core metrics (Original Principal, Top-Ups, Repayments, Live Balance) and a beautifully simplified, summed transaction log displaying `Date`, `Voucher type`, and `Action badges`.
+*   **Member ID Search & Sorting**: Added the capability to directly search the Special Loans ledger by `Member ID` and logically sort the entire multi-member dashboard by ascending/descending Member ID values.
+
 *   **Principal Repaid Fallback Fix**: Fixed the "Principal Repaid" summary calculation in the Special Loans page to use the fallback formula (amount - interestPaid) when explicit principalPaid is missing. This ensures legacy imported data correctly reflects principal reductions even when the import didn't populate the principalPaid field.
 
 *   **Start Month Interest Calculation Fix**: Fixed `getChargeableInterestPeriods` to skip the first partial month when calculating chargeable interest periods.

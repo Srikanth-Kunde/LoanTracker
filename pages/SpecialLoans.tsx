@@ -69,7 +69,7 @@ const SpecialLoans: React.FC = () => {
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'CLOSED'>('ACTIVE');
-    const [sortOrder, setSortOrder] = useState<'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'NAME_DESC' | 'AMOUNT_DESC' | 'AMOUNT_ASC' | 'OUTSTANDING_DESC'>('DATE_DESC');
+    const [sortOrder, setSortOrder] = useState<'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'NAME_DESC' | 'AMOUNT_DESC' | 'AMOUNT_ASC' | 'OUTSTANDING_DESC' | 'MEMBER_ID_ASC' | 'MEMBER_ID_DESC'>('DATE_DESC');
 
     // Modals
     const [modals, setModals] = useState<{
@@ -145,6 +145,7 @@ const SpecialLoans: React.FC = () => {
     const [ledgerSearchTerm, setLedgerSearchTerm] = useState('');
     const [ledgerTypeFilters, setLedgerTypeFilters] = useState<string[]>([]);
     const [ledgerSortConfig, setLedgerSortConfig] = useState<{ key: 'DATE' | 'AMOUNT', direction: 'ASC' | 'DESC' }>({ key: 'DATE', direction: 'ASC' });
+    const [ledgerViewTab, setLedgerViewTab] = useState<'SUMMARY' | 'AUDIT'>('SUMMARY');
 
     // Sync rates with dates based on rules
     React.useEffect(() => {
@@ -560,8 +561,11 @@ const SpecialLoans: React.FC = () => {
             };
         }).filter(l =>
             l.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (l.memberId?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
             l.id.toLowerCase().includes(searchTerm.toLowerCase())
         ).sort((a, b) => {
+            if (sortOrder === 'MEMBER_ID_ASC') return (parseInt(a.memberId) || 0) - (parseInt(b.memberId) || 0) || a.memberId.localeCompare(b.memberId);
+            if (sortOrder === 'MEMBER_ID_DESC') return (parseInt(b.memberId) || 0) - (parseInt(a.memberId) || 0) || b.memberId.localeCompare(a.memberId);
             if (sortOrder === 'DATE_ASC') return compareISODate(a.startDate, b.startDate);
             if (sortOrder === 'DATE_DESC') return compareISODate(b.startDate, a.startDate);
             if (sortOrder === 'NAME_ASC') return a.memberName.localeCompare(b.memberName);
@@ -1435,7 +1439,7 @@ const SpecialLoans: React.FC = () => {
                 <div className="relative flex-1">
                     <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                     <Input
-                        placeholder="Search by member name..."
+                        placeholder="Search by name or member ID..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         className="pl-10"
@@ -1465,6 +1469,8 @@ const SpecialLoans: React.FC = () => {
                         <option value="DATE_ASC">Oldest First</option>
                         <option value="NAME_ASC">Name (A-Z)</option>
                         <option value="NAME_DESC">Name (Z-A)</option>
+                        <option value="MEMBER_ID_ASC">Member ID (Asc)</option>
+                        <option value="MEMBER_ID_DESC">Member ID (Desc)</option>
                         <option value="AMOUNT_DESC">Highest Amount</option>
                         <option value="OUTSTANDING_DESC">Highest Outstanding</option>
                     </select>
@@ -2003,33 +2009,111 @@ const SpecialLoans: React.FC = () => {
             </Modal>
 
             {/* LOAN DETAILS MODAL — Expanded width for ledger stability */}
-            <Modal isOpen={modals.history} onClose={() => setModals({ ...modals, history: false })} title="Special Loan Audit Ledger" maxWidth="4xl">
+            <Modal isOpen={modals.history} onClose={() => setModals({ ...modals, history: false })} title={`Ledger: ${activeLoan?.memberName}`} maxWidth="5xl">
                 {activeLoan && activeLoanSummary && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
-                            <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                                <p className="text-slate-400 text-[9px] uppercase font-bold mb-1">Original Principal</p>
-                                <p className="font-black text-slate-800 dark:text-white">{formatCurrency(activeLoan.principalAmount, settings.currency)}</p>
-                            </div>
-                            <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-100 dark:border-violet-800 text-center">
-                                <p className="text-violet-500 text-[9px] uppercase font-bold mb-1">Total Top-Ups</p>
-                                <p className="font-black text-violet-800 dark:text-violet-200">{formatCurrency(activeLoanSummary.topupsTotal, settings.currency)}</p>
-                            </div>
-                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 text-center">
-                                <p className="text-blue-500 text-[9px] uppercase font-bold mb-1">Principal Repaid</p>
-                                <p className="font-black text-blue-800 dark:text-blue-200">{formatCurrency(activeLoanSummary.principalRepaid, settings.currency)}</p>
-                            </div>
-                            <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800 text-center">
-                                <p className="text-emerald-500 text-[9px] uppercase font-bold mb-1">Interest Paid</p>
-                                <p className="font-black text-emerald-800 dark:text-emerald-200">{formatCurrency(activeLoanSummary.interestPaid, settings.currency)}</p>
-                            </div>
-                            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800 text-center shadow-inner">
-                                <p className="text-amber-600 text-[9px] uppercase font-bold mb-1">Live Balance</p>
-                                <p className="font-black text-xl text-amber-900 dark:text-amber-200">{formatCurrency(activeLoanSummary.liveBalance, settings.currency)}</p>
-                            </div>
+                        <div className="flex border-b border-slate-200 dark:border-slate-700 mb-4">
+                            <button
+                                className={`px-4 py-3 text-sm font-bold tracking-wide transition-colors ${ledgerViewTab === 'SUMMARY' ? 'border-b-2 border-emerald-500 text-emerald-700 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                                onClick={() => setLedgerViewTab('SUMMARY')}
+                            >
+                                Transaction Summary
+                            </button>
+                            <button
+                                className={`px-4 py-3 text-sm font-bold tracking-wide transition-colors ${ledgerViewTab === 'AUDIT' ? 'border-b-2 border-emerald-500 text-emerald-700 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                                onClick={() => setLedgerViewTab('AUDIT')}
+                            >
+                                Audit Ledger
+                            </button>
                         </div>
-
-                        <div className="space-y-4">
+                        
+                        {ledgerViewTab === 'SUMMARY' ? (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+                                    <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                                        <p className="text-slate-400 text-[9px] uppercase font-bold mb-1">Original Principal</p>
+                                        <p className="font-black text-slate-800 dark:text-white">{formatCurrency(activeLoan.principalAmount, settings.currency)}</p>
+                                    </div>
+                                    <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-100 dark:border-violet-800 text-center">
+                                        <p className="text-violet-500 text-[9px] uppercase font-bold mb-1">Total Top-Ups</p>
+                                        <p className="font-black text-violet-800 dark:text-violet-200">{formatCurrency(activeLoanSummary.topupsTotal, settings.currency)}</p>
+                                    </div>
+                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 text-center">
+                                        <p className="text-blue-500 text-[9px] uppercase font-bold mb-1">Principal Repaid</p>
+                                        <p className="font-black text-blue-800 dark:text-blue-200">{formatCurrency(activeLoanSummary.principalRepaid, settings.currency)}</p>
+                                    </div>
+                                    <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800 text-center">
+                                        <p className="text-emerald-500 text-[9px] uppercase font-bold mb-1">Interest Paid</p>
+                                        <p className="font-black text-emerald-800 dark:text-emerald-200">{formatCurrency(activeLoanSummary.interestPaid, settings.currency)}</p>
+                                    </div>
+                                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800 text-center shadow-inner">
+                                        <p className="text-amber-600 text-[9px] uppercase font-bold mb-1">Live Balance</p>
+                                        <p className="font-black text-xl text-amber-900 dark:text-amber-200">{formatCurrency(activeLoanSummary.liveBalance, settings.currency)}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm mt-4">
+                                    <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+                                        <table className="min-w-full text-xs">
+                                            <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">S.No</th>
+                                                    <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Date</th>
+                                                    <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Member</th>
+                                                    <th className="px-4 py-3 text-left font-bold text-slate-500 uppercase">Voucher</th>
+                                                    <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Debit (₹)</th>
+                                                    <th className="px-4 py-3 text-right font-bold text-slate-500 uppercase">Credit (₹)</th>
+                                                    <th className="px-4 py-3 text-center font-bold text-slate-500 uppercase">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                                {filteredLedgerTransactions.map((tx: any, idx: number) => (
+                                                    <tr key={`summary-${tx.id}`} className="hover:bg-slate-50 dark:hover:bg-slate-900/20 transition-colors">
+                                                        <td className="px-4 py-3 text-slate-500">{idx + 1}</td>
+                                                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatDisplayDate(tx.date)}</td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-bold text-slate-800 dark:text-white">{activeLoan.memberName}</div>
+                                                            <div className="text-[10px] text-slate-500">ID: {activeLoan.memberId}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                                                            {tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? 'Loan' : 'Payment'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-bold text-blue-600 dark:text-blue-400">
+                                                            {tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? formatCurrency(tx.amount || 0, settings.currency) : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                                                            {tx.entryType === 'REPAYMENT' ? formatCurrency((tx.principalPaid || 0) + (tx.interestPaid || 0) + (tx.lateFee || 0), settings.currency) : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            {tx.entryType === 'DISBURSAL' ? (
+                                                                <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-black text-[10px] tracking-wider uppercase">CREATE LOAN</span>
+                                                            ) : tx.entryType === 'TOPUP' ? (
+                                                                <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-700 font-black text-[10px] tracking-wider uppercase">ADD TOPUP</span>
+                                                            ) : (
+                                                                <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-black text-[10px] tracking-wider uppercase">ADD REPAYMENT</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot className="bg-slate-50 dark:bg-slate-900/50 sticky bottom-0 z-10 border-t border-slate-200 dark:border-slate-700">
+                                                <tr className="font-black">
+                                                    <td colSpan={4} className="px-4 py-3 text-right uppercase tracking-widest text-[10px] text-slate-500">Total</td>
+                                                    <td className="px-4 py-3 text-right text-blue-600 dark:text-blue-400">
+                                                        {formatCurrency(filteredLedgerTransactions.reduce((acc: number, tx: any) => acc + (tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? (tx.amount || 0) : 0), 0), settings.currency)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">
+                                                        {formatCurrency(filteredLedgerTransactions.reduce((acc: number, tx: any) => acc + (tx.entryType === 'REPAYMENT' ? ((tx.principalPaid || 0) + (tx.interestPaid || 0) + (tx.lateFee || 0)) : 0), 0), settings.currency)}
+                                                    </td>
+                                                    <td className="px-4 py-3 bg-white dark:bg-slate-800"></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                        <div className="space-y-4 pt-2">
                             <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-slate-50/50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
                                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest shrink-0">Transaction Audit Trail</h4>
 
@@ -2255,6 +2339,7 @@ const SpecialLoans: React.FC = () => {
                                 </div>
                             </div>
                         </div>
+                        )}
 
                         <div className="flex gap-3 pt-2">
                             <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setModals({ ...modals, history: false })}>Close Ledger</Button>

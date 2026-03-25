@@ -56,18 +56,35 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         setIsLoading(true);
       }
 
-      const [loansRes, repaymentsRes, topupsRes] = await Promise.all([
-        supabase.from('loans').select('*').order('created_at', { ascending: false }),
-        supabase.from('loan_repayments').select('*'),
-        supabase.from('loan_topups').select('*')
+      const fetchAll = async (table: string, orderCol?: string) => {
+        let allData: any[] = [];
+        let hasMore = true;
+        let from = 0;
+        const step = 1000;
+        while (hasMore) {
+          let query = supabase.from(table).select('*').range(from, from + step - 1);
+          if (orderCol) query = query.order(orderCol, { ascending: false });
+          const { data, error } = await query;
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            if (data.length < step) hasMore = false;
+            else from += step;
+          } else {
+            hasMore = false;
+          }
+        }
+        return allData;
+      };
+
+      const [loansData, repaymentsData, topupsData] = await Promise.all([
+        fetchAll('loans', 'created_at'),
+        fetchAll('loan_repayments'),
+        fetchAll('loan_topups')
       ]);
 
-      if (loansRes.error) throw loansRes.error;
-      if (repaymentsRes.error) throw repaymentsRes.error;
-      if (topupsRes.error) throw topupsRes.error;
-
-      if (loansRes.data) {
-        setLoans((loansRes.data as any[]).map(l => ({
+      if (loansData) {
+        setLoans(loansData.map((l: any) => ({
           id: l.id,
           memberId: l.member_id,
           principalAmount: Number(l.principal_amount),
@@ -88,11 +105,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         })));
       }
 
-      if (repaymentsRes.error) {
-        console.error('ERROR: repayments fetch failed', repaymentsRes.error);
-      }
-      if (repaymentsRes.data) {
-        setLoanRepayments((repaymentsRes.data as any[]).map(r => {
+      if (repaymentsData) {
+        setLoanRepayments(repaymentsData.map((r: any) => {
           const amt = Number(r.amount || 0);
           const iPaid = Number(r.interest_paid || 0);
           const pPaid = Number(r.principal_paid ?? Math.max(0, amt - iPaid));
@@ -116,11 +130,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
         }));
       }
 
-      if (topupsRes.error) {
-        console.error('ERROR: topups fetch failed', topupsRes.error);
-      }
-      if (topupsRes.data) {
-        setLoanTopups((topupsRes.data as any[]).map(t => ({
+      if (topupsData) {
+        setLoanTopups(topupsData.map((t: any) => ({
           id: t.id,
           loanId: t.loan_id,
           amount: Number(t.amount),

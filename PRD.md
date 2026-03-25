@@ -49,9 +49,10 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   The Audit Report summary cards and member-balance table must display `Original Loan Disbursed` separately from top-ups so operators can visually reconcile `Original Principal + Top-Ups - Principal Recovered = Outstanding`.
 *   The member-balance table should prioritize calculation fields over profile-state fields, replacing status badges with the original loan start/disbursal date when space is limited.
 *   The audit ledger must expose a deterministic row-by-row running principal balance, even when multiple events occur on the same date.
-*   The Special Loan Audit Ledger must show live summary cards for original principal, top-ups, principal repaid, interest paid, and live balance.
+*   The Special Loan Audit Ledger must present data in two tabs: **Transaction Summary** (featuring live summary cards for original principal, top-ups, principal repaid, interest paid, live balance alongside a simplified Action voucher table) and **Detailed Audit Ledger** (the full chronological calculation trail).
 *   **Web & Mobile Compatibility**: All financial tables must be horizontally scrollable on small screens using `overflow-x-auto`. Metric grids must adapt to single or double-column layouts on mobile viewports.
 *   **Integrated Search & Filter**: The audit ledger modal must provide real-time search (by notes/period) and transaction-type filtering.
+*   **Member ID Search & Sorting**: The overall Special Loans view must allow searching by Member ID as well as sorting by Ascending or Descending Member IDs.
 *   **Audit Ledger Sorting**: Operators can sort transactions by Date or Amount (Ascending/Descending) for easier reconciliation.
 *   **Top-up Recording Edit**: Existing top-up records can be edited directly from the audit ledger to correct historical entry errors.
 *   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
@@ -111,6 +112,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 
 #### Data Flow (FinancialContext)
 *   All calculations are derived dynamically on the client side from the Supabase tables.
+*   **Pagination Resiliency**: API requests to `loans`, `loan_repayments`, and `loan_topups` strictly use a `.range()` pagination loop to defeat Supabase's mandatory 1,000-row limit. This ensures the comprehensive history of operations correctly reaches the UI engine.
 *   `getSpecialLoanOutstanding(loanId, asOfDate?)`: Calculates the exact principal balance by netting the original principal, top-ups up to the date, and principal repayments up to the date.
 *   Shared loan math utilities now drive arrears detection, current-month due, auto-generation, running balances, and interest-settlement status from the same event model.
 *   Shared loan math utilities also validate whether a loan can be closed on a selected date by checking both outstanding principal at that date and any future principal-affecting activity.
