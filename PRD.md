@@ -137,6 +137,7 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 
 #### 5.4. Interest Calculation Fixes
 *   **Start Month Partial Month Fix**: Fixed `getChargeableInterestPeriods` in `utils/loanMath.ts` to skip the first partial month when calculating chargeable interest periods. For loans disbursed mid-month (e.g., November 10), the system now correctly starts charging interest from the following full month (December), rather than attempting to charge full month's interest for a partial month. This aligns with standard interest-in-arrears accounting where interest for the partial first month is rolled into the following period's billing.
+*   **Principal Repaid Fallback Fix**: Fixed the "Principal Repaid" summary calculation in `pages/SpecialLoans.tsx` to use the fallback formula (amount - interestPaid) when explicit principalPaid is missing. This ensures legacy imported data correctly reflects principal reductions even when the import didn't populate the principalPaid field.
 *   **Zero-Balance Gap Fix**: Fixed interest auto-generation to properly calculate periods from loan start date, only skipping actual zero-balance periods before top-ups.
 *   **TypeScript Property Fix**: Corrected `loan_id` → `loanId` in loanMath.ts to match the LoanRepayment type definition.
 *   **No Database Schema Changes Required**: All fixes are purely frontend calculation changes.

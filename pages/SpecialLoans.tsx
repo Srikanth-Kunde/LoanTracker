@@ -406,7 +406,14 @@ const SpecialLoans: React.FC = () => {
             .reduce((sum, topup) => sum + Number(topup.amount || 0), 0);
         const principalRepaid = loanRepayments
             .filter(r => r.loanId === activeLoan.id)
-            .reduce((sum, repayment) => sum + Number(repayment.principalPaid || 0), 0);
+            .reduce((sum, repayment) => {
+                const explicitPrincipal = Number(repayment.principalPaid || 0);
+                // Fallback: if principalPaid is missing, calculate from amount - interestPaid
+                const calculatedPrincipal = explicitPrincipal > 0
+                    ? explicitPrincipal
+                    : Math.max(0, Number(repayment.amount || 0) - Number(repayment.interestPaid || 0));
+                return sum + calculatedPrincipal;
+            }, 0);
         const interestPaid = loanRepayments
             .filter(r => r.loanId === activeLoan.id)
             .reduce((sum, repayment) => sum + Number(repayment.interestPaid || 0), 0);
@@ -428,7 +435,14 @@ const SpecialLoans: React.FC = () => {
             .reduce((sum, topup) => sum + Number(topup.amount || 0), 0);
         const principalRecovered = loanRepayments
             .filter(r => r.loanId === activeLoan.id)
-            .reduce((sum, repayment) => sum + Number(repayment.principalPaid || 0), 0);
+            .reduce((sum, repayment) => {
+                const explicitPrincipal = Number(repayment.principalPaid || 0);
+                // Fallback: if principalPaid is missing, calculate from amount - interestPaid
+                const calculatedPrincipal = explicitPrincipal > 0
+                    ? explicitPrincipal
+                    : Math.max(0, Number(repayment.amount || 0) - Number(repayment.interestPaid || 0));
+                return sum + calculatedPrincipal;
+            }, 0);
         const rawRemaining = roundCurrency(revisedPrincipal + topupsTotal - principalRecovered);
 
         return {

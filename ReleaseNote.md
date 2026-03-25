@@ -1,8 +1,9 @@
-**v1.1.6 — Start Month Interest Calculation Fix**
+**v1.1.6 — Principal Calculation Fixes**
 
-This release fixes an issue where interest was incorrectly calculated for the loan's start month (partial month).
+This release fixes issues where principal calculations were incorrect for imported legacy data.
 
-- **Start Month Interest Fix**: Fixed `getChargeableInterestPeriods` to skip the first partial month when calculating chargeable interest periods. For loans disbursed mid-month (e.g., November 10), the system now correctly starts charging interest from the following full month (December), rather than attempting to charge full month's interest for a partial month. This aligns with standard interest-in-arrears accounting.
+- **Start Month Interest Calculation Fix**: Fixed `getChargeableInterestPeriods` to skip the first partial month when calculating chargeable interest periods. For loans disbursed mid-month (e.g., November 10), the system now correctly starts charging interest from the following full month.
+- **Principal Repaid Fallback Fix**: Fixed the "Principal Repaid" summary calculation to use the fallback formula (amount - interestPaid) when explicit principalPaid is missing. This ensures legacy imported data correctly reflects principal reductions even when the import didn't populate the principalPaid field.
 - **No Database Schema Changes**: This is purely a frontend calculation fix.
 
 ---
