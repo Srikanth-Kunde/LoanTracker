@@ -1,3 +1,14 @@
+**v1.1.5 — Interest Generation & TypeScript Fixes**
+
+This release fixes a TypeScript type error and improves the interest auto-generation logic to correctly handle loans with zero-balance gaps before top-ups.
+
+- **TypeScript Property Fix**: Corrected `loan_id` → `loanId` in loanMath.ts to match the LoanRepayment type definition, fixing the "Property 'loan_id' does not exist" error.
+- **Zero-Balance Gap Fix**: Fixed interest auto-generation to properly calculate periods from loan start date, only skipping actual zero-balance periods before top-ups. Previously, the code incorrectly skipped ALL periods before a top-up, causing missing interest for loans that had principal payments before the top-up.
+- **Duplicate Record Prevention**: The auto-generator now correctly identifies the full interest period range. Manual cleanup of existing duplicate records may be required via SQL.
+- **No Database Schema Changes**: This is purely a frontend calculation fix.
+
+---
+
 **v1.1.4 — Ledger Display & Import Integrity**
 
 This release fixes a display bug in the loan ledger that caused principal/top-up mismatch confusion after importing legacy data, and improves the Auto-Generate Interest engine to resume after Top-ups.

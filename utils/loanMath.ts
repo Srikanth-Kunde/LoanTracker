@@ -315,16 +315,22 @@ const getChargeableInterestPeriods = (
   const stopPeriod = getInterestPeriodFromDate(stopDate);
 
   // For active loans with top-ups, find the first top-up date to start from
-  // This handles the case where loan had zero balance but was topped up later
+  // BUT only skip the zero-balance gap, not all periods before top-up
   let effectiveStartPeriod = startPeriod;
   const firstTopup = topups
     .filter(t => t.loanId === loan.id)
     .sort((a, b) => compareISODate(a.date, b.date))[0];
 
-  if (firstTopup && loan.status === LoanStatus.ACTIVE) {
+  // Get the zero-balance date to know if there was a gap
+  const zeroBalanceDate = getSustainedZeroBalanceDate(loan, topups, repayments);
+
+  // Only adjust start if there was a zero-balance gap AND a top-up after it
+  if (firstTopup && zeroBalanceDate) {
+    const zeroBalancePeriod = getInterestPeriodFromDate(zeroBalanceDate);
     const topupPeriod = getInterestPeriodFromDate(firstTopup.date);
-    // Start from the month of first topup (or start, whichever is later)
-    if (comparePeriods(topupPeriod, startPeriod) > 0) {
+
+    // If top-up is after zero-balance, start from top-up
+    if (comparePeriods(topupPeriod, zeroBalancePeriod) > 0) {
       effectiveStartPeriod = topupPeriod;
     }
   }
