@@ -7,7 +7,7 @@ import { logger } from '../utils/logger';
 import {
   normalizeISODate
 } from '../utils/date';
-import { getInvalidInterestRepayments, getSpecialLoanOutstandingFromEvents, validateLoanCanCloseOnDate } from '../utils/loanMath';
+import { getInvalidInterestRepayments, getSpecialLoanOutstandingFromEvents, validateLoanCanCloseOnDate, getMissingInterestPeriods } from '../utils/loanMath';
 
 interface FinancialContextType {
   loans: Loan[];
@@ -555,9 +555,6 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       if (onProgress) {
         onProgress(Math.floor((processedCount / activeLoans.length) * 20), `Analyzing ${loan.memberId}...`);
       }
-
-      // We need util/loanMath.getMissingInterestPeriods
-      const { getMissingInterestPeriods } = await import('../utils/loanMath');
 
       const missingPeriods = getMissingInterestPeriods(
         loan,

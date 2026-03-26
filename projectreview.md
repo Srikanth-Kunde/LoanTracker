@@ -12,6 +12,7 @@ The LoanTracker system is now a production-grade financial tool specialized for 
     - Database triggers in `migration.sql` prevent invalid back-dated entries and negative values.
     - RLS Policies ensure secure data access for the `anon` role.
 - **Scalability**: Pagination fixes (v1.1.7) and Batch Processing (v1.1.8) ensure the system can handle large historical datasets without database timeouts or UI crashes.
+- **Build Optimization**: Resolved 'Mixed Static and Dynamic Import' warnings in `FinancialContext.tsx` by consolidating all `loanMath` utilities into static imports, ensuring deterministic bundle chunking in Vite/Cloudflare environments.
 
 ## 3. Database & SQL Editor Requirements
 The following should be executed in the Supabase SQL Editor if they haven't been already:

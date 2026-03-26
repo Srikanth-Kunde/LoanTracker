@@ -5,6 +5,7 @@ This release introduces a powerful "Global Auto-Generate Interest" feature to st
 - **Global Interest Alignment**: A new "Zap All Missing Interest Periods" tool has been added to the Legacy Importer's success screen. It automatically scans all active loans for chronological gaps and fills them in one click, ensuring the entire portfolio is audit-ready immediately after a bulk import.
 - **High-Safety Batch Processing**: To prevent database timeouts and ensure stability, the global generator processes records in secure batches of 50. This allows the system to effortlessly handle thousands of years of missing interest across hundreds of members.
 - **Real-Time Progress Tracking**: Added a new progress architecture that provides live UI feedback (percentage and status labels) during both the analysis and insertion phases of the auto-generation process.
+- **Vite Build Optimization**: Consolidated static and dynamic imports for `loanMath.ts` to resolve build-time warnings and ensure efficient bundle chunking for Cloudflare/Vite deployments.
 - **No Database Schema Changes**: This is a frontend logic and API orchestration enhancement.
 
 ---
