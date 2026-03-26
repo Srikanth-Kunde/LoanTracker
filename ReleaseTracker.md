@@ -1,3 +1,13 @@
+**v1.2.2 — Audit Ledger Narration Fix**
+
+This patch ensures that historical interest rates are accurately reflected in audit narrations, synchronizing the ledger with the Global Interest Rate Schedule.
+
+- **Dynamic Historical Rate Narration**: Interest records in the CSV export now dynamically display the correct historical rate based on the target interest period (e.g., `@2%` pre-Oct 2015, `@1.5%` post-Oct 2015).
+- **Refined Top-up Narration**: Top-up entries now follow a consistent `Top-up N (@Rate%)` format, including chronological sequence numbers and historically accurate rates.
+- **Improved Math Synchronization**: Updated `buildLoanLedger` to calculate and store authoritative historical rates for every transaction row, Ensuring perfect alignment between the UI ledger and the CSV export.
+
+---
+
 **v1.2.1 — Special Loans Integrity & Audit Maintenance**
 
 This release focuses on data integrity, audit-ready reporting, and advanced repayment management.

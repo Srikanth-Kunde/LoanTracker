@@ -354,9 +354,10 @@ const SpecialLoans: React.FC = () => {
         return buildLoanLedger(
             activeLoan,
             loanTopups.filter(t => t.loanId === activeLoan.id),
-            loanRepayments.filter(r => r.loanId === activeLoan.id)
+            loanRepayments.filter(r => r.loanId === activeLoan.id),
+            settings
         );
-    }, [activeLoan, loanRepayments, loanTopups]);
+    }, [activeLoan, loanRepayments, loanTopups, settings]);
 
     const filteredLedgerTransactions = useMemo(() => {
         if (!activeLoanTransactions) return [];
@@ -1111,7 +1112,7 @@ const SpecialLoans: React.FC = () => {
             } else if (isTopup) {
                 vchType = 'Top-up';
                 tCount++;
-                narration = `Top-up ${tCount} (@${tx.amount ? (tx.rate || activeLoan.interestRate) : activeLoan.interestRate}%)`;
+                narration = `Top-up ${tCount} (@${tx.rate || activeLoan.interestRate}%)`;
             } else if (isRepayment) {
                 if ((tx.principalPaid || 0) > 0) {
                     vchType = 'Payment';
@@ -1120,7 +1121,7 @@ const SpecialLoans: React.FC = () => {
                 } else if ((tx.interestPaid || 0) > 0) {
                     vchType = 'Interest';
                     const periodStr = tx.interestPeriod ? ` (${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year})` : '';
-                    narration = `Interest @${activeLoan.interestRate}%${periodStr}`;
+                    narration = `Interest @${tx.rate || activeLoan.interestRate}%${periodStr}`;
                 } else {
                     vchType = 'Repayment';
                     narration = tx.notes || 'Repayment';

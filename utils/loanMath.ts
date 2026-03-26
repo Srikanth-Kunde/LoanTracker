@@ -167,7 +167,7 @@ export const getFuturePrincipalActivityAfterDate = (
 ): FuturePrincipalActivity[] => {
   const cutoff = normalizeISODate(closeDate);
 
-  return buildLoanLedger(loan, topups, repayments)
+  return buildLoanLedger(loan, topups, repayments, undefined) // No settings needed for future activity check
     .filter(row => compareISODate(row.date, cutoff) > 0)
     .filter(row =>
       row.entryType === 'TOPUP' ||
@@ -437,7 +437,8 @@ export const getInvalidInterestRepayments = (
 export const buildLoanLedger = (
   loan: Loan,
   topups: LoanTopup[],
-  repayments: LoanRepayment[]
+  repayments: LoanRepayment[],
+  settings?: SocietySettings
 ): LoanLedgerRow[] => {
   const rows: LoanLedgerRow[] = [{
     id: `loan:${loan.id}`,
@@ -476,25 +477,34 @@ export const buildLoanLedger = (
 
   repayments
     .filter(r => String(r.loanId) === String(loan.id))
-
     .forEach(repayment => {
+      const repaymentDate = normalizeISODate(repayment.date);
+      const interestPeriod = getRepaymentInterestPeriod(repayment);
+      let effectiveRate = 0;
+      if (interestPeriod) {
+        // Use last day of month to look up rate schedule
+        const targetDate = getLastDayOfMonthISO(interestPeriod.year, interestPeriod.month);
+        effectiveRate = getEffectiveLoanRate(loan, topups, targetDate, settings);
+      } else {
+        effectiveRate = getEffectiveLoanRate(loan, topups, repaymentDate, settings);
+      }
+
       rows.push({
         id: repayment.id,
-        date: normalizeISODate(repayment.date),
+        date: repaymentDate,
         createdAt: repayment.createdAt,
         entryType: 'REPAYMENT',
         amount: Number(repayment.amount || 0),
         principalDelta: -(repayment.principalPaid || (Number(repayment.amount || 0) - Number(repayment.interestPaid || 0))),
         principalPaid: repayment.principalPaid || (Number(repayment.amount || 0) - Number(repayment.interestPaid || 0)),
-
         interestPaid: Number(repayment.interestPaid || 0),
         lateFee: Number(repayment.lateFee || 0),
         notes: repayment.notes,
         balanceAfter: 0,
-        interestPeriod: getRepaymentInterestPeriod(repayment),
+        interestPeriod,
         interestDays: repayment.interestDays,
-        interestCalculationType: repayment.interestCalculationType
-
+        interestCalculationType: repayment.interestCalculationType,
+        rate: effectiveRate
       });
     });
 
