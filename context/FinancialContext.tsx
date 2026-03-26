@@ -37,6 +37,7 @@ interface FinancialContextType {
   resetFinancials: () => void;
   isLoading: boolean;
   fetchFinancials: (showLoader?: boolean) => Promise<void>;
+  globalAutoGenLoanInterest: (onProgress?: (progress: number, label: string) => void) => Promise<void>;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
@@ -533,6 +534,107 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     );
   }, [loans, loanTopups, loanRepayments]);
 
+  const globalAutoGenLoanInterest = useCallback(async (
+    onProgress?: (progress: number, label: string) => void
+  ) => {
+    const activeLoans = loans.filter(l => l.status === LoanStatus.ACTIVE);
+    if (!activeLoans.length) {
+      if (onProgress) onProgress(100, 'No active loans found.');
+      return;
+    }
+
+    const today = new Date();
+    const endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
+    
+    let allMissingRepayments: Omit<LoanRepayment, 'id'>[] = [];
+    let processedCount = 0;
+
+    // Step 1: Analyze all active loans for missing interest
+    for (const loan of activeLoans) {
+      processedCount++;
+      if (onProgress) {
+        onProgress(Math.floor((processedCount / activeLoans.length) * 20), `Analyzing ${loan.memberId}...`);
+      }
+
+      // We need util/loanMath.getMissingInterestPeriods
+      const { getMissingInterestPeriods } = await import('../utils/loanMath');
+
+      const missingPeriods = getMissingInterestPeriods(
+        loan,
+        loanTopups.filter(t => t.loanId === loan.id),
+        loanRepayments.filter(r => r.loanId === loan.id),
+        endPeriod,
+        settings
+      );
+
+      missingPeriods.forEach(p => {
+        allMissingRepayments.push({
+          loanId: loan.id,
+          date: p.postingDate,
+          amount: p.interestDue,
+          interestPaid: p.interestDue,
+          principalPaid: 0,
+          lateFee: 0,
+          interestForMonth: p.month,
+          interestForYear: p.year,
+          interestCalculationType: 'MONTHLY',
+          method: PaymentMethod.CASH,
+          notes: 'Auto-generated interest'
+        });
+      });
+    }
+
+    if (allMissingRepayments.length === 0) {
+      if (onProgress) onProgress(100, 'All interest is up to date.');
+      return;
+    }
+
+    // Step 2: Batch insert into database
+    // Batch size of 50 to be safe with Supabase/PostgREST limits and connection timeouts
+    const batchSize = 50;
+    const totalBatches = Math.ceil(allMissingRepayments.length / batchSize);
+    
+    for (let i = 0; i < allMissingRepayments.length; i += batchSize) {
+      const batch = allMissingRepayments.slice(i, i + batchSize);
+      const batchIndex = Math.floor(i / batchSize) + 1;
+      
+      const progress = 20 + Math.floor((batchIndex / totalBatches) * 80);
+      if (onProgress) {
+        onProgress(progress, `Syncing interest records (${i + 1} to ${Math.min(i + batchSize, allMissingRepayments.length)} of ${allMissingRepayments.length})...`);
+      }
+
+      // Convert to Supabase format
+      const payload = batch.map((r, idx) => ({
+        id: `rep_auto_${Date.now()}_${i + idx}_${Math.random().toString(36).slice(2, 8)}`,
+        loan_id: r.loanId,
+        date: r.date,
+        amount: r.amount,
+        interest_paid: r.interestPaid,
+        principal_paid: r.principalPaid,
+        late_fee: r.lateFee || 0,
+        interest_for_month: r.interestForMonth ?? null,
+        interest_for_year: r.interestForYear ?? null,
+        interest_days: r.interestDays ?? null,
+        interest_calculation_type: r.interestCalculationType ?? 'MONTHLY',
+        method: r.method,
+        notes: r.notes,
+        entry_type: 'INTEREST'
+      }));
+
+      const { error } = await supabase.from('loan_repayments').insert(payload);
+      if (error) {
+        console.error('Batch Auto-Gen Failed:', error);
+        throw error;
+      }
+    }
+
+    // Final refresh
+    if (onProgress) onProgress(100, 'Refreshing ledger...');
+    await fetchFinancials(false);
+    
+    if (onProgress) onProgress(100, `Successfully generated ${allMissingRepayments.length} interest records.`);
+  }, [loans, loanRepayments, loanTopups, settings, fetchFinancials]);
+
   const setFinancialData = useCallback(({ loans, loanRepayments }: any) => {
     if (loans) setLoans(loans);
     if (loanRepayments) setLoanRepayments(loanRepayments);
@@ -564,7 +666,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       closeLoan,
       addLoanTopup, updateLoanTopup, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, getSpecialLoanOutstanding,
       setFinancialData, importFinancials, deleteAllFinancials, resetFinancials,
-      isLoading, fetchFinancials
+      isLoading, fetchFinancials,
+      globalAutoGenLoanInterest
     }}>
       {children}
     </FinancialContext.Provider>

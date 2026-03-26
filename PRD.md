@@ -104,7 +104,11 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
     *   Automated lookup during spreadsheet analysis.
     *   Reactive rate suggestions in the manual "Create Loan" and "Add Top-up" forms.
     *   *Evaluation Logic*: Rules are checked sequentially by `endDate`. The first matching rule (where `date <= rule.endDate`) wins. If no rule matches, the system falls back to the global `default_loan_interest_rate`.
-    *   *Recalculation Engine*: Core math utilities (`getInterestDueForPeriod`, `getMissingInterestPeriods`) are injected with `SocietySettings` to ensure historical consistency regardless of current-day configuration changes.
+    *   *Recalculation Engine*: Core math utilities (`getInterestDueForPeriod`, `getMissingInterestPeriods`) are injected with `SocietySettings` ensure historical consistency.
+*   **Global Interest Alignment (v1.1.8)**: 
+    *   Adds a "Zap Missing Interest Periods" tool to the success screen after a mass import.
+    *   **Progress-Tracked Batch Processing**: Analyzes all active loans and inserts missing records in batches of 50 to ensure database stability.
+    *   **Live UI Progress**: Uses asynchronous callbacks to provide the operator with a real-time progress bar and status labels during the analysis and sync phases.
 
 *   No new tables or columns are required for the latest month-interest override, remaining-principal settlement, admin-only audit-log tab, member-ID edit flow, or audit-report disbursal view. These changes operate on the existing `members`, `loans`, `loan_repayments`, and `audit_logs` structures.
 *   The legacy `payments` table is not part of the active product and should not exist after the latest migration.
@@ -142,7 +146,8 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 *   **Principal Repaid Fallback Fix**: Fixed the "Principal Repaid" summary calculation in `pages/SpecialLoans.tsx` to use the fallback formula (amount - interestPaid) when explicit principalPaid is missing. This ensures legacy imported data correctly reflects principal reductions even when the import didn't populate the principalPaid field.
 *   **Zero-Balance Gap Fix**: Fixed interest auto-generation to properly calculate periods from loan start date, only skipping actual zero-balance periods before top-ups.
 *   **TypeScript Property Fix**: Corrected `loan_id` → `loanId` in loanMath.ts to match the LoanRepayment type definition.
-*   **No Database Schema Changes Required**: All fixes are purely frontend calculation changes.
+*   **Global Auto-Gen & Batching (v1.1.8)**: Implemented a robust batch-processing mechanism (chunk size: 50) for global interest auto-generation, featuring a new progress-tracking UI for mass-import cleanup.
+*   **No Database Schema Changes Required**: All fixes are purely frontend calculation or orchestration changes.
 
 ### 🛡️ Financial Systems Audit Checklist
 For Senior Auditors, verify these controls:

@@ -25,7 +25,7 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Safe Loan Closure Validation:** A loan can only be closed when the selected close date has zero outstanding principal and no later principal-affecting activity.
 *   **Audit Report Principal Breakdown:** The Audit Report now shows `Original Loan Disbursed` in the top cards, member balance table, and Full Audit CSV for cleaner reconciliation.
 *   **Audit Report Table Cleanup:** The member balance table now shows the original loan start date instead of a status badge so the visible columns stay calculation-focused.
-*   **Auto-Interest Engine:** Single-click "Zap" button to backfill decades of historical interest records based on dynamically calculated principal balances.
+*   **Auto-Interest Engine (v1.1.8)**: Single-click "Zap" button to backfill decades of historical interest records based on dynamically calculated principal balances, featuring **Batch Processing (Safe-Sync)** and real-time progress tracking.
 *   **Admin-Only Audit Log Tab:** Database write-history now lives in its own `Audit Log History` tab and is visible only to admins.
 *   **Reduced Scope UI:** The application is laser-focused on `Special Loans`, `Members`, `Audit Report`, `Audit Log History` (admin only), and `Settings`. No distracting dashboards or bank-sync features.
 *   **Separate Backend Scripts:** Schema setup and sample data are now split into separate SQL Editor scripts.
@@ -100,7 +100,7 @@ The application requires a specific schema and security configuration to functio
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
 - **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors.
 - **Important Deployment Step**: Run `sql/interest_rules_migration.sql` in your Supabase SQL Editor. This adds the `interest_rate_rules` and `entry_type` columns and initializes the legacy 2012-2015 rules.
-- **Auto-Gen Logic Hardening**: Fixed the "sticky rate" bug in `getEffectiveLoanRate`, added ISO date normalization in `interest.ts`, and implemented **Interest Resume Logic** (detecting activity on closed loans) + **Principal Fallback Logic** (correctly detecting zero-balance gaps in v1.1.1).
+- **Auto-Gen Logic Hardening (v1.1.8)**: Implemented **Global Interest Alignment** with progress-tracked batch processing (50 records/chunk), fixed the "sticky rate" bug in `getEffectiveLoanRate`, added ISO date normalization in `interest.ts`, and implemented **Interest Resume Logic** (detecting activity on closed loans) + **Principal Fallback Logic** (correctly detecting zero-balance gaps in v1.1.1).
 - **Liveness Fix**: Replaced the invalid `HEAD /rest/v1` probe with an authenticated table-level `GET` ping to silence misleading `401 Unauthorized` alarms.
 
 ### 🛡️ Financial Systems Audit Checklist
@@ -208,9 +208,12 @@ DELETE FROM loans WHERE id LIKE 'sample_ajay_%';
 DELETE FROM members WHERE id = 'sample_ajay';
 ```
 
-### Latest Changes
+### Latest Changes (v1.1.8)
 
-*   **Supabase 1000-Row Pagination Fix**: Replaced the default `.select('*')` database query inside `FinancialContext.tsx` with a recursive pagination fetch strategy. This strictly prevents silent row truncation when dealing with heavily back-filled imported data and auto-generated historical interest spanning decades.
+*   **Global Interest Alignment Tool**: Added a dedicated "Zap All Missing Interest Periods" feature on the Importer's success screen.
+*   **Safe Batch Synchronization**: Implemented a new batching architecture that handles hundreds of interest records in secure chunks of 50 to prevent database timeouts.
+*   **Progress Visualization**: Added real-time UI feedback with a percentage progress bar and detailed status labels during mass-interest generation.
+*   **Supabase 1000-Row Pagination Fix (v1.1.7)**: Replaced default database queries with a recursive pagination strategy to ensure massive historical datasets (spanning decades) are fully loaded into the ledger without truncation.
 *   **Audit Ledger Tabs**: Reorganized the Special Loans eye-icon modal into explicit "Transaction Summary" and "Detailed Audit Ledger" tabs. The Transaction Summary view provides an operator-friendly breakdown of core metrics (Original Principal, Top-Ups, Repayments, Live Balance) and a beautifully simplified, summed transaction log displaying `Date`, `Voucher type`, and `Action badges`.
 *   **Member ID Search & Sorting**: Added the capability to directly search the Special Loans ledger by `Member ID` and logically sort the entire multi-member dashboard by ascending/descending Member ID values.
 

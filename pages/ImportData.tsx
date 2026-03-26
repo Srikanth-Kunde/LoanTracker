@@ -10,7 +10,8 @@ import {
   Zap,
   ChevronRight,
   ShieldCheck,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 import { useFinancials } from '../context/FinancialContext';
 import { useMembers } from '../context/MemberContext';
@@ -40,12 +41,18 @@ interface ImportRow {
 export const ImportData: React.FC = () => {
   const { members, addMember } = useMembers();
   const { settings } = useSettings();
-  const { loans, createLoan, addLoanTopup, recordLoanRepayment } = useFinancials();
+  const { loans, createLoan, addLoanTopup, recordLoanRepayment, globalAutoGenLoanInterest } = useFinancials();
   const [pasteContent, setPasteContent] = useState('');
   const [parsedRows, setParsedRows] = useState<ImportRow[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importProgressLabel, setImportProgressLabel] = useState('');
+  
+  // Global Auto-Gen after Import
+  const [isGlobalGenerating, setIsGlobalGenerating] = useState(false);
+  const [globalProgress, setGlobalProgress] = useState(0);
+  const [globalLabel, setGlobalLabel] = useState('');
+  const [globalDone, setGlobalDone] = useState(false);
   const [importStep, setImportStep] = useState<'INPUT' | 'PREVIEW' | 'SUCCESS'>('INPUT');
   const [importSummary, setImportSummary] = useState({
     members: 0,
@@ -618,16 +625,75 @@ export const ImportData: React.FC = () => {
             >
               Go to Special Loans
             </button>
-            <button
-              onClick={() => {
-                setPasteContent('');
-                setImportStep('INPUT');
-              }}
-              className="rounded-2xl bg-slate-900 px-8 py-4 font-bold text-white shadow-xl transition-all hover:bg-slate-800 dark:bg-primary-600 dark:hover:bg-primary-500"
-            >
-              Import More Data
-            </button>
           </div>
+
+          {/* GLOBAL AUTO-GEN SECTION */}
+          {!globalDone ? (
+            <div className="mt-12 w-full max-w-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-3xl p-8 animate-in slide-in-from-bottom-4 duration-700 delay-300">
+              <div className="flex items-start gap-4 mb-6 text-left">
+                <div className="p-3 bg-amber-100 dark:bg-amber-900/40 text-amber-600 rounded-2xl shrink-0">
+                  <Zap size={24} className="fill-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-amber-100">Historical Interest Alignment</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    Legacy imports often contain gaps between the last recorded payment and today. 
+                    Running this will automatically identify and generate missing interest periods for all active loans.
+                  </p>
+                </div>
+              </div>
+
+              {isGlobalGenerating ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-end">
+                    <div className="flex items-center gap-2">
+                      <Loader2 size={16} className="animate-spin text-amber-600" />
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{globalLabel}</span>
+                    </div>
+                    <span className="text-2xl font-black text-amber-600 italic leading-none">{globalProgress}%</span>
+                  </div>
+                  <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                      className="h-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-300 ease-out"
+                      style={{ width: `${globalProgress}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setIsGlobalGenerating(true);
+                    try {
+                      await globalAutoGenLoanInterest((progress, label) => {
+                        setGlobalProgress(progress);
+                        setGlobalLabel(label);
+                      });
+                      setGlobalDone(true);
+                    } catch (err) {
+                      console.error('Global Auto-Gen Failed', err);
+                      setGlobalLabel('Operation failed. Check console.');
+                    } finally {
+                      setIsGlobalGenerating(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-amber-600/20 active:scale-[0.98] transition-all"
+                >
+                  <Zap size={20} />
+                  Zap All Missing Interest Periods
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="mt-12 w-full max-w-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 rounded-3xl p-6 flex items-center gap-4 animate-in zoom-in-95 duration-500">
+              <div className="p-2 bg-emerald-100 dark:bg-emerald-800 text-emerald-600 rounded-full">
+                <CheckCircle2 size={24} />
+              </div>
+              <div className="text-left">
+                <p className="font-black text-emerald-800 dark:text-emerald-200">Alignment Complete</p>
+                <p className="text-sm text-emerald-600 dark:text-emerald-400">All historical interest gaps have been identified and filled.</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

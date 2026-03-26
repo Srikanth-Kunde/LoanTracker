@@ -1,3 +1,14 @@
+**v1.1.8 — Global Interest Alignment & Batch Processing**
+
+This release introduces a powerful "Global Auto-Generate Interest" feature to streamline the final step of legacy data migration.
+
+- **Global Interest Alignment**: A new "Zap All Missing Interest Periods" tool has been added to the Legacy Importer's success screen. It automatically scans all active loans for chronological gaps and fills them in one click, ensuring the entire portfolio is audit-ready immediately after a bulk import.
+- **High-Safety Batch Processing**: To prevent database timeouts and ensure stability, the global generator processes records in secure batches of 50. This allows the system to effortlessly handle thousands of years of missing interest across hundreds of members.
+- **Real-Time Progress Tracking**: Added a new progress architecture that provides live UI feedback (percentage and status labels) during both the analysis and insertion phases of the auto-generation process.
+- **No Database Schema Changes**: This is a frontend logic and API orchestration enhancement.
+
+---
+
 **v1.1.7 — Pagination & Ledger UI Enhancements**
 
 This release fixes a critical data truncation bug caused by API limits and introduces a cleaner, tabbed layout for the Special Loans Audit Ledger modal.
