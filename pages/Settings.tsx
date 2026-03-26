@@ -40,7 +40,6 @@ const SettingsPage: React.FC = () => {
       viewerCode: form.viewerCode?.trim() || settings.viewerCode,
       themeMode: form.themeMode,
       accentColor: form.accentColor,
-      accentColor: form.accentColor,
       bannerImage: form.bannerImage?.trim() || '',
       interestRateRules: form.interestRateRules,
       globalCutoffDate: form.globalCutoffDate
