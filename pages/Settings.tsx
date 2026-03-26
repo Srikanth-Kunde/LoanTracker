@@ -40,8 +40,10 @@ const SettingsPage: React.FC = () => {
       viewerCode: form.viewerCode?.trim() || settings.viewerCode,
       themeMode: form.themeMode,
       accentColor: form.accentColor,
+      accentColor: form.accentColor,
       bannerImage: form.bannerImage?.trim() || '',
-      interestRateRules: form.interestRateRules
+      interestRateRules: form.interestRateRules,
+      globalCutoffDate: form.globalCutoffDate
     });
     setMessage('Settings saved to app_settings.');
   };
@@ -122,10 +124,16 @@ const SettingsPage: React.FC = () => {
             disabled={!canEdit}
           />
           <Input
-            label="Banner Image URL"
-            value={form.bannerImage ?? ''}
             onChange={e => setField('bannerImage', e.target.value)}
             className="md:col-span-2"
+            disabled={!canEdit}
+          />
+          <Input
+            label="Global Interest Cutoff Date (Optional)"
+            type="date"
+            value={form.globalCutoffDate || ''}
+            onChange={e => setField('globalCutoffDate', e.target.value)}
+            description="If set, auto-generation will stop at this date instead of the current month. Format: DD-MM-YYYY in display."
             disabled={!canEdit}
           />
         </div>

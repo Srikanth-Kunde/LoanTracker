@@ -1,4 +1,4 @@
-# Project Review: LoanTracker (Special Loans Edition) v1.1.8
+# Project Review: LoanTracker (Special Loans Edition) v1.1.9
 
 ## 1. Executive Summary
 The LoanTracker system is now a production-grade financial tool specialized for the "Special Loans" (Interest-Only) model. As of v1.1.8, the system successfully addresses the complex requirements of historical record digitization, principal top-ups, and auditability spanning from 2012 to the present.
@@ -17,12 +17,16 @@ The LoanTracker system is now a production-grade financial tool specialized for 
 ## 3. Database & SQL Editor Requirements
 The following should be executed in the Supabase SQL Editor if they haven't been already:
 
-1.  **`migration.sql`**: The primary schema file. Ensure this is run to establish the baseline and add the latest integrity constraints (v1.1.7+).
-2.  **`sql/interest_rules_migration.sql`**: Mandatory for v1.1.8. This adds the `interest_rate_rules` logic to `app_settings` and pre-fills the 2012–2015 2.0% rule.
-3.  **No new SQL for v1.1.8**: The latest Global Interest Alignment is a pure frontend logic update; no schema changes were required for the "Zap" tool.
+1.  **`migration.sql`**: The primary schema file.
+2.  **`sql/interest_rules_migration.sql`**: Mandatory for the 2.0% rules logic.
+3.  **v1.1.9 Cutoff Migration**: 
+    ```sql
+    ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS global_cutoff_date DATE;
+    ```
 
-## 4. Key Feature Recap (v1.1.8)
-- **Global Auto-Gen Interest**: Single-click "Zap" tool on the Importer's success screen to fill all historical gaps.
+## 4. Key Feature Recap (v1.1.9)
+- **Global Cutoff Date**: A new setting to control interest auto-generation boundaries (e.g., stop at 31-01-2026).
+- **Global Auto-Gen Interest**: Single-click "Zap" tool for mass-import alignment.
 - **Batch Processing**: Safely syncs hundreds of interest records in chunks of 50.
 - **Detailed Audit Ledger**: Enhanced tabbed view with summary cards and row-by-row balance trails.
 

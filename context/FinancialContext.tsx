@@ -544,7 +544,23 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     }
 
     const today = new Date();
-    const endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
+    let endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
+
+    // If a global cutoff is set, use it as the boundary
+    if (settings.globalCutoffDate) {
+      try {
+        const cutoffParts = settings.globalCutoffDate.split('-');
+        if (cutoffParts.length === 3) {
+          // input type="date" returns YYYY-MM-DD
+          endPeriod = { 
+            year: parseInt(cutoffParts[0]), 
+            month: parseInt(cutoffParts[1]) 
+          };
+        }
+      } catch (e) {
+        console.error('Failed to parse global cutoff date:', e);
+      }
+    }
     
     let allMissingRepayments: Omit<LoanRepayment, 'id'>[] = [];
     let processedCount = 0;

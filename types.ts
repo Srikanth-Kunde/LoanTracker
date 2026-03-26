@@ -119,4 +119,5 @@ export interface SocietySettings {
   accentColor?: AccentColor;
   bannerImage?: string;
   interestRateRules?: InterestRateRule[];
+  globalCutoffDate?: string;
 }

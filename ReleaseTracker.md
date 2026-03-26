@@ -1,3 +1,14 @@
+**v1.1.9 — Global Cutoff Governance**
+
+This release implements a hard boundary for interest auto-generation, ensuring that no records are created past a user-defined date.
+
+- **Global Interest Cutoff Date**: A new system setting that allows operators to define a hard boundary for interest auto-generation (e.g., "Stop all generation at 31-01-2026").
+- **Unified Logic**: The cutoff is respected by both the "Global Zap" (mass-import) tool and individual per-loan auto-generation modals.
+- **Form Integration**: Added the "Global Interest Cutoff Date" input to the Settings tab with full persistence to Supabase.
+- **Schema Update**: Added `global_cutoff_date` (DATE) to `app_settings`.
+
+---
+
 **v1.1.8 — Global Interest Alignment & Batch Processing**
 
 This release introduces a powerful "Global Auto-Generate Interest" feature to streamline the final step of legacy data migration.

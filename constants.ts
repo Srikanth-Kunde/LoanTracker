@@ -16,7 +16,8 @@ export const DEFAULT_SETTINGS = {
   themeMode: 'light' as const,
   accentColor: 'blue' as const,
   bannerImage: "https://media.istockphoto.com/id/1417583870/photo/growth-financial-business-arrow-money-coin-on-increase-earnings-3d-background-with-economy.jpg?s=2048x2048&w=is&k=20&c=q0Ye2vGZ-swv_nwkMFnhzUXdb9388nIeyFPfhwUA6gQ=",
-  interestRateRules: []
+  interestRateRules: [],
+  globalCutoffDate: ""
 };
 
 // RGB values for Tailwind CSS variables (without 'rgb()')

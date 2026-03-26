@@ -591,7 +591,13 @@ const SpecialLoans: React.FC = () => {
             };
         }
         const today = new Date();
-        const endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
+        let endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
+        if (settings.globalCutoffDate) {
+            const cutoffParts = settings.globalCutoffDate.split('-');
+            if (cutoffParts.length === 3) {
+                endPeriod = { year: parseInt(cutoffParts[0]), month: parseInt(cutoffParts[1]) };
+            }
+        }
         const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === autoGenLoan.id);
         const loanTopupsForLoan = loanTopups.filter(t => t.loanId === autoGenLoan.id);
         const stopDate = getAutoGenerationStopDate(autoGenLoan, loanTopupsForLoan, loanRepaymentsForLoan, endPeriod);

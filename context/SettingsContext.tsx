@@ -56,6 +56,7 @@ const mapDbRowToSettings = (row: any): Partial<SocietySettings> => ({
   accentColor: (row.accent_color as AccentColor) ?? DEFAULT_SETTINGS.accentColor,
   bannerImage: row.banner_image ?? DEFAULT_SETTINGS.bannerImage,
   interestRateRules: row.interest_rate_rules ?? DEFAULT_SETTINGS.interestRateRules,
+  globalCutoffDate: row.global_cutoff_date ?? DEFAULT_SETTINGS.globalCutoffDate,
 });
 
 const mapSettingsToDbRow = (settings: SocietySettings) => ({
@@ -71,6 +72,7 @@ const mapSettingsToDbRow = (settings: SocietySettings) => ({
   accent_color: settings.accentColor,
   banner_image: settings.bannerImage,
   interest_rate_rules: settings.interestRateRules,
+  global_cutoff_date: settings.globalCutoffDate || null,
   updated_at: new Date().toISOString()
 });
 
