@@ -1116,7 +1116,7 @@ const SpecialLoans: React.FC = () => {
             ['Interest Paid', activeLoanSummary.interestPaid],
             ['Live Balance', activeLoanSummary.liveBalance],
             [],
-            ['Date', 'CalcType', 'Days', 'Vch Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'],
+            ['Sl.No', 'Date', 'CalcType', 'Days', 'Vocher Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'],
             ...ledgerRows
         ];
 
