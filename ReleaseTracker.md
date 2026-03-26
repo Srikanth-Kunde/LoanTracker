@@ -1,3 +1,14 @@
+**v1.3.1 — Dependency Hardening & Security Patch**
+
+This release focuses on enterprise-grade security and build toolchain modernization.
+
+- **Zero-Vulnerability Audit**: Resolved 13 vulnerabilities (5 High, 8 Moderate) identified during the pre-deployment audit.
+- **Security Overrides**: Implemented `npm overrides` to force-patch transitive dependencies for `picomatch` (ReDoS), `serialize-javascript` (RCE), `brace-expansion`, and `minimatch`.
+- **Toolchain Modernization**: Updated `vite`, `vite-plugin-pwa`, and `workbox` to resolve legacy deprecation warnings (`glob`, `sourcemap-codec`).
+- **Clean Build Logs**: Eliminated all build-time security warnings to satisfy strict financial systems auditing.
+
+---
+
 **v1.3.0 — Global Interest Waiver Periods**
 
 This release adds the ability to waive interest for specific month ranges across all loans, designed for scenarios like COVID-19 relief.
