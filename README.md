@@ -1,4 +1,4 @@
-# Legacy Loan Tracker
+# Legacy Loan Tracker v1.2.0
 Digitize and audit historical handwritten loan records starting from 2012 with absolute precision. This specialized tool focuses exclusively on **Special Loans** (Interest-only, with multiple top-ups and flexible repayments).
 
 > [!NOTE]

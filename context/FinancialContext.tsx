@@ -37,7 +37,7 @@ interface FinancialContextType {
   resetFinancials: () => void;
   isLoading: boolean;
   fetchFinancials: (showLoader?: boolean) => Promise<void>;
-  globalAutoGenLoanInterest: (onProgress?: (progress: number, label: string) => void) => Promise<void>;
+  globalAutoGenLoanInterest: (onProgress?: (progress: number, label: string) => void, clearStale?: boolean) => Promise<void>;
 }
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
@@ -535,7 +535,8 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   }, [loans, loanTopups, loanRepayments]);
 
   const globalAutoGenLoanInterest = useCallback(async (
-    onProgress?: (progress: number, label: string) => void
+    onProgress?: (progress: number, label: string) => void,
+    clearStale: boolean = false
   ) => {
     const activeLoans = loans.filter(l => l.status === LoanStatus.ACTIVE);
     if (!activeLoans.length) {
@@ -564,6 +565,14 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     
     let allMissingRepayments: Omit<LoanRepayment, 'id'>[] = [];
     let processedCount = 0;
+
+    // Step 0: Optional Wipe/Cleanup
+    if (clearStale) {
+      if (onProgress) onProgress(5, 'Cleaning up stale records...');
+      for (const loan of activeLoans) {
+        await cleanupInvalidInterestRowsForLoan(loan);
+      }
+    }
 
     // Step 1: Analyze all active loans for missing interest
     for (const loan of activeLoans) {
@@ -677,10 +686,9 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       loans, loanRepayments, loanTopups,
       createLoan, updateLoan, deleteLoan, recordLoanRepayment, updateLoanRepayment, bulkRecordLoanRepayments, deleteLoanRepayment,
       closeLoan,
-      addLoanTopup, updateLoanTopup, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, getSpecialLoanOutstanding,
+      addLoanTopup, updateLoanTopup, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, getSpecialLoanOutstanding, globalAutoGenLoanInterest,
       setFinancialData, importFinancials, deleteAllFinancials, resetFinancials,
-      isLoading, fetchFinancials,
-      globalAutoGenLoanInterest
+      isLoading, fetchFinancials
     }}>
       {children}
     </FinancialContext.Provider>

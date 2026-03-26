@@ -1,3 +1,14 @@
+**v1.2.0 — Special Loans Audit & Maintenance (Final)**
+
+This version completes the Special Loans module with high-fidelity audit reporting and global maintenance tools.
+
+- **Audit-Ready CSV Ledger**: Re-engineered the Special Loan ledger export to match auditor requirements. Columns: `Sl.No`, `Date`, `CalcType`, `Days`, `Vch Type`, `Debit`, `Credit`, `Interest`, `Balance`, `Narration`.
+- **Global "Zap" Reconciliation**: Added a portfolio-wide "Zap Missing Interest" tool in the Special Loans tab. This feature performs a "Wipe & Regenerate" workflow—cleaning stale/invalid interest records and then automatically filling all gaps in the financial timeline.
+- **Member ID Visibility**: Added a dedicated Member ID column to the Special Loans table and optimized the search engine to support case-insensitive Member ID lookups.
+- **Build & Integrity Hardening**: Resolved structural JSX issues and TypeScript errors in the Special Loans module to ensure a clean, production-ready build.
+
+---
+
 **v1.1.9 — Global Cutoff Governance**
 
 This release implements a hard boundary for interest auto-generation, ensuring that no records are created past a user-defined date.

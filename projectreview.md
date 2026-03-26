@@ -1,7 +1,7 @@
-# Project Review: LoanTracker (Special Loans Edition) v1.1.9
+# Project Review: LoanTracker (Special Loans Edition) v1.2.0
 
 ## 1. Executive Summary
-The LoanTracker system is now a production-grade financial tool specialized for the "Special Loans" (Interest-Only) model. As of v1.1.8, the system successfully addresses the complex requirements of historical record digitization, principal top-ups, and auditability spanning from 2012 to the present.
+The LoanTracker system is now a professional-grade financial tool specialized for the "Special Loans" (Interest-Only) model. As of v1.2.0, the system successfully addresses the complex requirements of historical record digitization, portfolio-wide interest reconciliation, and audit-ready reporting.
 
 ## 2. Technical Audit & Financial Determinism
 - **Core Math Engine**: The `loanMath.ts` utility has been verified through regression testing (`npm test`). It correctly handles:
@@ -24,11 +24,11 @@ The following should be executed in the Supabase SQL Editor if they haven't been
     ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS global_cutoff_date DATE;
     ```
 
-## 4. Key Feature Recap (v1.1.9)
-- **Global Cutoff Date**: A new setting to control interest auto-generation boundaries (e.g., stop at 31-01-2026).
-- **Global Auto-Gen Interest**: Single-click "Zap" tool for mass-import alignment.
-- **Batch Processing**: Safely syncs hundreds of interest records in chunks of 50.
-- **Detailed Audit Ledger**: Enhanced tabbed view with summary cards and row-by-row balance trails.
+## 4. Key Feature Recap (v1.2.0)
+- **Audit-Ready CSV Export**: Reformulated CSV structure with all 10 required audit columns (Sl.No, Date, CalcType, Days, Vch Type, Debit, Credit, Interest, Balance, Narration).
+- **Global "Zap" Reconciliation**: One-click portfolio-wide interest repair tool with progress tracking and "Wipe & Regenerate" safety.
+- **Member ID Visibility & Search**: Integrated Member ID columns and optimized search engine.
+- **Global Cutoff Date**: Centralized setting to control interest auto-generation boundaries.
 
 ## 5. Architectural Recommendations
 - **Periodic Backups**: While the system is robust, periodic CSV exports of the "All Members Ledger" are recommended as immutable checkpoints.
@@ -36,4 +36,4 @@ The following should be executed in the Supabase SQL Editor if they haven't been
 
 ---
 **Senior FinTech Architect & Financial Systems Auditor**
-*Status: Verified and Finalized (v1.1.8)*
+*Status: Verified and Finalized (v1.2.0)*

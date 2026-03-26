@@ -59,7 +59,7 @@ const SpecialLoans: React.FC = () => {
         loans, loanRepayments, loanTopups, createLoan, updateLoan, deleteLoan,
         recordLoanRepayment, updateLoanRepayment, closeLoan,
         addLoanTopup, updateLoanTopup, deleteLoanRepayment, deleteLoanTopup, wipeLoanInterest, cleanupInvalidLoanInterest, bulkRecordLoanRepayments,
-        getSpecialLoanOutstanding, fetchFinancials
+        globalAutoGenLoanInterest, getSpecialLoanOutstanding, fetchFinancials
     } = useFinancials();
     const { role } = useAuth();
     const { log } = useAuditLog();
@@ -71,7 +71,6 @@ const SpecialLoans: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'CLOSED'>('ACTIVE');
     const [sortOrder, setSortOrder] = useState<'DATE_DESC' | 'DATE_ASC' | 'NAME_ASC' | 'NAME_DESC' | 'AMOUNT_DESC' | 'AMOUNT_ASC' | 'OUTSTANDING_DESC' | 'MEMBER_ID_ASC' | 'MEMBER_ID_DESC'>('DATE_DESC');
 
-    // Modals
     const [modals, setModals] = useState<{
         create: boolean;
         repay: boolean;
@@ -81,7 +80,8 @@ const SpecialLoans: React.FC = () => {
         editInterest: boolean;
         topup: boolean;
         autoGen: boolean;
-    }>({ create: false, repay: false, calc: false, history: false, edit: false, editInterest: false, topup: false, autoGen: false });
+        globalZap: boolean;
+    }>({ create: false, repay: false, calc: false, history: false, edit: false, editInterest: false, topup: false, autoGen: false, globalZap: false });
 
     const [printScheduleLoan, setPrintScheduleLoan] = useState<EnrichedLoan | null>(null);
 
@@ -561,7 +561,7 @@ const SpecialLoans: React.FC = () => {
             };
         }).filter(l =>
             l.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (l.memberId?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+            String(l.memberId).toLowerCase().includes(searchTerm.toLowerCase()) ||
             l.id.toLowerCase().includes(searchTerm.toLowerCase())
         ).sort((a, b) => {
             if (sortOrder === 'MEMBER_ID_ASC') return (parseInt(a.memberId) || 0) - (parseInt(b.memberId) || 0) || a.memberId.localeCompare(b.memberId);
@@ -1074,19 +1074,37 @@ const SpecialLoans: React.FC = () => {
     const downloadActiveLoanLedger = () => {
         if (!activeLoan || !activeLoanSummary) return;
 
-        const ledgerRows = activeLoanTransactions.map(tx => ([
-            formatDisplayDate(tx.date),
-            tx.entryType,
-            tx.interestPeriod ? `${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year}` : '',
-            tx.interestCalculationType || '',
-            tx.interestDays || '',
-            tx.amount || 0,
-            tx.principalPaid || 0,
-            tx.interestPaid || 0,
-            tx.lateFee || 0,
-            tx.balanceAfter || 0,
-            tx.notes || ''
-        ]));
+        const ledgerRows = activeLoanTransactions.map((tx, idx) => {
+            const isDisbursal = tx.entryType === 'DISBURSAL';
+            const isTopup = tx.entryType === 'TOPUP';
+            const isRepayment = tx.entryType === 'REPAYMENT';
+            
+            let vchType = '';
+            if (isDisbursal) vchType = 'Loan';
+            else if (isTopup) vchType = 'Top-up';
+            else if (isRepayment) {
+                if ((tx.principalPaid || 0) > 0) vchType = 'Payment';
+                else if ((tx.interestPaid || 0) > 0) vchType = 'Interest';
+                else vchType = 'Repayment';
+            }
+
+            const debit = (isDisbursal || isTopup) ? (tx.amount || tx.principalDelta || 0) : '';
+            const credit = isRepayment && (tx.principalPaid || 0) > 0 ? tx.principalPaid : '';
+            const interest = (tx.interestPaid || 0) > 0 ? tx.interestPaid : '';
+
+            return [
+                idx + 1,
+                formatDisplayDate(tx.date),
+                tx.interestCalculationType || '',
+                tx.interestDays || '',
+                vchType,
+                debit,
+                credit,
+                interest,
+                tx.balanceAfter || 0,
+                tx.notes || ''
+            ];
+        });
 
         const csvRows = [
             ['Member Name', activeLoan.memberName],
@@ -1098,7 +1116,7 @@ const SpecialLoans: React.FC = () => {
             ['Interest Paid', activeLoanSummary.interestPaid],
             ['Live Balance', activeLoanSummary.liveBalance],
             [],
-            ['Date', 'Type', 'Interest Period', 'Calc Type', 'Days', 'Amount', 'Principal', 'Interest', 'Late Fee', 'Balance', 'Notes'],
+            ['Date', 'CalcType', 'Days', 'Vch Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'],
             ...ledgerRows
         ];
 
@@ -1333,36 +1351,40 @@ const SpecialLoans: React.FC = () => {
                         const totalBatches = Math.ceil(recordsToSave.length / batchSize);
                         throw new Error(`Interest generation partially failed. Check console for details.`);
                     }
-
-                    // Small delay between batches to prevent DB overload
-                    if (i + batchSize < recordsToSave.length) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-
-                    const progress = 40 + Math.min(50, Math.round(((i + batchSize) / recordsToSave.length) * 50));
-                    setGenerationProgress(progress);
                 }
-            } else {
-                setGenerationProgress(90);
             }
-
-            log('BULK_RECORD_INTEREST', 'loan_repayments', autoGenLoan.id, {
-                generatedCount: generationCount,
-                cleanedCount,
-                totalAmount: totalGenAmount
-            });
-
-            // 4. Force a full refetch WITH loader to show the user the update is happening
-            setGenerationProgress(95);
-            await fetchFinancials(true);
-
-            setGenerationProgress(100);
             alert(`SUCCESS: ${generationCount} interest records generated and ${cleanedCount} stale records cleaned.`);
             setModals({ ...modals, autoGen: false });
         } catch (error) {
             const e = error as Error;
             logger.error("Error generating interest", e);
             alert("Interest Generation Failed: " + e.message);
+        } finally {
+            setIsGenerating(false);
+            setGenerationProgress(0);
+            setGenerationProgressLabel('');
+        }
+    };
+
+    const handleGlobalZap = async () => {
+        if (!confirm("This will analyze all active special loans, cleanup stale auto-generated records, and generate any missing interest. Continue?")) return;
+        
+        setIsGenerating(true);
+        setGenerationProgress(0);
+        setGenerationProgressLabel('Initializing Global Zap...');
+        
+        try {
+            await globalAutoGenLoanInterest((prog, label) => {
+                setGenerationProgress(prog);
+                setGenerationProgressLabel(label);
+            }, true); // true for clearStale (wipe and regenerate)
+            
+            alert("Global interest generation and reconciliation complete!");
+            setModals({ ...modals, globalZap: false });
+        } catch (error) {
+            const e = error as Error;
+            logger.error("Global Zap Failed", e);
+            alert("Global Zap Failed: " + e.message);
         } finally {
             setIsGenerating(false);
             setGenerationProgress(0);
@@ -1408,6 +1430,14 @@ const SpecialLoans: React.FC = () => {
                     <div className="flex gap-2">
                         <Button variant="outline" icon={Download} onClick={downloadReport}>Report</Button>
                         <Button variant="outline" icon={Calculator} onClick={() => setModals({ ...modals, calc: true })}>Calc</Button>
+                        <Button 
+                            variant="outline" 
+                            className="text-amber-600 border-amber-200 bg-amber-50/50 hover:bg-amber-100 dark:bg-amber-900/10" 
+                            icon={Zap} 
+                            onClick={() => setModals({ ...modals, globalZap: true })}
+                        >
+                            Zap Missing Interest
+                        </Button>
                         {canCreateLoan && (
                             <Button icon={Plus} onClick={() => setModals({ ...modals, create: true })}>New Special Loan</Button>
                         )}
@@ -1488,6 +1518,7 @@ const SpecialLoans: React.FC = () => {
                     <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                         <thead className="bg-slate-50 dark:bg-slate-900/50">
                             <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Member ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Member / Date</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Mode &amp; Rate</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Original</th>
@@ -1501,6 +1532,11 @@ const SpecialLoans: React.FC = () => {
                         <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
                             {loansInSelectedPeriod.map((loan) => (
                                 <tr key={loan.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded inline-block">
+                                            {loan.memberId}
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm font-semibold text-slate-900 dark:text-white">{loan.memberName}</div>
                                         <div className="text-xs text-slate-500 mb-1">{formatDisplayDate(loan.startDate)}</div>
@@ -1678,6 +1714,52 @@ const SpecialLoans: React.FC = () => {
                     >
                         Disburse Special Loan
                     </Button>
+                </div>
+            </Modal>
+
+            {/* GLOBAL ZAP MODAL */}
+            <Modal isOpen={modals.globalZap} onClose={() => !isGenerating && setModals({ ...modals, globalZap: false })} title="Global Interest Reconciliation" >
+                <div className="space-y-6 py-4">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-100 dark:border-amber-800 flex items-start">
+                        <Zap size={24} className="text-amber-600 mr-3 mt-1 shrink-0" />
+                        <div>
+                            <p className="text-sm font-bold text-amber-900 dark:text-amber-200 mb-1">Portfolio-Wide Interest Repair</p>
+                            <p className="text-xs text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                                This tool will scan all active special loans, identify missing interest periods up to the current date (or global cutoff), 
+                                clean up any stale/incorrect auto-generated records, and perform a full reconciliation.
+                            </p>
+                        </div>
+                    </div>
+
+                    {!isGenerating ? (
+                        <div className="flex flex-col gap-3">
+                            <div className="text-sm text-slate-600 dark:text-slate-400 px-1">
+                                <p className="mb-2"><strong>Wipe & Regenerate:</strong></p>
+                                <ul className="list-disc list-inside space-y-1 text-xs">
+                                    <li>Deletes invalid/stale interest rows</li>
+                                    <li>Fills gaps in historical interest tracking</li>
+                                    <li>Respects manual edits and principal repayments</li>
+                                </ul>
+                            </div>
+                            <Button className="w-full py-6 text-lg font-bold shadow-lg" onClick={handleGlobalZap} icon={Zap}>
+                                Start Reconciliation
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="flex justify-between text-sm font-medium">
+                                <span className="text-amber-700 dark:text-amber-400 animate-pulse">{generationProgressLabel}</span>
+                                <span className="text-slate-500">{generationProgress}%</span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden border border-slate-200 dark:border-slate-600">
+                                <div 
+                                    className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(245,158,11,0.3)]"
+                                    style={{ width: `${generationProgress}%` }}
+                                />
+                            </div>
+                            <p className="text-[10px] text-center text-slate-400">Do not close this window until the process completes.</p>
+                        </div>
+                    )}
                 </div>
             </Modal>
 
