@@ -22,6 +22,7 @@ export interface LoanLedgerRow {
   interestPeriod?: InterestPeriod | null;
   interestDays?: number;
   interestCalculationType?: string;
+  rate?: number;
 }
 
 export interface FuturePrincipalActivity {
@@ -449,7 +450,8 @@ export const buildLoanLedger = (
     lateFee: 0,
     notes: loan.description || loan.remarks || 'Original loan disbursal',
     balanceAfter: 0,
-    interestPeriod: null
+    interestPeriod: null,
+    rate: Number(loan.interestRate || 0)
   }];
 
   topups
@@ -467,7 +469,8 @@ export const buildLoanLedger = (
         lateFee: 0,
         notes: topup.notes,
         balanceAfter: 0,
-        interestPeriod: null
+        interestPeriod: null,
+        rate: Number(topup.rate || 0)
       });
     });
 
