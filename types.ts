@@ -107,6 +107,15 @@ export interface InterestRateRule {
   rate: number;
 }
 
+export interface InterestWaiverPeriod {
+  id: string;
+  label: string;           // e.g., "COVID-19 Relief"
+  fromMonth: number;       // 1-12
+  fromYear: number;        // e.g., 2020
+  toMonth: number;         // 1-12
+  toYear: number;          // e.g., 2020
+}
+
 export interface SocietySettings {
   societyName: string;
   loanProcessingFee?: number;
@@ -120,4 +129,5 @@ export interface SocietySettings {
   bannerImage?: string;
   interestRateRules?: InterestRateRule[];
   globalCutoffDate?: string;
+  interestWaiverPeriods?: InterestWaiverPeriod[];
 }

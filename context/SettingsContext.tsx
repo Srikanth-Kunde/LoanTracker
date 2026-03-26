@@ -57,6 +57,7 @@ const mapDbRowToSettings = (row: any): Partial<SocietySettings> => ({
   bannerImage: row.banner_image ?? DEFAULT_SETTINGS.bannerImage,
   interestRateRules: row.interest_rate_rules ?? DEFAULT_SETTINGS.interestRateRules,
   globalCutoffDate: row.global_cutoff_date ?? DEFAULT_SETTINGS.globalCutoffDate,
+  interestWaiverPeriods: row.interest_waiver_periods ?? DEFAULT_SETTINGS.interestWaiverPeriods,
 });
 
 const mapSettingsToDbRow = (settings: SocietySettings) => ({
@@ -73,6 +74,7 @@ const mapSettingsToDbRow = (settings: SocietySettings) => ({
   banner_image: settings.bannerImage,
   interest_rate_rules: settings.interestRateRules,
   global_cutoff_date: settings.globalCutoffDate || null,
+  interest_waiver_periods: settings.interestWaiverPeriods || [],
   updated_at: new Date().toISOString()
 });
 

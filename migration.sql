@@ -125,6 +125,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Add interest waiver periods column (v1.3.0)
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS interest_waiver_periods JSONB DEFAULT '[]'::jsonb;
+
 -- 6. Audit Logs Table
 CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGSERIAL PRIMARY KEY,

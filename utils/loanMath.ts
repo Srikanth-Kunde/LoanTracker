@@ -1,4 +1,4 @@
-import { Loan, LoanRepayment, LoanStatus, LoanTopup, SocietySettings } from '../types';
+import { InterestWaiverPeriod, Loan, LoanRepayment, LoanStatus, LoanTopup, SocietySettings } from '../types';
 import { getInterestRateForDate } from './interest';
 import { compareISODate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, normalizeISODate } from './date';
 
@@ -6,6 +6,19 @@ export interface InterestPeriod {
   year: number;
   month: number;
 }
+
+export const isWaivedPeriod = (
+  period: InterestPeriod,
+  waiverPeriods?: InterestWaiverPeriod[]
+): boolean => {
+  if (!waiverPeriods || waiverPeriods.length === 0) return false;
+  return waiverPeriods.some(waiver => {
+    const fromKey = waiver.fromYear * 100 + waiver.fromMonth;
+    const toKey = waiver.toYear * 100 + waiver.toMonth;
+    const periodKey = period.year * 100 + period.month;
+    return periodKey >= fromKey && periodKey <= toKey;
+  });
+};
 
 export interface LoanLedgerRow {
   id: string;
@@ -347,6 +360,22 @@ const getChargeableInterestPeriods = (
   }> = [];
 
   while (comparePeriods(cursor, stopPeriod) <= 0) {
+    // Check if this period is waived
+    if (isWaivedPeriod(cursor, settings?.interestWaiverPeriods)) {
+      // Emit a zero-interest row for waived periods so they appear in the ledger
+      const periodDue = getInterestDueForPeriod(loan, topups, repayments, cursor, settings);
+      if (periodDue.openingOutstanding > 1) {
+        periods.push({
+          ...cursor,
+          interestDue: 0,
+          openingOutstanding: periodDue.openingOutstanding,
+          rate: periodDue.rate,
+          postingDate: getLastDayOfMonthISO(cursor.year, cursor.month)
+        });
+      }
+      cursor = getNextPeriod(cursor);
+      continue;
+    }
     const periodDue = getInterestDueForPeriod(loan, topups, repayments, cursor, settings);
     if (periodDue.interestDue > 0) {
       periods.push({

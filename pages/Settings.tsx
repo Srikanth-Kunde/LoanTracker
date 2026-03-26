@@ -2,13 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { Save, RotateCcw, Database, Plus, Trash2, Calendar } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
-import { SocietySettings, AccentColor, ThemeMode, UserRole } from '../types';
+import { SocietySettings, AccentColor, ThemeMode, UserRole, InterestWaiverPeriod } from '../types';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 
 const THEME_OPTIONS: ThemeMode[] = ['light', 'dark', 'system'];
 const ACCENT_OPTIONS: AccentColor[] = ['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan'];
+const MONTH_OPTIONS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+const YEAR_OPTIONS = Array.from({ length: new Date().getFullYear() - 2011 }, (_, i) => 2012 + i);
 
 const SettingsPage: React.FC = () => {
   const { settings, updateSettings, resetSettings } = useSettings();
@@ -42,7 +47,8 @@ const SettingsPage: React.FC = () => {
       accentColor: form.accentColor,
       bannerImage: form.bannerImage?.trim() || '',
       interestRateRules: form.interestRateRules,
-      globalCutoffDate: form.globalCutoffDate
+      globalCutoffDate: form.globalCutoffDate,
+      interestWaiverPeriods: form.interestWaiverPeriods
     });
     setMessage('Settings saved to app_settings.');
   };
@@ -73,6 +79,28 @@ const SettingsPage: React.FC = () => {
   const updateRule = (id: string, updates: Partial<any>) => {
     setField('interestRateRules', (form.interestRateRules || []).map(r => 
       r.id === id ? { ...r, ...updates } : r
+    ));
+  };
+
+  const addWaiver = () => {
+    const newWaiver: InterestWaiverPeriod = {
+      id: `waiver_${Date.now()}`,
+      label: 'New Waiver',
+      fromMonth: 1,
+      fromYear: 2020,
+      toMonth: 1,
+      toYear: 2020
+    };
+    setField('interestWaiverPeriods', [...(form.interestWaiverPeriods || []), newWaiver]);
+  };
+
+  const removeWaiver = (id: string) => {
+    setField('interestWaiverPeriods', (form.interestWaiverPeriods || []).filter(w => w.id !== id));
+  };
+
+  const updateWaiver = (id: string, updates: Partial<InterestWaiverPeriod>) => {
+    setField('interestWaiverPeriods', (form.interestWaiverPeriods || []).map(w =>
+      w.id === id ? { ...w, ...updates } : w
     ));
   };
 
@@ -221,6 +249,118 @@ const SettingsPage: React.FC = () => {
             <strong>How it works:</strong> Rules are checked in order of their End Date. The first rule whose end date is 
             greater than or equal to the loan/top-up date will be applied. If no rules match (or no end date is set), 
             the global default rate is used.
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Interest Waiver Periods" subtitle="Define months where interest is waived for all loans (e.g., COVID-19 relief)">
+        <div className="space-y-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <th className="py-2 font-bold text-slate-500 dark:text-slate-400">Label</th>
+                  <th className="py-2 font-bold text-slate-500 dark:text-slate-400">From (Month / Year)</th>
+                  <th className="py-2 font-bold text-slate-500 dark:text-slate-400">To (Month / Year)</th>
+                  <th className="py-2 text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                {(form.interestWaiverPeriods || []).map((waiver) => (
+                  <tr key={waiver.id}>
+                    <td className="py-3 pr-4">
+                      <input
+                        className="w-full bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white p-0"
+                        value={waiver.label}
+                        onChange={e => updateWaiver(waiver.id, { label: e.target.value })}
+                        placeholder="e.g. COVID-19 Relief"
+                        disabled={!canEdit}
+                      />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white p-0 text-xs"
+                          value={waiver.fromMonth}
+                          onChange={e => updateWaiver(waiver.id, { fromMonth: Number(e.target.value) })}
+                          disabled={!canEdit}
+                        >
+                          {MONTH_OPTIONS.map((m, i) => (
+                            <option key={i} value={i + 1}>{m}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white p-0 text-xs font-mono"
+                          value={waiver.fromYear}
+                          onChange={e => updateWaiver(waiver.id, { fromYear: Number(e.target.value) })}
+                          disabled={!canEdit}
+                        >
+                          {YEAR_OPTIONS.map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white p-0 text-xs"
+                          value={waiver.toMonth}
+                          onChange={e => updateWaiver(waiver.id, { toMonth: Number(e.target.value) })}
+                          disabled={!canEdit}
+                        >
+                          {MONTH_OPTIONS.map((m, i) => (
+                            <option key={i} value={i + 1}>{m}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white p-0 text-xs font-mono"
+                          value={waiver.toYear}
+                          onChange={e => updateWaiver(waiver.id, { toYear: Number(e.target.value) })}
+                          disabled={!canEdit}
+                        >
+                          {YEAR_OPTIONS.map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </td>
+                    <td className="py-3 text-right">
+                      {canEdit && (
+                        <button
+                          onClick={() => removeWaiver(waiver.id)}
+                          className="text-rose-500 hover:text-rose-600 p-1"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {(form.interestWaiverPeriods || []).length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-400 italic">
+                      No waiver periods defined. Interest is charged for all months.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {canEdit && (
+            <button
+              onClick={addWaiver}
+              className="flex items-center gap-2 text-primary-600 hover:text-primary-700 font-bold text-xs mt-2"
+            >
+              <Plus size={14} />
+              Add Waiver Period
+            </button>
+          )}
+
+          <div className="mt-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 text-xs text-amber-700 dark:text-amber-300">
+            <strong>How it works:</strong> For every month that falls within a waiver range, interest will be set to ₹0 for all loans.
+            Auto-generated records will show the waived months with zero interest. Existing manually-entered interest records are not auto-deleted.
           </div>
         </div>
       </Card>

@@ -1,3 +1,15 @@
+**v1.3.0 — Global Interest Waiver Periods**
+
+This release adds the ability to waive interest for specific month ranges across all loans, designed for scenarios like COVID-19 relief.
+
+- **Configurable Waiver Ranges**: Operators can define one or more waiver periods in Settings using From/To Month+Year selectors. Each range has a descriptive label (e.g., "COVID-19 Relief").
+- **Zero-Interest Auto-Generation**: The interest engine now emits ₹0 interest records for waived months (instead of skipping them), ensuring they appear in the Audit Ledger with full traceability.
+- **Audit Narration**: Waived months are narrated as `Interest Waived (April 2020)` in both the UI ledger and CSV exports.
+- **Global Scope**: Waivers apply to ALL loans automatically—no per-loan configuration needed.
+- **Schema Update**: Added `interest_waiver_periods` (JSONB) to `app_settings`.
+
+---
+
 **v1.2.2 — Audit Ledger Narration Fix**
 
 This patch ensures that historical interest rates are accurately reflected in audit narrations, synchronizing the ledger with the Global Interest Rate Schedule.

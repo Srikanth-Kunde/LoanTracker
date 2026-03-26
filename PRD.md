@@ -1,4 +1,4 @@
-# Legacy Loan Tracker - PRD v1.2.1
+# Legacy Loan Tracker - PRD v1.3.0
 ## Product Overview
 Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present).
 
@@ -31,6 +31,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   **Exact-Day Mode**: The system should allow operators to switch the current-period calculation to an exact day-count basis, store the day count used, and preserve whether the entry was `MONTHLY` or `PRORATED_DAYS` for later audit review.
 *   **Existing-Month Interest Override**: Previously recorded interest rows must remain editable month-by-month so operators can convert a historical monthly charge into an exact-day figure without deleting the repayment row.
 *   **Explicit Settlement Period**: The system must support recording an interest payment against the month it settles, even when the cash is physically collected in a later month.
+*   **Global Interest Waiver (v1.3.0)**: Operators can define configurable waiver periods (e.g., April–May 2020 for COVID-19) in Settings. For every waived month, the system generates a ₹0 interest record instead of the standard monthly charge. Waivers apply globally to all loans and are narrated as "Interest Waived" in the Audit Ledger and CSV.
 
 #### 3.4. Principal Repayment
 *   During interest collection (or independently), members can pay down a portion of the principal.

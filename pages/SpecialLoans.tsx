@@ -31,7 +31,8 @@ import {
     getLastInterestPaymentDate,
     getMissingInterestPeriods,
     getProratedInterestForDays,
-    getRepaymentInterestPeriod
+    getRepaymentInterestPeriod,
+    isWaivedPeriod
 } from '../utils/loanMath';
 
 interface EnrichedLoan extends Loan {
@@ -1121,7 +1122,14 @@ const SpecialLoans: React.FC = () => {
                 } else if ((tx.interestPaid || 0) > 0) {
                     vchType = 'Interest';
                     const periodStr = tx.interestPeriod ? ` (${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year})` : '';
-                    narration = `Interest @${tx.rate || activeLoan.interestRate}%${periodStr}`;
+                    const isWaived = tx.interestPeriod && isWaivedPeriod(tx.interestPeriod, settings.interestWaiverPeriods);
+                    narration = isWaived
+                        ? `Interest Waived${periodStr}`
+                        : `Interest @${tx.rate || activeLoan.interestRate}%${periodStr}`;
+                } else if (tx.interestPeriod && isWaivedPeriod(tx.interestPeriod, settings.interestWaiverPeriods)) {
+                    vchType = 'Waived';
+                    const periodStr = ` (${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year})`;
+                    narration = `Interest Waived${periodStr}`;
                 } else {
                     vchType = 'Repayment';
                     narration = tx.notes || 'Repayment';
@@ -1156,7 +1164,7 @@ const SpecialLoans: React.FC = () => {
             ['Interest Paid', activeLoanSummary.interestPaid],
             ['Live Balance', activeLoanSummary.liveBalance],
             [],
-            ['Sl.No', 'Date', 'CalcType', 'Days', 'Vocher Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'],
+            ['Sl.No', 'Date', 'CalcType', 'Days', 'Voucher Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'],
             ...ledgerRows
         ];
 
