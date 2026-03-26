@@ -1,4 +1,4 @@
-# Legacy Loan Tracker - PRD v1.2.0
+# Legacy Loan Tracker - PRD v1.2.1
 ## Product Overview
 Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present).
 
@@ -56,6 +56,9 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   **Audit Ledger Sorting**: Operators can sort transactions by Date or Amount (Ascending/Descending) for easier reconciliation.
 *   **Top-up Recording Edit**: Existing top-up records can be edited directly from the audit ledger to correct historical entry errors.
 *   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
+*   **Enhanced Audit Narration (v1.2.1):** CSV exports now include detailed, numbered narrations for every event (e.g., "Payment 1", "Interest @1.5% (Jan 2026)") to ensure complete audit traceability.
+*   **Advanced Repayment Edit Workflow (v1.2.1):** Operators can edit any repayment record directly from the audit ledger, with full control over transaction date, interest month/year, and principal/interest breakout.
+*   **Member ID Multi-Search (v1.2.1):** Support for phone number search added to Special Loans tab; search engine hardened for consistency across all views.
 *   **Advanced Multi-Type Ledger Filtering:** Upgraded the audit ledger to support selecting multiple transaction types simultaneously (Disbursal, Top-up, Principal, Interest) using interactive toggle chips.
 *   **Full Mobile Responsiveness:** Application is now optimized for mobile viewing with horizontally scrollable tables and adaptive metric grids.
 *   **Ledger Column Totals:** The audit ledger now features a footer that automatically sums visible "Amount", "Principal", and "Interest" columns.
@@ -68,6 +71,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   Operators can create, update, and deactivate member profiles (Name, Phone, Address, Join Date).
 *   *Rule*: Member IDs can be manual (to match legacy books) or auto-generated.
 *   Operators must be able to correct a member's legacy member/account ID from the frontend without breaking linked loans or surety references.
+*   **Member ID Integrity Lock (v1.2.1):** To prevent broken relations, the system automatically disables Member ID editing for any member who already has active or historical loans.
 *   A member ID correction must preserve dependent `loans.member_id`, `surety1_id`, and `surety2_id` relationships.
 
 

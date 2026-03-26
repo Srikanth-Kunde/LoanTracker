@@ -79,6 +79,11 @@ const Members: React.FC = () => {
         .filter(loan => loan.type === LoanType.SPECIAL)
         .reduce((sum, loan) => sum + getSpecialLoanOutstanding(loan.id), 0);
 
+    const memberHasLoans = useMemo(() => {
+        if (!editingMember) return false;
+        return loans.some(loan => loan.memberId === editingMember.id);
+    }, [editingMember, loans]);
+
     // Handlers
     const handleOpenCreate = () => {
         setMemberForm({
@@ -554,10 +559,14 @@ const Members: React.FC = () => {
                                 placeholder="Auto-generated if empty"
                                 value={memberForm.id}
                                 onChange={e => setMemberForm({ ...memberForm, id: e.target.value })}
+                                disabled={modals.edit && memberHasLoans}
+                                className={modals.edit && memberHasLoans ? 'bg-slate-50 dark:bg-slate-900/50 cursor-not-allowed opacity-80' : ''}
                             />
                             {modals.edit && (
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                    Changing the member ID will remap linked loans and surety references.
+                                <p className={`text-[11px] ${memberHasLoans ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-slate-500 dark:text-slate-400'}`}>
+                                    {memberHasLoans 
+                                        ? "ID is locked because this member has active or historical loans." 
+                                        : "Changing the member ID will remap linked loans and surety references."}
                                 </p>
                             )}
                         </div>

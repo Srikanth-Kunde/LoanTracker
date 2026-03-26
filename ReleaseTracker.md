@@ -1,3 +1,15 @@
+**v1.2.1 — Special Loans Integrity & Audit Maintenance**
+
+This release focuses on data integrity, audit-ready reporting, and advanced repayment management.
+
+- **Advanced Repayment Editing**: Expanded the Audit Ledger to support full editing of ANY repayment transaction. Operators can now adjust transaction dates, principal/interest breakdowns, and interest periods (Month/Year) with a single click.
+- **Member ID Integrity Lock**: Implemented a safeguard in the Members module that disables Member ID editing for any member with active or historical loans. This prevents "Unknown Member" states and preserves the integrity of the audit trail.
+- **Chronological Audit Narration**: Re-engineered the Special Loan CSV export to feature detailed, numbered narrations (e.g., "Payment 1", "Interest @1.5% (Jan 2026)") for superior audit traceability.
+- **Search Engine Enhancements**: Integrated phone number search into the Special Loans tab and hardened Member ID lookups across the system.
+- **Misspelling Fix**: Corrected "Intrest" to "Interest" in Audit Ledger headers.
+
+---
+
 **v1.2.0 — Special Loans Audit & Maintenance (Final)**
 
 This version completes the Special Loans module with high-fidelity audit reporting and global maintenance tools.

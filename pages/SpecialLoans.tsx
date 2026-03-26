@@ -123,6 +123,11 @@ const SpecialLoans: React.FC = () => {
     const [interestEditForm, setInterestEditForm] = useState({
         interestCalculationType: 'MONTHLY' as InterestCalculationType,
         interestDays: '',
+        date: '',
+        month: '',
+        year: '',
+        principalPaid: '0',
+        interestPaid: '0',
         notes: ''
     });
 
@@ -176,10 +181,12 @@ const SpecialLoans: React.FC = () => {
     const getInterestEditPreview = (
         loan: EnrichedLoan,
         repayment: LoanRepayment,
-        interestCalculationType: InterestCalculationType,
-        rawInterestDays = ''
+        form: typeof interestEditForm
     ) => {
-        const interestPeriod = getRepaymentInterestPeriod(repayment);
+        const interestPeriod = form.month && form.year 
+            ? { month: parseInt(form.month), year: parseInt(form.year) }
+            : getRepaymentInterestPeriod(repayment);
+            
         if (!interestPeriod) {
             return null;
         }
@@ -194,12 +201,12 @@ const SpecialLoans: React.FC = () => {
             settings
         );
         const defaultInterestDays = getDefaultInterestDays(repayment, interestPeriod.year, interestPeriod.month);
-        const parsedInterestDays = Number.parseInt(rawInterestDays || '', 10);
+        const parsedInterestDays = Number.parseInt(form.interestDays || '', 10);
         const requestedInterestDays = Number.isFinite(parsedInterestDays) && parsedInterestDays > 0
             ? parsedInterestDays
             : defaultInterestDays;
         const monthDays = getDaysInMonth(interestPeriod.year, interestPeriod.month);
-        const proration = interestCalculationType === 'PRORATED_DAYS'
+        const proration = form.interestCalculationType === 'PRORATED_DAYS'
             ? getProratedInterestForDays(
                 periodDue.openingOutstanding,
                 periodDue.rate,
@@ -208,9 +215,9 @@ const SpecialLoans: React.FC = () => {
                 requestedInterestDays
             )
             : null;
-        const nextInterestAmount = interestCalculationType === 'PRORATED_DAYS'
+        const nextInterestAmount = form.interestCalculationType === 'PRORATED_DAYS'
             ? proration?.proratedInterest || 0
-            : periodDue.interestDue;
+            : (form.interestPaid !== String(repayment.interestPaid || 0) ? Number(form.interestPaid) : periodDue.interestDue);
 
         return {
             interestPeriod,
@@ -221,7 +228,7 @@ const SpecialLoans: React.FC = () => {
             currentInterest: Number(repayment.interestPaid || 0),
             currentAmount: Number(repayment.amount || 0),
             nextInterest: roundCurrency(nextInterestAmount),
-            nextAmount: roundCurrency(Number(repayment.principalPaid || 0) + nextInterestAmount),
+            nextAmount: roundCurrency(Number(form.principalPaid || 0) + nextInterestAmount),
             daysHeld: proration?.daysHeld || requestedInterestDays,
             monthDays,
             formula: proration
@@ -338,10 +345,9 @@ const SpecialLoans: React.FC = () => {
         return getInterestEditPreview(
             activeLoan,
             interestEditTarget,
-            interestEditForm.interestCalculationType,
-            interestEditForm.interestDays
+            interestEditForm
         );
-    }, [activeLoan, interestEditForm.interestCalculationType, interestEditForm.interestDays, interestEditTarget, loanRepayments, loanTopups]);
+    }, [activeLoan, interestEditForm, interestEditTarget, loanRepayments, loanTopups]);
 
     const activeLoanTransactions = useMemo(() => {
         if (!activeLoan) return [];
@@ -544,6 +550,7 @@ const SpecialLoans: React.FC = () => {
             return {
                 ...loan,
                 memberName: member?.name || 'Unknown',
+                memberPhone: member?.phone || '',
                 historicalOutstanding,
                 openingOutstanding,
                 historicalPrincipalPaid,
@@ -559,11 +566,15 @@ const SpecialLoans: React.FC = () => {
                 isOverdueMonth,
                 lastInterestPaymentDate: getLastInterestPaymentDate(allRepayments, loan.id)
             };
-        }).filter(l =>
-            l.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            String(l.memberId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-            l.id.toLowerCase().includes(searchTerm.toLowerCase())
-        ).sort((a, b) => {
+        }).filter(l => {
+            const lowSearch = searchTerm.toLowerCase();
+            return (
+                l.memberName.toLowerCase().includes(lowSearch) ||
+                String(l.memberId).toLowerCase().includes(lowSearch) ||
+                (l.memberPhone && l.memberPhone.includes(searchTerm)) ||
+                l.id.toLowerCase().includes(lowSearch)
+            );
+        }).sort((a, b) => {
             if (sortOrder === 'MEMBER_ID_ASC') return (parseInt(a.memberId) || 0) - (parseInt(b.memberId) || 0) || a.memberId.localeCompare(b.memberId);
             if (sortOrder === 'MEMBER_ID_DESC') return (parseInt(b.memberId) || 0) - (parseInt(a.memberId) || 0) || b.memberId.localeCompare(a.memberId);
             if (sortOrder === 'DATE_ASC') return compareISODate(a.startDate, b.startDate);
@@ -863,27 +874,34 @@ const SpecialLoans: React.FC = () => {
     const openInterestEditModal = (repaymentId: string) => {
         if (!activeLoan) return;
         const repayment = loanRepayments.find(row => row.id === repaymentId && row.loanId === activeLoan.id);
-        if (!repayment || (repayment.interestPaid || 0) <= 0) return;
+        if (!repayment) return;
 
         const interestPeriod = getRepaymentInterestPeriod(repayment);
-        if (!interestPeriod) return;
-
+        
         setInterestEditTarget(repayment);
         setInterestEditForm({
             interestCalculationType: repayment.interestCalculationType || 'MONTHLY',
-            interestDays: String(getDefaultInterestDays(repayment, interestPeriod.year, interestPeriod.month)),
+            interestDays: String(interestPeriod ? getDefaultInterestDays(repayment, interestPeriod.year, interestPeriod.month) : ''),
+            date: repayment.date,
+            month: interestPeriod ? String(interestPeriod.month) : '',
+            year: interestPeriod ? String(interestPeriod.year) : '',
+            principalPaid: String(repayment.principalPaid || 0),
+            interestPaid: String(repayment.interestPaid || 0),
             notes: repayment.notes || ''
         });
         setErrorMsg('');
         setModals({ ...modals, editInterest: true });
     };
 
-    const handleUpdateInterestForMonth = async () => {
-        if (!activeLoan || !interestEditTarget || !interestEditPreview) return;
+    const handleUpdateRepayment = async () => {
+        if (!activeLoan || !interestEditTarget) return;
         setErrorMsg('');
 
         try {
-            if (interestEditForm.interestCalculationType === 'PRORATED_DAYS') {
+            const upMonth = interestEditForm.month ? parseInt(interestEditForm.month) : undefined;
+            const upYear = interestEditForm.year ? parseInt(interestEditForm.year) : undefined;
+
+            if (interestEditForm.interestCalculationType === 'PRORATED_DAYS' && interestEditPreview) {
                 const dayCount = Number.parseInt(interestEditForm.interestDays || '', 10);
                 if (!Number.isFinite(dayCount) || dayCount <= 0 || dayCount > interestEditPreview.monthDays) {
                     throw new Error(`Exact days must be between 1 and ${interestEditPreview.monthDays} for ${interestEditPreview.periodLabel}.`);
@@ -892,10 +910,14 @@ const SpecialLoans: React.FC = () => {
 
             const updatedRepayment: LoanRepayment = {
                 ...interestEditTarget,
-                amount: interestEditPreview.nextAmount,
-                interestPaid: interestEditPreview.nextInterest,
+                date: interestEditForm.date,
+                amount: roundCurrency(Number(interestEditForm.principalPaid) + Number(interestEditForm.interestPaid)),
+                interestPaid: Number(interestEditForm.interestPaid),
+                principalPaid: Number(interestEditForm.principalPaid),
+                interestForMonth: upMonth,
+                interestForYear: upYear,
                 interestDays: interestEditForm.interestCalculationType === 'PRORATED_DAYS'
-                    ? interestEditPreview.daysHeld
+                    ? (interestEditPreview?.daysHeld || parseInt(interestEditForm.interestDays))
                     : undefined,
                 interestCalculationType: interestEditForm.interestCalculationType,
                 notes: interestEditForm.notes.trim() || undefined
@@ -905,20 +927,19 @@ const SpecialLoans: React.FC = () => {
             log('UPDATE_REPAYMENT', 'loan_repayments', interestEditTarget.id, {
                 loanId: activeLoan.id,
                 memberName: activeLoan.memberName,
-                interestPeriod: interestEditPreview.periodLabel,
                 before: {
+                    date: interestEditTarget.date,
                     amount: interestEditTarget.amount,
                     interestPaid: interestEditTarget.interestPaid,
-                    interestDays: interestEditTarget.interestDays || null,
-                    interestCalculationType: interestEditTarget.interestCalculationType || 'MONTHLY',
-                    notes: interestEditTarget.notes || null
+                    principalPaid: interestEditTarget.principalPaid,
+                    interestPeriod: getRepaymentInterestPeriod(interestEditTarget),
                 },
                 after: {
+                    date: updatedRepayment.date,
                     amount: updatedRepayment.amount,
                     interestPaid: updatedRepayment.interestPaid,
-                    interestDays: updatedRepayment.interestDays || null,
-                    interestCalculationType: updatedRepayment.interestCalculationType || 'MONTHLY',
-                    notes: updatedRepayment.notes || null
+                    principalPaid: updatedRepayment.principalPaid,
+                    interestPeriod: { month: upMonth, year: upYear }
                 }
             });
 
@@ -926,7 +947,7 @@ const SpecialLoans: React.FC = () => {
             setInterestEditTarget(null);
         } catch (error) {
             const e = error as Error;
-            logger.error("Error updating monthly interest", e);
+            logger.error("Error updating repayment", e);
             setErrorMsg(e.message);
         }
     };
@@ -1074,18 +1095,36 @@ const SpecialLoans: React.FC = () => {
     const downloadActiveLoanLedger = () => {
         if (!activeLoan || !activeLoanSummary) return;
 
+        let pCount = 0;
+        let tCount = 0;
         const ledgerRows = activeLoanTransactions.map((tx, idx) => {
             const isDisbursal = tx.entryType === 'DISBURSAL';
             const isTopup = tx.entryType === 'TOPUP';
             const isRepayment = tx.entryType === 'REPAYMENT';
             
             let vchType = '';
-            if (isDisbursal) vchType = 'Loan';
-            else if (isTopup) vchType = 'Top-up';
-            else if (isRepayment) {
-                if ((tx.principalPaid || 0) > 0) vchType = 'Payment';
-                else if ((tx.interestPaid || 0) > 0) vchType = 'Interest';
-                else vchType = 'Repayment';
+            let narration = '';
+
+            if (isDisbursal) {
+                vchType = 'Loan';
+                narration = 'Original Loan Disbursement';
+            } else if (isTopup) {
+                vchType = 'Top-up';
+                tCount++;
+                narration = `Top-up ${tCount} (@${tx.amount ? (tx.rate || activeLoan.interestRate) : activeLoan.interestRate}%)`;
+            } else if (isRepayment) {
+                if ((tx.principalPaid || 0) > 0) {
+                    vchType = 'Payment';
+                    pCount++;
+                    narration = `Payment ${pCount}`;
+                } else if ((tx.interestPaid || 0) > 0) {
+                    vchType = 'Interest';
+                    const periodStr = tx.interestPeriod ? ` (${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year})` : '';
+                    narration = `Interest @${activeLoan.interestRate}%${periodStr}`;
+                } else {
+                    vchType = 'Repayment';
+                    narration = tx.notes || 'Repayment';
+                }
             }
 
             const debit = (isDisbursal || isTopup) ? (tx.amount || tx.principalDelta || 0) : '';
@@ -1095,14 +1134,14 @@ const SpecialLoans: React.FC = () => {
             return [
                 idx + 1,
                 formatDisplayDate(tx.date),
-                tx.interestCalculationType || '',
-                tx.interestDays || '',
+                tx.interestCalculationType || 'Monthly',
+                tx.interestDays || '30',
                 vchType,
-                debit,
-                credit,
-                interest,
-                tx.balanceAfter || 0,
-                tx.notes || ''
+                debit ? Number(debit).toFixed(2) : '0.00',
+                credit ? Number(credit).toFixed(2) : '0.00',
+                interest ? Number(interest).toFixed(2) : '0.00',
+                (tx.balanceAfter || 0).toFixed(2),
+                narration || tx.notes || ''
             ];
         });
 
@@ -2364,13 +2403,13 @@ const SpecialLoans: React.FC = () => {
                                                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500" onClick={() => openEditModal(activeLoan)}><Edit size={12} /></Button>
                                                             ) : (
                                                                 <>
-                                                                    {tx.entryType === 'REPAYMENT' && (tx.interestPaid || 0) > 0 && tx.interestPeriod ? (
+                                                                    {tx.entryType === 'REPAYMENT' ? (
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
                                                                             className="h-6 w-6 text-blue-500"
                                                                             onClick={() => openInterestEditModal(tx.id)}
-                                                                            title="Edit interest"
+                                                                            title="Edit repayment"
                                                                         >
                                                                             <Edit size={12} />
                                                                         </Button>
@@ -2443,106 +2482,127 @@ const SpecialLoans: React.FC = () => {
                     setModals({ ...modals, editInterest: false });
                     setInterestEditTarget(null);
                 }}
-                title="Edit Month Interest"
+                title="Edit Repayment"
                 maxWidth="max-w-2xl"
             >
-                {activeLoan && interestEditTarget && interestEditPreview && (
+                {activeLoan && interestEditTarget && (
                     <div className="space-y-5">
                         {errorMsg && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{errorMsg}</div>}
 
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Month</p>
-                                <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{interestEditPreview.periodLabel}</p>
-                                <p className="mt-1 text-xs text-slate-500">Recorded on {formatDisplayDate(interestEditTarget.date)}</p>
-                            </div>
-                            <div className="rounded-2xl border border-amber-100 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-300">Opening Principal</p>
-                                <p className="mt-2 text-base font-bold text-amber-900 dark:text-amber-100">{formatCurrency(interestEditPreview.openingOutstanding, settings.currency)}</p>
-                                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{interestEditPreview.monthlyRate}% monthly rate</p>
-                            </div>
-                            <div className="rounded-2xl border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">Current Saved Interest</p>
-                                <p className="mt-2 text-base font-bold text-blue-900 dark:text-blue-100">{formatCurrency(interestEditPreview.currentInterest, settings.currency)}</p>
-                                <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">Repayment amount {formatCurrency(interestEditPreview.currentAmount, settings.currency)}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input
+                                label="Transaction Date"
+                                type="date"
+                                value={interestEditForm.date}
+                                onChange={e => setInterestEditForm({ ...interestEditForm, date: e.target.value })}
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Int. Month</label>
+                                    <select
+                                        value={interestEditForm.month}
+                                        onChange={e => setInterestEditForm({ ...interestEditForm, month: e.target.value })}
+                                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    >
+                                        <option value="">None</option>
+                                        {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Int. Year</label>
+                                    <select
+                                        value={interestEditForm.year}
+                                        onChange={e => setInterestEditForm({ ...interestEditForm, year: e.target.value })}
+                                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    >
+                                        <option value="">None</option>
+                                        {Array.from({ length: 20 }, (_, i) => 2020 + i).map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 p-4 space-y-4">
-                            <div>
-                                <p className="text-sm font-semibold text-slate-900 dark:text-white">Calculation Mode</p>
-                                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Switch a recorded month between default monthly interest and exact-day proration. Saving updates the existing repayment row in place.</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                {[
-                                    { label: 'Monthly Default', value: 'MONTHLY' as InterestCalculationType },
-                                    { label: 'Exact Days', value: 'PRORATED_DAYS' as InterestCalculationType }
-                                ].map(option => (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => setInterestEditForm({
-                                            ...interestEditForm,
-                                            interestCalculationType: option.value
-                                        })}
-                                        className={`rounded-2xl border px-4 py-3 text-left transition-all ${interestEditForm.interestCalculationType === option.value
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-400 dark:bg-blue-900/20 dark:text-blue-200'
-                                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
-                                            }`}
-                                    >
-                                        <div className="text-sm font-bold">{option.label}</div>
-                                        <div className="mt-1 text-xs opacity-80">
-                                            {option.value === 'MONTHLY'
-                                                ? `Use the stored monthly amount ${formatCurrency(interestEditPreview.monthlyInterest, settings.currency)}`
-                                                : `Prorate for up to ${interestEditPreview.monthDays} exact days`}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-
-                            {interestEditForm.interestCalculationType === 'PRORATED_DAYS' && (
-                                <Input
-                                    label="Exact Days Held"
-                                    type="number"
-                                    min={1}
-                                    max={interestEditPreview.monthDays}
-                                    value={interestEditForm.interestDays}
-                                    onChange={e => setInterestEditForm({
-                                        ...interestEditForm,
-                                        interestDays: e.target.value
-                                    })}
-                                    description={interestEditPreview.formula
-                                        ? `${interestEditPreview.daysHeld} of ${interestEditPreview.monthDays} days. ${interestEditPreview.formula}`
-                                        : `Use 1-${interestEditPreview.monthDays} days for ${interestEditPreview.periodLabel}.`}
-                                />
-                            )}
-
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Input
-                                label="Notes"
-                                type="text"
-                                value={interestEditForm.notes}
-                                onChange={e => setInterestEditForm({
-                                    ...interestEditForm,
-                                    notes: e.target.value
-                                })}
-                                placeholder="Optional note for this repayment row"
-                                description="Any save is appended to the audit log with before/after values for this month."
+                                label="Principal Amount"
+                                type="number"
+                                value={interestEditForm.principalPaid}
+                                onChange={e => setInterestEditForm({ ...interestEditForm, principalPaid: e.target.value })}
+                                leftIcon={<span className="text-xs font-bold text-slate-400">{settings.currency}</span>}
+                            />
+                            <Input
+                                label="Interest Amount"
+                                type="number"
+                                value={interestEditForm.interestPaid}
+                                onChange={e => setInterestEditForm({ ...interestEditForm, interestPaid: e.target.value })}
+                                leftIcon={<span className="text-xs font-bold text-slate-400">{settings.currency}</span>}
                             />
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Monthly Default</p>
-                                <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{formatCurrency(interestEditPreview.monthlyInterest, settings.currency)}</p>
-                            </div>
-                            <div className="rounded-2xl border border-emerald-100 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-300">Updated Interest</p>
-                                <p className="mt-2 text-lg font-black text-emerald-900 dark:text-emerald-100">{formatCurrency(interestEditPreview.nextInterest, settings.currency)}</p>
-                                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Repayment amount becomes {formatCurrency(interestEditPreview.nextAmount, settings.currency)}</p>
-                            </div>
-                        </div>
+                        {interestEditPreview && (
+                            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 p-4 space-y-4">
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Calculation Mode</p>
+                                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Switch a recorded month between default monthly interest and exact-day proration.</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {[
+                                        { label: 'Monthly Default', value: 'MONTHLY' as InterestCalculationType },
+                                        { label: 'Exact Days', value: 'PRORATED_DAYS' as InterestCalculationType }
+                                    ].map(option => (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            onClick={() => setInterestEditForm({
+                                                ...interestEditForm,
+                                                interestCalculationType: option.value
+                                            })}
+                                            className={`rounded-2xl border px-4 py-3 text-left transition-all ${interestEditForm.interestCalculationType === option.value
+                                                ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-400 dark:bg-blue-900/20 dark:text-blue-200'
+                                                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                                                }`}
+                                        >
+                                            <div className="text-sm font-bold">{option.label}</div>
+                                            <div className="mt-1 text-xs opacity-80">
+                                                {option.value === 'MONTHLY'
+                                                    ? `Match stored monthly amount ${formatCurrency(interestEditPreview.monthlyInterest, settings.currency)}`
+                                                    : `Prorate for up to ${interestEditPreview.monthDays} exact days`}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
 
-                        <div className="flex justify-end gap-3">
+                                {interestEditForm.interestCalculationType === 'PRORATED_DAYS' && (
+                                    <Input
+                                        label="Exact Days Held"
+                                        type="number"
+                                        min={1}
+                                        max={interestEditPreview.monthDays}
+                                        value={interestEditForm.interestDays}
+                                        onChange={e => setInterestEditForm({
+                                            ...interestEditForm,
+                                            interestDays: e.target.value
+                                        })}
+                                        description={interestEditPreview.formula
+                                            ? `${interestEditPreview.daysHeld} of ${interestEditPreview.monthDays} days. ${interestEditPreview.formula}`
+                                            : `Use 1-${interestEditPreview.monthDays} days for ${interestEditPreview.periodLabel}.`}
+                                    />
+                                )}
+                            </div>
+                        )}
+
+                        <Input
+                            label="Notes"
+                            type="text"
+                            value={interestEditForm.notes}
+                            onChange={e => setInterestEditForm({
+                                ...interestEditForm,
+                                notes: e.target.value
+                            })}
+                            placeholder="Optional note"
+                        />
+
+                        <div className="flex justify-end gap-3 pt-2">
                             <Button
                                 variant="outline"
                                 onClick={() => {
@@ -2552,8 +2612,8 @@ const SpecialLoans: React.FC = () => {
                             >
                                 Cancel
                             </Button>
-                            <Button onClick={handleUpdateInterestForMonth}>
-                                Save Month Interest
+                            <Button onClick={handleUpdateRepayment}>
+                                Save Repayment
                             </Button>
                         </div>
                     </div>
