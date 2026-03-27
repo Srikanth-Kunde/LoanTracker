@@ -1,4 +1,4 @@
-# Legacy Loan Tracker v1.4.0
+# Legacy Loan Tracker v1.4.1 (Production Ready)
 Digitize and audit historical handwritten loan records starting from 2012 with absolute precision. This specialized tool focuses exclusively on **Special Loans** (Interest-only, with multiple top-ups and flexible repayments).
 
 > [!NOTE]
@@ -29,8 +29,9 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Admin-Only Audit Log Tab:** Database write-history now lives in its own `Audit Log History` tab and is visible only to admins.
 *   **Reduced Scope UI:** The application is laser-focused on `Special Loans`, `Members`, `Audit Report`, `Audit Log History` (admin only), and `Settings`. No distracting dashboards or bank-sync features.
 *   **Separate Backend Scripts:** Schema setup and sample data are now split into separate SQL Editor scripts.
-*   **Centralized Financial Engine (v1.4.0)**: Core principal math and transaction labeling are now unified into a single calculation utility (`utils/loanMath.ts`). This ensures 100% consistency across the UI, reports, and CSV/XLSX exports.
-*   **Bulk Audit Export (v1.4.0)**: Added "Download All Ledgers" action to Special Loans, generating a single multi-sheet XLSX file containing the full audit history for every member in the portfolio.
+*   **Bulk Audit Export (v1.4.1)**: Enhanced "Download All Ledgers" to generate a single ZIP archive containing all member CSV ledgers, ensuring 100% reliable bulk downloads across all browsers.
+*   **Centralized Financial Engine (v1.4.1)**: Core principal math and transaction labeling are now unified into a single calculation utility (`utils/loanMath.ts`). This ensures 1000% consistency across the UI, reports, and CSV/XLSX exports.
+*   **XLSX Financial Precision (v1.4.1)**: XLSX exports now use raw numeric types instead of strings, restoring native Excel functionality like Auto-Sum and external formula references.
 *   **Prorate Snapshot Safety (v1.4.0)**: "Wipe Interest" now automatically snapshots manual prorate date overrides to `app_settings` before deletion, preventing data loss during historical reconciliation.
 
 ## 🚀 Quick Start
@@ -98,7 +99,7 @@ The application requires a specific schema and security configuration to functio
 6.  Run `sql/sample-ajay-remove.sql` whenever you want to remove the sample rows.
 
 ### Do You Need To Run SQL Again?
-- **Yes, if your database was created before the latest ledger hardening update (v1.4.0), rerun `migration.sql`.**
+- **Yes, if your database was created before the latest ledger hardening update (v1.4.1), rerun `migration.sql`.**
 - `migration.sql` now adds `prorate_override_dates` to `app_settings` for interest-wipe safety and includes database-level validation triggers to ensure transaction dates are chronologically sound.
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
 - **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors.
@@ -113,6 +114,8 @@ For Senior Auditors, verify these controls in the application:
 - [x] **Allocation Separation**: `interestPaid` is tracked separately from `principalPaid` to prevent amortized balance corruption.
 - [x] **Logic Consolidation**: Every principal calculation in the system uses the same shared utility (`calculatePrincipalPaid`) to ensure "no-gap" reconciliation.
 - [x] **Zero-Balance Cutoff**: No interest is generated for periods where principal is ≤ 1.00 INR (rounding tolerance).
+- [x] **Zero-Interest Settlement Detection**: Correctly identifies ₹0 entries (waived months) as "settled" to prevent row duplication during interest regeneration.
+- [x] **Export Integrity**: CSV/XLSX exports match the UI's deterministic running balances and use appropriate data types for spreadsheet calculations.
 - [x] **Immutable Repayment Basis**: Exact-day interest rows preserve their specific `interestDays` and `interestCalculationType` even if global rules change later.
 - [x] **Event-Driven Running Balance**: Every transaction generates a new `balanceAfter` based on deterministic chronological event ordering.
 

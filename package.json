@@ -1,7 +1,7 @@
 {
   "name": "legacy-loan-tracker",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -19,6 +20,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.0",
     "@types/node": "^22.14.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",

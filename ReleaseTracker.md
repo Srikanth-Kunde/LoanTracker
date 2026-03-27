@@ -1,3 +1,14 @@
+**v1.4.1 — Reliability & Export Precision (Production Ready)**
+
+This release hardens the project for production deployment by resolving critical export formatting and interest-recalculation bugs.
+
+- **XLSX Financial Formatting**: Corrected the ledger column types for Debit, Credit, Interest, and Balance. By passing raw numbers instead of strings, native Excel formulas and "Auto-Sum" are now fully functional.
+- **Bulk CSV ZIP Bundling**: Integrated `jszip` to bundle multiple member ledgers into a single ZIP file for bulk exports. This completely resolves browser-side download blocking for large portfolios.
+- **Zero-Interest Settlement Control**: Updated the interest detection logic to recognize ₹0 entries (e.g., COVID-19 waived months) as settled. This eliminates "Duplicate Zero Rows" during interest regeneration.
+- **Regression Logic Hardening**: Expanded the test suite in `loanMath.test.ts` to cover zero-interest settlement and chronological running balances.
+
+---
+
 **v1.4.0 — Audit Hardening & Precision Recovery**
 
 This release focuses on long-term maintainability, logic consolidation, and audit-ready data persistence.

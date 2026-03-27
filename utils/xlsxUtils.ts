@@ -7,6 +7,7 @@
  */
 
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 export type DownloadFormat = 'CSV' | 'XLSX';
 
@@ -72,6 +73,29 @@ export const downloadAs = (
   } else {
     downloadAsCSV(rows, filename);
   }
+};
+
+/**
+ * Creates a ZIP file containing multiple CSV files
+ * Each entry in 'files' should be { name: string, rows: 2D array }
+ */
+export const downloadAsZip = async (
+  files: { name: string; rows: (string | number | null | undefined)[][] }[],
+  zipFilename: string
+): Promise<void> => {
+  const zip = new JSZip();
+
+  files.forEach(({ name, rows }) => {
+    const csvContent = rows
+      .map(row => row.map(escapeCsvValue).join(','))
+      .join('\n');
+    // Ensure filename ends with .csv
+    const safeName = name.endsWith('.csv') ? name : `${name}.csv`;
+    zip.file(safeName, '\uFEFF' + csvContent);
+  });
+
+  const content = await zip.generateAsync({ type: 'blob' });
+  triggerDownload(content, zipFilename.endsWith('.zip') ? zipFilename : `${zipFilename}.zip`);
 };
 
 // ── Internal ──────────────────────────────────────────────────────────────────

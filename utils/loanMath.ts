@@ -441,11 +441,24 @@ export const getInterestPaidForPeriod = (
   }, 0));
 };
 
+export const hasInterestRecordForPeriod = (
+  repayments: LoanRepayment[],
+  loanId: string,
+  period: InterestPeriod
+): boolean => {
+  const targetKey = getInterestPeriodKey(period);
+  return repayments.some(repayment => {
+    if (repayment.loanId !== loanId) return false;
+    const assignedPeriod = getRepaymentInterestPeriod(repayment);
+    return assignedPeriod && getInterestPeriodKey(assignedPeriod) === targetKey;
+  });
+};
+
 export const isInterestSettledForPeriod = (
   repayments: LoanRepayment[],
   loanId: string,
   period: InterestPeriod
-) => getInterestPaidForPeriod(repayments, loanId, period) > 0;
+) => hasInterestRecordForPeriod(repayments, loanId, period);
 
 export const getMissingInterestPeriods = (
   loan: Loan,

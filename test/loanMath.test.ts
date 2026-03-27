@@ -7,6 +7,8 @@ import {
     getInterestDueForPeriod,
     getInvalidInterestRepayments,
     getInterestPaidForPeriod,
+    hasInterestRecordForPeriod,
+    isInterestSettledForPeriod,
     getMissingInterestPeriods,
     getProratedInterestForDays,
     getSpecialLoanOutstandingFromEvents,
@@ -240,6 +242,45 @@ const makeRepayment = (id: string, overrides: Partial<LoanRepayment>): LoanRepay
   const jan2013 = getInterestDueForPeriod(legacyLoan, [], [], { year: 2013, month: 2 }, mockSettings);
   assert.equal(jan2013.rate, 2.0, 'Historical interest (2013) should follow legacy rule (2%)');
   assert.equal(jan2013.interestDue, 1000, 'Historical interest should be 2% of 50000');
+}
+
+{
+  const loan = makeLoan();
+  const repayments = [
+    makeRepayment('rep_zero_interest', {
+      date: '2020-04-30',
+      interestPaid: 0,
+      interestForMonth: 4,
+      interestForYear: 2020
+    }),
+    makeRepayment('rep_normal_interest', {
+      date: '2020-05-31',
+      interestPaid: 7500,
+      interestForMonth: 5,
+      interestForYear: 2020
+    })
+  ];
+
+  assert.equal(
+    hasInterestRecordForPeriod(repayments, loan.id, { year: 2020, month: 4 }),
+    true,
+    'Zero interest record should be detected as an existing record'
+  );
+  assert.equal(
+    isInterestSettledForPeriod(repayments, loan.id, { year: 2020, month: 4 }),
+    true,
+    'Zero interest record should mark the period as settled'
+  );
+  assert.equal(
+    isInterestSettledForPeriod(repayments, loan.id, { year: 2020, month: 5 }),
+    true,
+    'Normal interest record should mark the period as settled'
+  );
+  assert.equal(
+    isInterestSettledForPeriod(repayments, loan.id, { year: 2020, month: 6 }),
+    false,
+    'Month with no record should not be settled'
+  );
 }
 
 console.log('loanMath regression tests passed');

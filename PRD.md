@@ -1,4 +1,4 @@
-# Legacy Loan Tracker - PRD v1.4.0
+# Legacy Loan Tracker - PRD v1.4.1
 ## Product Overview
 Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present).
 
@@ -57,7 +57,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   **Audit Ledger Sorting**: Operators can sort transactions by Date or Amount (Ascending/Descending) for easier reconciliation.
 *   **Top-up Recording Edit**: Existing top-up records can be edited directly from the audit ledger to correct historical entry errors.
 *   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
-*   **Bulk Audit Export (v1.4.0):** Operators can download a complete audit trail for the entire society in a single multi-sheet XLSX file. This provides a portable, full-fidelity offline backup of all financial activities.
+*   **Bulk Audit Export (v1.4.1):** Operators can download a complete audit trail for the entire society in a single multi-file ZIP archive or multi-sheet XLSX file. This ensures 100% reliable bulk downloads by bundling individual CSVs into a single transaction, bypassing browser-side download blockers.
 *   **Enhanced Audit Narration (v1.2.1):** CSV exports now include detailed, numbered narrations for every event (e.g., "Payment 1", "Interest @1.5% (Jan 2026)") to ensure complete audit traceability.
 *   **Advanced Repayment Edit Workflow (v1.2.1):** Operators can edit any repayment record directly from the audit ledger, with full control over transaction date, interest month/year, and principal/interest breakout.
 *   **Member ID Multi-Search (v1.2.1):** Support for phone number search added to Special Loans tab; search engine hardened for consistency across all views.
@@ -153,9 +153,8 @@ To support older IDE TypeScript Language Servers (specifically in WSL/Windows en
 #### 5.4. Interest Calculation Fixes
 *   **Start Month Partial Month Fix**: Fixed `getChargeableInterestPeriods` in `utils/loanMath.ts` to skip the first partial month when calculating chargeable interest periods. For loans disbursed mid-month (e.g., November 10), the system now correctly starts charging interest from the following full month (December), rather than attempting to charge full month's interest for a partial month. This aligns with standard interest-in-arrears accounting where interest for the partial first month is rolled into the following period's billing.
 *   **Principal Repaid Fallback Fix**: Fixed the "Principal Repaid" summary calculation in `pages/SpecialLoans.tsx` to use the fallback formula (amount - interestPaid) when explicit principalPaid is missing. This ensures legacy imported data correctly reflects principal reductions even when the import didn't populate the principalPaid field.
-*   **Zero-Balance Gap Fix**: Fixed interest auto-generation to properly calculate periods from loan start date, only skipping actual zero-balance periods before top-ups.
-*   **TypeScript Property Fix**: Corrected `loan_id` → `loanId` in loanMath.ts to match the LoanRepayment type definition.
-*   **Global Auto-Gen & Batching (v1.1.8)**: Implemented a robust batch-processing mechanism (chunk size: 50) for global interest auto-generation, featuring a new progress-tracking UI for mass-import cleanup.
+*   **Zero-Interest Settlement Detection (v1.4.1)**: Fixed `isInterestSettledForPeriod` in `utils/loanMath.ts` to identify ₹0 interest records (e.g., waived months) as "settled". This prevents the duplicate generation of interest rows for waived periods during historical reconciliation.
+*   **XLSX Financial Precision (v1.4.1)**: Corrected the data types for financial columns in the XLSX ledger export. By passing raw numbers instead of strings, native Excel formulas and Auto-Sum are now fully functional across all exported reports.
 *   **No Database Schema Changes Required**: All fixes are purely frontend calculation or orchestration changes.
 
 ### 🛡️ Financial Systems Audit Checklist

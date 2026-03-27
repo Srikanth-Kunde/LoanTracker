@@ -21,7 +21,7 @@ import { Card } from '../components/ui/Card';
 import { LoanCalculator } from '../components/LoanCalculator';
 import { compareISODate, formatDisplayDate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp, parseISODateParts } from '../utils/date';
 import { getInterestRateForDate } from '../utils/interest';
-import { downloadAs, downloadMultiSheetXLSX, type DownloadFormat } from '../utils/xlsxUtils';
+import { downloadAs, downloadMultiSheetXLSX, downloadAsZip, type DownloadFormat } from '../utils/xlsxUtils';
 import {
     getAutoGenerationStopDate,
     buildLoanLedger,
@@ -1134,10 +1134,10 @@ const SpecialLoans: React.FC = () => {
                 tx.interestCalculationType || 'Monthly',
                 tx.interestDays || 30,
                 vchType,
-                Number(debit).toFixed(2),
-                Number(credit).toFixed(2),
-                Number(interest).toFixed(2),
-                (tx.balanceAfter || 0).toFixed(2),
+                Number(debit),
+                Number(credit),
+                Number(interest),
+                Number(tx.balanceAfter || 0),
                 narration || tx.notes || ''
             ];
         });
@@ -1176,12 +1176,14 @@ const SpecialLoans: React.FC = () => {
             const filename = `All_Audit_Ledgers_${MONTHS[selectedMonth - 1]}_${selectedYear}`;
             downloadMultiSheetXLSX(sheets, filename);
         } else {
-            // CSV: download each loan as a separate file
-            loansInSelectedPeriod.forEach(loan => {
+            // CSV: download all loans as a single ZIP file
+            const files = loansInSelectedPeriod.map(loan => {
                 const rows = buildLedgerRowsForLoan(loan);
                 const safeName = loan.memberName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || loan.id;
-                downloadAs(rows, `Audit_Ledger_${safeName}`, 'CSV');
+                return { name: `Audit_Ledger_${safeName}`, rows };
             });
+            const zipFilename = `All_Audit_Ledgers_${MONTHS[selectedMonth - 1]}_${selectedYear}`;
+            downloadAsZip(files, zipFilename);
         }
     };
 
