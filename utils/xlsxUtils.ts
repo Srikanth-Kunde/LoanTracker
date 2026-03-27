@@ -8,8 +8,11 @@
 
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
+import ExcelJS from 'exceljs';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
-export type DownloadFormat = 'CSV' | 'XLSX';
+export type DownloadFormat = 'CSV' | 'XLSX' | 'PDF';
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
 
@@ -69,10 +72,236 @@ export const downloadAs = (
   sheetName?: string
 ): void => {
   if (format === 'XLSX') {
-    downloadAsXLSX(rows, filename, sheetName);
+    downloadAsStylishXLSX(rows, filename, sheetName);
+  } else if (format === 'PDF') {
+    downloadAsPDF(rows, filename);
   } else {
     downloadAsCSV(rows, filename);
   }
+};
+
+/** Download 2D array as XLSX with styling using ExcelJS */
+export const downloadAsStylishXLSX = async (
+  rows: (string | number | null | undefined)[][],
+  filename: string,
+  sheetName = 'Ledger'
+): Promise<void> => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName.slice(0, 31));
+
+  // Find the header row (has 'Sl.No')
+  const headerIdx = rows.findIndex(r => r.includes('Sl.No'));
+  const dataRows = rows;
+
+  dataRows.forEach((row, i) => {
+    const wsRow = worksheet.addRow(row);
+    
+    // Apply styling to the top summary block (before the main table)
+    if (headerIdx !== -1 && i < headerIdx) {
+      const cellA = wsRow.getCell(1);
+      const cellB = wsRow.getCell(2);
+      cellA.font = { bold: true };
+      cellA.alignment = { horizontal: 'left' };
+      cellB.alignment = { horizontal: 'right' };
+      if (typeof row[1] === 'number') {
+        cellB.numFmt = '#,##0.00';
+      }
+    }
+
+    // Apply styling to the table header
+    if (i === headerIdx) {
+      wsRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF444444' }
+        };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+        cell.alignment = { horizontal: 'center' };
+      });
+    }
+
+    // Apply styling to table data
+    if (headerIdx !== -1 && i > headerIdx) {
+      wsRow.eachCell((cell, colNumber) => {
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+        
+        // Align numeric columns
+        if ([6, 7, 8, 9].includes(colNumber)) {
+          cell.alignment = { horizontal: 'right' };
+          cell.numFmt = '#,##0.00';
+        }
+
+        // Highlight "GRAND TOTAL" row
+        if (String(row[4]).includes('GRAND TOTAL')) {
+          cell.font = { bold: true };
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF0F0F0' }
+          };
+        }
+      });
+    }
+  });
+
+  // Auto-fit columns
+  worksheet.columns.forEach(column => {
+    let maxLen = 0;
+    column.eachCell?.({ includeEmpty: true }, cell => {
+      const len = cell.value ? String(cell.value).length : 5;
+      if (len > maxLen) maxLen = len;
+    });
+    column.width = Math.min(maxLen + 2, 40);
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  triggerDownload(blob, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
+};
+
+/** Download 2D array as a Landscape PDF using jsPDF + AutoTable */
+export const downloadAsPDF = (
+  rows: (string | number | null | undefined)[][],
+  filename: string
+): void => {
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  // Find the header row (has 'Sl.No')
+  const headerIdx = rows.findIndex(r => r.includes('Sl.No'));
+  
+  if (headerIdx === -1) {
+    // If no table structure, just dump rows (fallback)
+    doc.text(rows.map(r => r.join(' | ')).join('\n'), 10, 10);
+  } else {
+    // Top summary block
+    const summary = rows.slice(0, headerIdx).filter(r => r.length > 0 && r[0]);
+    let y = 15;
+    
+    doc.setFontSize(14);
+    doc.text('Loan Ledger Report', 140, 10, { align: 'center' });
+    doc.setFontSize(10);
+    
+    summary.forEach(row => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${String(row[0])}:`, 15, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${String(row[1] ?? '')}`, 50, y);
+      y += 5;
+    });
+
+    // Main Table
+    const tableHeaders = rows[headerIdx];
+    const tableData = rows.slice(headerIdx + 1);
+
+    autoTable(doc, {
+      startY: y + 5,
+      head: [tableHeaders],
+      body: tableData as any[][],
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [68, 68, 68], textColor: 255 },
+      columnStyles: {
+        5: { halign: 'right' }, // Debit
+        6: { halign: 'right' }, // Credit
+        7: { halign: 'right' }, // Interest
+        8: { halign: 'right' }, // Balance
+      },
+      didParseCell: (data) => {
+        // Bold the totals row
+        const row = data.row.raw as any[];
+        if (row && row[4] === 'GRAND TOTAL') {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [240, 240, 240];
+        }
+      }
+    });
+  }
+
+  doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+};
+
+/** Download multiple 2D arrays into a single multi-page PDF */
+export const downloadAllAsPDF = (
+  sheets: (string | number | null | undefined)[][][],
+  filename: string
+): void => {
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  sheets.forEach((rows, index) => {
+    if (index > 0) doc.addPage();
+
+    // Find the header row (has 'Sl.No')
+    const headerIdx = rows.findIndex(r => r.includes('Sl.No'));
+    
+    if (headerIdx === -1) {
+      doc.text(rows.map(r => r.join(' | ')).join('\n'), 10, 10);
+    } else {
+      // Top summary block
+      const summary = rows.slice(0, headerIdx).filter(r => r.length > 0 && r[0]);
+      let y = 15;
+      
+      doc.setFontSize(14);
+      doc.text('Loan Ledger Report', 140, 10, { align: 'center' });
+      doc.setFontSize(10);
+      
+      summary.forEach(row => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${String(row[0])}:`, 15, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${String(row[1] ?? '')}`, 50, y);
+        y += 5;
+      });
+
+      // Main Table
+      const tableHeaders = rows[headerIdx];
+      const tableData = rows.slice(headerIdx + 1);
+
+      autoTable(doc, {
+        startY: y + 5,
+        head: [tableHeaders],
+        body: tableData as any[][],
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [68, 68, 68], textColor: 255 },
+        columnStyles: {
+          5: { halign: 'right' }, // Debit
+          6: { halign: 'right' }, // Credit
+          7: { halign: 'right' }, // Interest
+          8: { halign: 'right' }, // Balance
+        },
+        didParseCell: (data) => {
+          // Bold the totals row
+          const row = data.row.raw as any[];
+          if (row && row[4] === 'GRAND TOTAL') {
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fillColor = [240, 240, 240];
+          }
+        }
+      });
+    }
+  });
+
+  doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
 };
 
 /**

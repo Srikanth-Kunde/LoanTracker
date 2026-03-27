@@ -21,7 +21,7 @@ import { Card } from '../components/ui/Card';
 import { LoanCalculator } from '../components/LoanCalculator';
 import { compareISODate, formatDisplayDate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp, parseISODateParts } from '../utils/date';
 import { getInterestRateForDate } from '../utils/interest';
-import { downloadAs, downloadMultiSheetXLSX, downloadAsZip, type DownloadFormat } from '../utils/xlsxUtils';
+import { downloadAs, downloadMultiSheetXLSX, downloadAsZip, downloadAllAsPDF, type DownloadFormat } from '../utils/xlsxUtils';
 import {
     getAutoGenerationStopDate,
     buildLoanLedger,
@@ -1154,7 +1154,9 @@ const SpecialLoans: React.FC = () => {
             ['Live Balance', liveBalance],
             [],
             ['Sl.No', 'Date', 'CalcType', 'Days', 'Voucher Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'],
-            ...ledgerRows
+            ...ledgerRows,
+            [], // Spacer
+            ['', '', '', '', 'GRAND TOTAL', topupsTotal + loan.principalAmount, principalRepaid, interestPaid, liveBalance, '']
         ] as (string | number | null | undefined)[][];
     };
 
@@ -1175,6 +1177,10 @@ const SpecialLoans: React.FC = () => {
             }));
             const filename = `All_Audit_Ledgers_${MONTHS[selectedMonth - 1]}_${selectedYear}`;
             downloadMultiSheetXLSX(sheets, filename);
+        } else if (bulkDownloadFormat === 'PDF') {
+            const sheets = loansInSelectedPeriod.map(loan => buildLedgerRowsForLoan(loan));
+            const filename = `All_Audit_Ledgers_${MONTHS[selectedMonth - 1]}_${selectedYear}`;
+            downloadAllAsPDF(sheets, filename);
         } else {
             // CSV: download all loans as a single ZIP file
             const files = loansInSelectedPeriod.map(loan => {
@@ -1498,7 +1504,7 @@ const SpecialLoans: React.FC = () => {
                                 All Ledgers
                             </Button>
                             <div className="flex text-[10px] font-bold">
-                                {(['CSV', 'XLSX'] as const).map(fmt => (
+                                {(['CSV', 'XLSX', 'PDF'] as const).map(fmt => (
                                     <button key={fmt} onClick={() => setBulkDownloadFormat(fmt)}
                                         className={`px-2 py-1.5 transition-colors ${bulkDownloadFormat === fmt ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
                                         {fmt}
@@ -2353,7 +2359,7 @@ const SpecialLoans: React.FC = () => {
                                             >
                                                 <Download size={11} /> Download
                                             </button>
-                                            {(['CSV', 'XLSX'] as const).map(fmt => (
+                                            {(['CSV', 'XLSX', 'PDF'] as const).map(fmt => (
                                                 <button key={fmt} onClick={() => setLedgerFormat(fmt)}
                                                     className={`px-2 py-1.5 transition-colors ${ledgerFormat === fmt ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
                                                     {fmt}

@@ -3,6 +3,8 @@
 This release hardens the project for production deployment by resolving critical export formatting and interest-recalculation bugs.
 
 - **XLSX Financial Formatting**: Corrected the ledger column types for Debit, Credit, Interest, and Balance. By passing raw numbers instead of strings, native Excel formulas and "Auto-Sum" are now fully functional.
+- **Stylish Excel (ExcelJS)**: Upgraded XLSX exports with bold headers, professional cell borders, and highlighted "Grand Total" footers for audit-ready presentation.
+- **Landscape PDF Reports**: Integrated `jspdf` to provide a high-fidelity PDF download option. Uses Landscape orientation to fit all columns perfectly without overlap.
 - **Bulk CSV ZIP Bundling**: Integrated `jszip` to bundle multiple member ledgers into a single ZIP file for bulk exports. This completely resolves browser-side download blocking for large portfolios.
 - **Zero-Interest Settlement Control**: Updated the interest detection logic to recognize ₹0 entries (e.g., COVID-19 waived months) as settled. This eliminates "Duplicate Zero Rows" during interest regeneration.
 - **Regression Logic Hardening**: Expanded the test suite in `loanMath.test.ts` to cover zero-interest settlement and chronological running balances.
