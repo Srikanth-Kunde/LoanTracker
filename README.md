@@ -1,4 +1,4 @@
-# Legacy Loan Tracker v1.2.0
+# Legacy Loan Tracker v1.4.0
 Digitize and audit historical handwritten loan records starting from 2012 with absolute precision. This specialized tool focuses exclusively on **Special Loans** (Interest-only, with multiple top-ups and flexible repayments).
 
 > [!NOTE]
@@ -29,6 +29,9 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Admin-Only Audit Log Tab:** Database write-history now lives in its own `Audit Log History` tab and is visible only to admins.
 *   **Reduced Scope UI:** The application is laser-focused on `Special Loans`, `Members`, `Audit Report`, `Audit Log History` (admin only), and `Settings`. No distracting dashboards or bank-sync features.
 *   **Separate Backend Scripts:** Schema setup and sample data are now split into separate SQL Editor scripts.
+*   **Centralized Financial Engine (v1.4.0)**: Core principal math and transaction labeling are now unified into a single calculation utility (`utils/loanMath.ts`). This ensures 100% consistency across the UI, reports, and CSV/XLSX exports.
+*   **Bulk Audit Export (v1.4.0)**: Added "Download All Ledgers" action to Special Loans, generating a single multi-sheet XLSX file containing the full audit history for every member in the portfolio.
+*   **Prorate Snapshot Safety (v1.4.0)**: "Wipe Interest" now automatically snapshots manual prorate date overrides to `app_settings` before deletion, preventing data loss during historical reconciliation.
 
 ## 🚀 Quick Start
 
@@ -95,15 +98,10 @@ The application requires a specific schema and security configuration to functio
 6.  Run `sql/sample-ajay-remove.sql` whenever you want to remove the sample rows.
 
 ### Do You Need To Run SQL Again?
-- **Yes, if your database was created before the latest ledger hardening update, rerun `migration.sql`.**
-- `migration.sql` now adds new repayment allocation columns, audit-log compatibility columns, repayment validation constraints, and date-validation triggers.
+- **Yes, if your database was created before the latest ledger hardening update (v1.4.0), rerun `migration.sql`.**
+- `migration.sql` now adds `prorate_override_dates` to `app_settings` for interest-wipe safety and includes database-level validation triggers to ensure transaction dates are chronologically sound.
 - The latest migration also adds `loan_repayments.interest_days` and `loan_repayments.interest_calculation_type` for exact-day interest auditability.
 - **Rerun `migration.sql` once more on existing deployments** if you want direct backend updates to `members.id` to work without foreign-key errors.
-- **Important Deployment Step**: Run `sql/interest_rules_migration.sql` in your Supabase SQL Editor. This adds the `interest_rate_rules` and `entry_type` columns and initializes the legacy 2012-2015 rules.
-- **Global Cutoff Date (v1.1.9)**: Run this SQL to enable the new interest boundary setting:
-  ```sql
-  ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS global_cutoff_date DATE;
-  ```
 - **Auto-Gen Logic Hardening (v1.1.8)**: Implemented **Global Interest Alignment** with progress-tracked batch processing (50 records/chunk) and fixed the "sticky rate" bug.
 - **Liveness Fix**: Replaced the invalid `HEAD /rest/v1` probe with an authenticated table-level `GET` ping to silence misleading `401 Unauthorized` alarms.
 
@@ -113,6 +111,7 @@ For Senior Auditors, verify these controls in the application:
 - [x] **Principal Integrity**: Sum of `Original Principal + Top-ups - Principal Recoveries` matches live outstanding.
 - [x] **Interest Determinism**: Monthly dues match either the `loan.interestRate` OR a matching `interest_rate_rules` entry for that date.
 - [x] **Allocation Separation**: `interestPaid` is tracked separately from `principalPaid` to prevent amortized balance corruption.
+- [x] **Logic Consolidation**: Every principal calculation in the system uses the same shared utility (`calculatePrincipalPaid`) to ensure "no-gap" reconciliation.
 - [x] **Zero-Balance Cutoff**: No interest is generated for periods where principal is ≤ 1.00 INR (rounding tolerance).
 - [x] **Immutable Repayment Basis**: Exact-day interest rows preserve their specific `interestDays` and `interestCalculationType` even if global rules change later.
 - [x] **Event-Driven Running Balance**: Every transaction generates a new `balanceAfter` based on deterministic chronological event ordering.

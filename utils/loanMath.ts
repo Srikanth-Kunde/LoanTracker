@@ -1,4 +1,4 @@
-import { InterestWaiverPeriod, Loan, LoanRepayment, LoanStatus, LoanTopup, SocietySettings } from '../types';
+import { InterestWaiverPeriod, Loan, LoanRepayment, LoanStatus, LoanTopup, SocietySettings, ProrateOverrideDate, InterestRateRule } from '../types';
 import { getInterestRateForDate } from './interest';
 import { compareISODate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, normalizeISODate } from './date';
 
@@ -110,6 +110,35 @@ const isSamePeriod = (left: InterestPeriod, right: InterestPeriod) =>
 const formatAmountForMessage = (amount: number) =>
   Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
 
+/**
+ * Shared utility to determine principal reduction from a repayment record.
+ * Falls back to (amount - interestPaid) if principalPaid is not explicitly set.
+ */
+export const calculatePrincipalPaid = (rep: {
+  amount?: number | string | null;
+  interestPaid?: number | string | null;
+  principalPaid?: number | string | null;
+}): number => {
+  if (rep.principalPaid != null && Number(rep.principalPaid) !== 0) return Number(rep.principalPaid);
+  const amount = Number(rep.amount || 0);
+  const interest = Number(rep.interestPaid || 0);
+  return Math.max(0, amount - interest);
+};
+
+/**
+ * Shared utility for human-readable transaction labels.
+ */
+export const getVoucherTypeLabel = (entryType?: string): string => {
+  switch (entryType) {
+    case 'DISBURSAL': return 'Loan Disbursal';
+    case 'TOPUP': return 'Loan Top-Up';
+    case 'REPAYMENT': return 'Principal Repayment';
+    case 'INTEREST': return 'Interest Payment';
+    case 'CLOSE': return 'Loan Closure';
+    default: return 'Transaction';
+  }
+};
+
 export const getEffectiveLoanRate = (loan: Loan, topups: LoanTopup[], asOfDate?: string, settings?: SocietySettings) => {
   // If a global schedule is provided and we have an asOfDate, it becomes the authoritative source
   // for this specific date, overriding any sticky rates from loan or top-ups.
@@ -160,11 +189,8 @@ export const getSpecialLoanOutstandingFromEvents = (
     if (repayment.loanId !== loan.id) return;
     const repaymentDate = normalizeISODate(repayment.date);
     if (!cutoff || repaymentDate <= cutoff) {
-      // For special loans, we treat any amount not allocated to interest as principal reduction
-      // Use || 0 to treat missing or 0 principalPaid as an invitation to check the amount-based residual
-      const principalPart = repayment.principalPaid ||
-        (Number(repayment.amount || 0) - Number(repayment.interestPaid || 0));
-      totalPrincipal -= principalPart;
+      // Use the shared utility for principal reduction
+      totalPrincipal -= calculatePrincipalPaid(repayment);
     }
   });
 
@@ -362,16 +388,20 @@ const getChargeableInterestPeriods = (
   while (comparePeriods(cursor, stopPeriod) <= 0) {
     // Check if this period is waived
     if (isWaivedPeriod(cursor, settings?.interestWaiverPeriods)) {
-      // Emit a zero-interest row for waived periods so they appear in the ledger
-      const periodDue = getInterestDueForPeriod(loan, topups, repayments, cursor, settings);
-      if (periodDue.openingOutstanding > 1) {
-        periods.push({
-          ...cursor,
-          interestDue: 0,
-          openingOutstanding: periodDue.openingOutstanding,
-          rate: periodDue.rate,
-          postingDate: getLastDayOfMonthISO(cursor.year, cursor.month)
-        });
+      // Only emit a zero-interest row for waived periods if NOT already settled.
+      // This prevents duplicate zero entries when auto-gen runs a second time.
+      const alreadySettled = isInterestSettledForPeriod(repayments, loan.id, cursor);
+      if (!alreadySettled) {
+        const periodDue = getInterestDueForPeriod(loan, topups, repayments, cursor, settings);
+        if (periodDue.openingOutstanding > 1) {
+          periods.push({
+            ...cursor,
+            interestDue: 0,
+            openingOutstanding: periodDue.openingOutstanding,
+            rate: periodDue.rate,
+            postingDate: getLastDayOfMonthISO(cursor.year, cursor.month)
+          });
+        }
       }
       cursor = getNextPeriod(cursor);
       continue;

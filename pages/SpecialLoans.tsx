@@ -21,6 +21,7 @@ import { Card } from '../components/ui/Card';
 import { LoanCalculator } from '../components/LoanCalculator';
 import { compareISODate, formatDisplayDate, getDaysInMonth, getISODateMonthYear, getLastDayOfMonthISO, isoDateToTimestamp, parseISODateParts } from '../utils/date';
 import { getInterestRateForDate } from '../utils/interest';
+import { downloadAs, downloadMultiSheetXLSX, type DownloadFormat } from '../utils/xlsxUtils';
 import {
     getAutoGenerationStopDate,
     buildLoanLedger,
@@ -32,7 +33,9 @@ import {
     getMissingInterestPeriods,
     getProratedInterestForDays,
     getRepaymentInterestPeriod,
-    isWaivedPeriod
+    isWaivedPeriod,
+    calculatePrincipalPaid,
+    getVoucherTypeLabel
 } from '../utils/loanMath';
 
 interface EnrichedLoan extends Loan {
@@ -152,6 +155,11 @@ const SpecialLoans: React.FC = () => {
     const [ledgerTypeFilters, setLedgerTypeFilters] = useState<string[]>([]);
     const [ledgerSortConfig, setLedgerSortConfig] = useState<{ key: 'DATE' | 'AMOUNT', direction: 'ASC' | 'DESC' }>({ key: 'DATE', direction: 'ASC' });
     const [ledgerViewTab, setLedgerViewTab] = useState<'SUMMARY' | 'AUDIT'>('SUMMARY');
+
+    // Download format state
+    const [reportFormat, setReportFormat] = useState<DownloadFormat>('XLSX');
+    const [ledgerFormat, setLedgerFormat] = useState<DownloadFormat>('XLSX');
+    const [bulkDownloadFormat, setBulkDownloadFormat] = useState<DownloadFormat>('XLSX');
 
     // Sync rates with dates based on rules
     React.useEffect(() => {
@@ -415,14 +423,7 @@ const SpecialLoans: React.FC = () => {
             .reduce((sum, topup) => sum + Number(topup.amount || 0), 0);
         const principalRepaid = loanRepayments
             .filter(r => r.loanId === activeLoan.id)
-            .reduce((sum, repayment) => {
-                const explicitPrincipal = Number(repayment.principalPaid || 0);
-                // Fallback: if principalPaid is missing, calculate from amount - interestPaid
-                const calculatedPrincipal = explicitPrincipal > 0
-                    ? explicitPrincipal
-                    : Math.max(0, Number(repayment.amount || 0) - Number(repayment.interestPaid || 0));
-                return sum + calculatedPrincipal;
-            }, 0);
+            .reduce((sum, repayment) => sum + calculatePrincipalPaid(repayment), 0);
         const interestPaid = loanRepayments
             .filter(r => r.loanId === activeLoan.id)
             .reduce((sum, repayment) => sum + Number(repayment.interestPaid || 0), 0);
@@ -444,14 +445,7 @@ const SpecialLoans: React.FC = () => {
             .reduce((sum, topup) => sum + Number(topup.amount || 0), 0);
         const principalRecovered = loanRepayments
             .filter(r => r.loanId === activeLoan.id)
-            .reduce((sum, repayment) => {
-                const explicitPrincipal = Number(repayment.principalPaid || 0);
-                // Fallback: if principalPaid is missing, calculate from amount - interestPaid
-                const calculatedPrincipal = explicitPrincipal > 0
-                    ? explicitPrincipal
-                    : Math.max(0, Number(repayment.amount || 0) - Number(repayment.interestPaid || 0));
-                return sum + calculatedPrincipal;
-            }, 0);
+            .reduce((sum, repayment) => sum + calculatePrincipalPaid(repayment), 0);
         const rawRemaining = roundCurrency(revisedPrincipal + topupsTotal - principalRecovered);
 
         return {
@@ -509,7 +503,7 @@ const SpecialLoans: React.FC = () => {
             allRepayments.forEach(r => {
                 const rDate = isoDateToTimestamp(r.date, true);
                 if (rDate <= endOfMonthTime) {
-                    historicalPrincipalPaid += (r.principalPaid || 0);
+                    historicalPrincipalPaid += calculatePrincipalPaid(r);
                     historicalInterestPaid += (r.interestPaid || 0);
                     historicalLateFeePaid += (r.lateFee || 0);
                 }
@@ -1067,121 +1061,128 @@ const SpecialLoans: React.FC = () => {
 
             return [
                 l.memberId,
-                `"${l.memberName}"`,
+                l.memberName,
                 l.startDate,
                 l.principalAmount,
                 topupTotal,
-                `"${topupDatesStr}"`,
+                topupDatesStr,
                 outstanding,
                 `${l.interestRate}%`,
                 l.historicalInterestPaid,
                 l.selectedMonthLateFee,
-                lateFeesTotal, // this is cumulative from the repayments loop above
+                lateFeesTotal,
                 lastPaymentDate ? formatDisplayDate(lastPaymentDate) : '',
                 l.status
             ];
         });
 
-        const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Special_Loans_Report_${MONTHS[selectedMonth - 1]}_${selectedYear}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const allRows = [headers, ...rows];
+        const filename = `Special_Loans_Report_${MONTHS[selectedMonth - 1]}_${selectedYear}`;
+        downloadAs(allRows, filename, reportFormat, `${MONTHS[selectedMonth - 1]} ${selectedYear}`);
     };
 
-    const downloadActiveLoanLedger = () => {
-        if (!activeLoan || !activeLoanSummary) return;
+    /** Build ledger rows for a single loan (reusable for both single + bulk download) */
+    const buildLedgerRowsForLoan = (loan: EnrichedLoan) => {
+        const loanTopupsForLoan = loanTopups.filter(t => t.loanId === loan.id);
+        const loanRepaymentsForLoan = loanRepayments.filter(r => r.loanId === loan.id);
+        const topupsTotal = loanTopupsForLoan.reduce((s, t) => s + Number(t.amount || 0), 0);
+        const principalRepaid = loanRepaymentsForLoan.reduce((sum, repayment) => {
+            return sum + calculatePrincipalPaid(repayment);
+        }, 0);
+        const interestPaid = loanRepaymentsForLoan.reduce((s, r) => s + Number(r.interestPaid || 0), 0);
+        const liveBalance = getSpecialLoanOutstanding(loan.id);
+
+        const txs = buildLoanLedger(loan, loanTopupsForLoan, loanRepaymentsForLoan, settings);
 
         let pCount = 0;
         let tCount = 0;
-        const ledgerRows = activeLoanTransactions.map((tx, idx) => {
+        const ledgerRows = txs.map((tx, idx) => {
             const isDisbursal = tx.entryType === 'DISBURSAL';
             const isTopup = tx.entryType === 'TOPUP';
             const isRepayment = tx.entryType === 'REPAYMENT';
-            
-            let vchType = '';
+            const vchType = getVoucherTypeLabel(tx.entryType);
             let narration = '';
 
             if (isDisbursal) {
-                vchType = 'Loan';
                 narration = 'Original Loan Disbursement';
             } else if (isTopup) {
-                vchType = 'Top-up';
                 tCount++;
-                narration = `Top-up ${tCount} (@${tx.rate || activeLoan.interestRate}%)`;
+                narration = `Top-up ${tCount} (@${tx.rate || loan.interestRate}%)`;
             } else if (isRepayment) {
-                if ((tx.principalPaid || 0) > 0) {
-                    vchType = 'Payment';
+                const pPaid = calculatePrincipalPaid(tx);
+                if (pPaid > 0 && (tx.interestPaid || 0) === 0) {
                     pCount++;
                     narration = `Payment ${pCount}`;
                 } else if ((tx.interestPaid || 0) > 0) {
-                    vchType = 'Interest';
                     const periodStr = tx.interestPeriod ? ` (${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year})` : '';
                     const isWaived = tx.interestPeriod && isWaivedPeriod(tx.interestPeriod, settings.interestWaiverPeriods);
-                    narration = isWaived
-                        ? `Interest Waived${periodStr}`
-                        : `Interest @${tx.rate || activeLoan.interestRate}%${periodStr}`;
+                    narration = isWaived ? `Interest Waived${periodStr}` : `Interest @${tx.rate || loan.interestRate}%${periodStr}`;
                 } else if (tx.interestPeriod && isWaivedPeriod(tx.interestPeriod, settings.interestWaiverPeriods)) {
-                    vchType = 'Waived';
-                    const periodStr = ` (${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year})`;
-                    narration = `Interest Waived${periodStr}`;
+                    narration = `Interest Waived (${MONTHS[tx.interestPeriod.month - 1]} ${tx.interestPeriod.year})`;
                 } else {
-                    vchType = 'Repayment';
                     narration = tx.notes || 'Repayment';
                 }
             }
 
-            const debit = (isDisbursal || isTopup) ? (tx.amount || tx.principalDelta || 0) : '';
-            const credit = isRepayment && (tx.principalPaid || 0) > 0 ? tx.principalPaid : '';
-            const interest = (tx.interestPaid || 0) > 0 ? tx.interestPaid : '';
+            const debit = (isDisbursal || isTopup) ? (tx.amount || tx.principalDelta || 0) : 0;
+            const credit = isRepayment ? calculatePrincipalPaid(tx) : 0;
+            const interest = (tx.interestPaid || 0) > 0 ? tx.interestPaid : 0;
 
             return [
                 idx + 1,
                 formatDisplayDate(tx.date),
                 tx.interestCalculationType || 'Monthly',
-                tx.interestDays || '30',
+                tx.interestDays || 30,
                 vchType,
-                debit ? Number(debit).toFixed(2) : '0.00',
-                credit ? Number(credit).toFixed(2) : '0.00',
-                interest ? Number(interest).toFixed(2) : '0.00',
+                Number(debit).toFixed(2),
+                Number(credit).toFixed(2),
+                Number(interest).toFixed(2),
                 (tx.balanceAfter || 0).toFixed(2),
                 narration || tx.notes || ''
             ];
         });
 
-        const csvRows = [
-            ['Member Name', activeLoan.memberName],
-            ['Loan ID', activeLoan.id],
-            ['Start Date', formatDisplayDate(activeLoan.startDate)],
-            ['Original Principal', activeLoan.principalAmount],
-            ['Top-Ups', activeLoanSummary.topupsTotal],
-            ['Principal Repaid', activeLoanSummary.principalRepaid],
-            ['Interest Paid', activeLoanSummary.interestPaid],
-            ['Live Balance', activeLoanSummary.liveBalance],
+        return [
+            ['Member Name', loan.memberName],
+            ['Member ID', loan.memberId],
+            ['Loan ID', loan.id],
+            ['Start Date', formatDisplayDate(loan.startDate)],
+            ['Original Principal', loan.principalAmount],
+            ['Top-Ups', topupsTotal],
+            ['Principal Repaid', principalRepaid],
+            ['Interest Paid', interestPaid],
+            ['Live Balance', liveBalance],
             [],
             ['Sl.No', 'Date', 'CalcType', 'Days', 'Voucher Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'],
             ...ledgerRows
-        ];
+        ] as (string | number | null | undefined)[][];
+    };
 
-        const csvContent = csvRows
-            .map(row => row.map(value => escapeCsvValue(value as string | number | null | undefined)).join(','))
-            .join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
+    const downloadActiveLoanLedger = () => {
+        if (!activeLoan || !activeLoanSummary) return;
+        const rows = buildLedgerRowsForLoan(activeLoan);
         const safeName = activeLoan.memberName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || activeLoan.id;
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Special_Loan_Audit_Ledger_${safeName}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        const filename = `Special_Loan_Audit_Ledger_${safeName}`;
+        downloadAs(rows, filename, ledgerFormat, activeLoan.memberName.slice(0, 31));
+    };
+
+    const downloadAllLedgers = () => {
+        if (loansInSelectedPeriod.length === 0) return;
+        if (bulkDownloadFormat === 'XLSX') {
+            const sheets = loansInSelectedPeriod.map(loan => ({
+                name: (loan.memberName || loan.memberId).replace(/[:\\/?*[\]]/g, '_').slice(0, 31),
+                rows: buildLedgerRowsForLoan(loan)
+            }));
+            const filename = `All_Audit_Ledgers_${MONTHS[selectedMonth - 1]}_${selectedYear}`;
+            downloadMultiSheetXLSX(sheets, filename);
+        } else {
+            // CSV: download each loan as a separate file
+            loansInSelectedPeriod.forEach(loan => {
+                const rows = buildLedgerRowsForLoan(loan);
+                const safeName = loan.memberName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || loan.id;
+                downloadAs(rows, `Audit_Ledger_${safeName}`, 'CSV');
+            });
+        }
     };
 
     const openEditModal = (loan: EnrichedLoan) => {
@@ -1353,7 +1354,7 @@ const SpecialLoans: React.FC = () => {
 
         if (confirm(`CAUTION: This will delete ALL ${interestCount} recorded interest payments for this loan. Principal repayments will be kept. Proceed?`)) {
             try {
-                await wipeLoanInterest(target.id);
+                await wipeLoanInterest(target.id, target.memberName);
                 log('WIPE_INTEREST', 'loan_repayments', target.id, { memberName: target.memberName });
                 // No need to manually refresh, useMemo handles it
             } catch (error) {
@@ -1475,8 +1476,35 @@ const SpecialLoans: React.FC = () => {
                         </select>
                     </div>
 
-                    <div className="flex gap-2">
-                        <Button variant="outline" icon={Download} onClick={downloadReport}>Report</Button>
+                    <div className="flex flex-wrap gap-2 items-center">
+                        {/* Report Download with format picker */}
+                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
+                            <Button variant="outline" icon={Download} onClick={downloadReport} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700">Report</Button>
+                            <div className="flex text-[10px] font-bold">
+                                {(['CSV', 'XLSX'] as const).map(fmt => (
+                                    <button key={fmt} onClick={() => setReportFormat(fmt)}
+                                        className={`px-2 py-1.5 transition-colors ${reportFormat === fmt ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
+                                        {fmt}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Bulk Download All Ledgers with format picker */}
+                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
+                            <Button variant="outline" icon={Download} onClick={downloadAllLedgers} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/10" title={`Download all ${loansInSelectedPeriod.length} ledger(s) as ${bulkDownloadFormat}`}>
+                                All Ledgers
+                            </Button>
+                            <div className="flex text-[10px] font-bold">
+                                {(['CSV', 'XLSX'] as const).map(fmt => (
+                                    <button key={fmt} onClick={() => setBulkDownloadFormat(fmt)}
+                                        className={`px-2 py-1.5 transition-colors ${bulkDownloadFormat === fmt ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
+                                        {fmt}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         <Button variant="outline" icon={Calculator} onClick={() => setModals({ ...modals, calc: true })}>Calc</Button>
                         <Button 
                             variant="outline" 
@@ -2212,13 +2240,13 @@ const SpecialLoans: React.FC = () => {
                                                             <div className="text-[10px] text-slate-500">ID: {activeLoan.memberId}</div>
                                                         </td>
                                                         <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                                                            {tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? 'Loan' : 'Payment'}
+                                                            {getVoucherTypeLabel(tx.entryType)}
                                                         </td>
                                                         <td className="px-4 py-3 text-right font-bold text-blue-600 dark:text-blue-400">
                                                             {tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? formatCurrency(tx.amount || 0, settings.currency) : '—'}
                                                         </td>
                                                         <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                                                            {tx.entryType === 'REPAYMENT' ? formatCurrency((tx.principalPaid || 0) + (tx.interestPaid || 0) + (tx.lateFee || 0), settings.currency) : '—'}
+                                                            {tx.entryType === 'REPAYMENT' ? formatCurrency(calculatePrincipalPaid(tx) + (tx.interestPaid || 0) + (tx.lateFee || 0), settings.currency) : '—'}
                                                         </td>
                                                         <td className="px-4 py-3 text-center">
                                                             {tx.entryType === 'DISBURSAL' ? (
@@ -2239,7 +2267,7 @@ const SpecialLoans: React.FC = () => {
                                                         {formatCurrency(filteredLedgerTransactions.reduce((acc: number, tx: any) => acc + (tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? (tx.amount || 0) : 0), 0), settings.currency)}
                                                     </td>
                                                     <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">
-                                                        {formatCurrency(filteredLedgerTransactions.reduce((acc: number, tx: any) => acc + (tx.entryType === 'REPAYMENT' ? ((tx.principalPaid || 0) + (tx.interestPaid || 0) + (tx.lateFee || 0)) : 0), 0), settings.currency)}
+                                                        {formatCurrency(filteredLedgerTransactions.reduce((acc: number, tx: any) => acc + (tx.entryType === 'REPAYMENT' ? (calculatePrincipalPaid(tx) + (tx.interestPaid || 0) + (tx.lateFee || 0)) : 0), 0), settings.currency)}
                                                     </td>
                                                     <td className="px-4 py-3 bg-white dark:bg-slate-800"></td>
                                                 </tr>
@@ -2315,15 +2343,21 @@ const SpecialLoans: React.FC = () => {
                                     <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
 
                                     <div className="flex items-center gap-2">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-[10px] h-8 px-2 flex items-center gap-1.5 text-slate-600 dark:text-slate-300"
-                                            onClick={downloadActiveLoanLedger}
-                                        >
-                                            <Download size={12} />
-                                            <span>CSV</span>
-                                        </Button>
+                                        {/* Format picker + download */}
+                                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm text-[10px] font-bold">
+                                            <button
+                                                onClick={downloadActiveLoanLedger}
+                                                className="flex items-center gap-1 px-2 py-1.5 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors"
+                                            >
+                                                <Download size={11} /> Download
+                                            </button>
+                                            {(['CSV', 'XLSX'] as const).map(fmt => (
+                                                <button key={fmt} onClick={() => setLedgerFormat(fmt)}
+                                                    className={`px-2 py-1.5 transition-colors ${ledgerFormat === fmt ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
+                                                    {fmt}
+                                                </button>
+                                            ))}
+                                        </div>
                                         <Button
                                             variant="ghost"
                                             size="sm"
@@ -2360,7 +2394,7 @@ const SpecialLoans: React.FC = () => {
                                                             <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">DISBURSAL</span>
                                                         ) : tx.entryType === 'TOPUP' ? (
                                                             <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-700 font-bold text-[10px]">TOP-UP</span>
-                                                        ) : (tx.principalPaid || 0) > 0 && (tx.interestPaid || 0) === 0 ? (
+                                                        ) : calculatePrincipalPaid(tx) > 0 && (tx.interestPaid || 0) === 0 ? (
                                                             <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-bold text-[10px]">REPAYMENT</span>
                                                         ) : (
                                                             <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">INTEREST</span>
@@ -2379,15 +2413,15 @@ const SpecialLoans: React.FC = () => {
                                                     <td className="px-4 py-3 text-right font-bold">
                                                         {tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? (
                                                             <span className="text-violet-600">+{formatCurrency(tx.amount || 0, settings.currency)}</span>
-                                                        ) : (tx.principalPaid || 0) > 0 || (tx.interestPaid || 0) > 0 ? (
-                                                            <span className="text-red-600">-{formatCurrency((tx.principalPaid || 0) + (tx.interestPaid || 0), settings.currency)}</span>
+                                                        ) : calculatePrincipalPaid(tx) > 0 || (tx.interestPaid || 0) > 0 ? (
+                                                            <span className="text-red-600">-{formatCurrency(calculatePrincipalPaid(tx) + (tx.interestPaid || 0), settings.currency)}</span>
                                                         ) : '—'}
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-bold">
                                                         {tx.entryType === 'DISBURSAL' ? (
                                                             <span className="text-emerald-700">{formatCurrency(tx.amount, settings.currency)}</span>
-                                                        ) : (tx.entryType === 'TOPUP' || (tx.principalPaid || 0) > 0) ? (
-                                                            <span className="text-blue-600">-{formatCurrency(tx.entryType === 'TOPUP' ? tx.amount : tx.principalPaid, settings.currency)}</span>
+                                                        ) : (tx.entryType === 'TOPUP' || calculatePrincipalPaid(tx) > 0) ? (
+                                                            <span className="text-blue-600">-{formatCurrency(tx.entryType === 'TOPUP' ? tx.amount : calculatePrincipalPaid(tx), settings.currency)}</span>
                                                         ) : '—'}
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-bold">

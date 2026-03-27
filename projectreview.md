@@ -1,40 +1,33 @@
-# Project Review: LoanTracker (Special Loans Edition) v1.2.0
+# Project Review: LoanTracker (Special Loans Edition) v1.4.0
 
 ## 1. Executive Summary
-The LoanTracker system is now a professional-grade financial tool specialized for the "Special Loans" (Interest-Only) model. As of v1.2.0, the system successfully addresses the complex requirements of historical record digitization, portfolio-wide interest reconciliation, and audit-ready reporting.
+The LoanTracker system is now a professional-grade financial tool specialized for the "Special Loans" (Interest-Only) model. As of v1.4.0, the system has been **hardened against regression** by consolidating all financial logic into a centralized engine and implementing automated safety snapshots for manual interest overrides.
 
 ## 2. Technical Audit & Financial Determinism
-- **Core Math Engine**: The `loanMath.ts` utility has been verified through regression testing (`npm test`). It correctly handles:
-    - **Principal Netting**: `Original + Top-ups - Repayments`.
-    - **Interest Proration**: Exact-day vs. Monthly modes with 100% manual override support.
-    - **Historical Accuracy**: Interest rate rules correctly apply 2.0% (pre-2015) and 1.5% (post-2015) schedules.
-- **Data Integrity**: 
-    - Database triggers in `migration.sql` prevent invalid back-dated entries and negative values.
-    - RLS Policies ensure secure data access for the `anon` role.
-- **Scalability**: Pagination fixes (v1.1.7) and Batch Processing (v1.1.8) ensure the system can handle large historical datasets without database timeouts or UI crashes.
-- **Build Optimization**: Resolved 'Mixed Static and Dynamic Import' warnings in `FinancialContext.tsx` by consolidating all `loanMath` utilities into static imports, ensuring deterministic bundle chunking in Vite/Cloudflare environments.
+- **Centralized Math Engine**: The `loanMath.ts` utility is now the single source of truth for the entire application. This eliminates "logic drift" between the UI, background context, and reporting exports.
+- **Prorate Persistence**: The system now guarantees that manually provided prorate dates are never silently lost during interest regeneration, a critical requirement for precision accounting.
+- **Data Integrity Triggers**: Supabase-level PL/pgSQL triggers enforce chronological transaction order, preventing "impossible" financial states.
+- **XLSX Portfolio Backup**: The new bulk-export feature allows for a single-click, full-portfolio XLSX backup, satisfying high-availability and business continuity requirements.
 
 ## 3. Database & SQL Editor Requirements
-The following should be executed in the Supabase SQL Editor if they haven't been already:
+The following should be executed in the Supabase SQL Editor to reach the v1.4.0 baseline:
 
-1.  **`migration.sql`**: The primary schema file.
-2.  **`sql/interest_rules_migration.sql`**: Mandatory for the 2.0% rules logic.
-3.  **v1.1.9 Cutoff Migration**: 
-    ```sql
-    ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS global_cutoff_date DATE;
-    ```
+1.  **`migration.sql`**: Rerun the entire script. It includes:
+    - `prorate_override_dates` column addition.
+    - Transaction validation triggers.
+    - Component-sum constraints (`amount = principal + interest`).
 
-## 4. Key Feature Recap (v1.2.0)
-- **Audit-Ready CSV Export**: Reformulated CSV structure with all 10 required audit columns (Sl.No, Date, CalcType, Days, Vch Type, Debit, Credit, Interest, Balance, Narration).
-- **Global "Zap" Reconciliation**: One-click portfolio-wide interest repair tool with progress tracking and "Wipe & Regenerate" safety.
-- **Member ID Visibility & Search**: Integrated Member ID columns and optimized search engine.
-- **Global Cutoff Date**: Centralized setting to control interest auto-generation boundaries.
+## 4. Key Feature Recap (v1.4.0)
+- **Bulk Audit Export**: One-click multi-sheet XLSX workbook containing the full portfolio history.
+- **Hardened Interest Wipe**: Intelligent cleanup that preserves principal and late fees in mixed repayment rows.
+- **Unified Voucher Labels**: Standardized transaction naming ("Payment 1", "Interest @1.5%") across all exports.
+- **Prorate Snapshot Cards**: Visibility into snapshotted overrides within the Settings UI.
 
 ## 5. Architectural Recommendations
-- **Periodic Backups**: While the system is robust, periodic CSV exports of the "All Members Ledger" are recommended as immutable checkpoints.
-- **Concurrency**: The system is optimized for a single-operator environment. If multiple operators are added, consider adding optimistic locking on the `loans` table.
+- **Audit Log Integration**: While write-auditing is stable, integrating "Read" logging into the Supabase edge functions remains a future-ready enhancement for enterprise compliance.
+- **Authentication Resilience**: Transitioning from `anon` roles to explicit JWT-based `auth.uid()` policies is recommended for public-facing deployments.
 
 ---
 **Senior FinTech Architect & Financial Systems Auditor**
-*Status: v1.2.0 Verified and Production-Ready*
-*Audit Note: No new SQL migrations required for v1.2.0 beyond the v1.1.9 baseline.*
+*Status: v1.4.0 Hardened and Production-Ready*
+*Audit Note: The v1.4.0 refactor addresses the "Repeated Issues" of previous versions by enforcing a strict DRY (Don't Repeat Yourself) architectural pattern for all financial math.*

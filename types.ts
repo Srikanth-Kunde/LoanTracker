@@ -116,6 +116,17 @@ export interface InterestWaiverPeriod {
   toYear: number;          // e.g., 2020
 }
 
+export interface ProrateOverrideDate {
+  id: string;
+  loanId: string;
+  memberLabel?: string;     // e.g. "Chitti Yadagiri"
+  date: string;             // ISO date of the repayment
+  days: number;             // exact days held
+  interestForMonth?: number;
+  interestForYear?: number;
+  notes?: string;
+}
+
 export interface SocietySettings {
   societyName: string;
   loanProcessingFee?: number;
@@ -130,4 +141,5 @@ export interface SocietySettings {
   interestRateRules?: InterestRateRule[];
   globalCutoffDate?: string;
   interestWaiverPeriods?: InterestWaiverPeriod[];
+  prorateOverrideDates?: ProrateOverrideDate[];
 }

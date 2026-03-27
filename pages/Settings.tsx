@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Save, RotateCcw, Database, Plus, Trash2, Calendar } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
-import { SocietySettings, AccentColor, ThemeMode, UserRole, InterestWaiverPeriod } from '../types';
+import { SocietySettings, AccentColor, ThemeMode, UserRole, InterestWaiverPeriod, ProrateOverrideDate } from '../types';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -365,6 +365,75 @@ const SettingsPage: React.FC = () => {
         </div>
       </Card>
 
+      <Card title="Prorate Date Overrides" subtitle="Snapshots of exact-day interest entries saved during interest wipes">
+        <div className="space-y-4">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+              <thead className="bg-slate-50 dark:bg-slate-900/50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-500 uppercase">Member / Loan</th>
+                  <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-500 uppercase">Date</th>
+                  <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-500 uppercase">Days</th>
+                  <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-500 uppercase">Notes</th>
+                  <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {(!form.prorateOverrideDates || form.prorateOverrideDates.length === 0) ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-xs text-slate-400 italic">
+                      No saved prorate overrides found. These are created automatically when you wipe a loan's interest.
+                    </td>
+                  </tr>
+                ) : (
+                  form.prorateOverrideDates.map((override) => (
+                    <tr key={override.id} className="text-xs hover:bg-slate-50 dark:hover:bg-slate-900/20">
+                      <td className="px-4 py-2 font-medium text-slate-700 dark:text-slate-300">
+                        {override.memberLabel || 'Unknown Member'}
+                        <div className="text-[10px] text-slate-400 font-mono">{override.loanId}</div>
+                      </td>
+                      <td className="px-4 py-2 text-slate-600 dark:text-slate-400">
+                        {override.date}
+                        {override.interestForMonth && (
+                          <div className="text-[9px] font-bold text-blue-500 uppercase">
+                            Period: {MONTH_OPTIONS[override.interestForMonth - 1]} {override.interestForYear}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-center font-bold text-blue-600">
+                        {override.days}
+                      </td>
+                      <td className="px-4 py-2 text-slate-500 max-w-[150px] truncate" title={override.notes || ''}>
+                        {override.notes || '—'}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        {canEdit && (
+                          <button
+                            onClick={() => {
+                              const next = form.prorateOverrideDates?.filter(o => o.id !== override.id) || [];
+                              setField('prorateOverrideDates', next);
+                            }}
+                            className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded"
+                            title="Delete snapshot"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 rounded-xl text-[11px] text-blue-700 dark:text-blue-300">
+            <p className="font-bold mb-1 uppercase tracking-tight">Manual Re-entry Requirement</p>
+            These records serve as a <strong>reference library</strong>. After you regenerate interest for a loan, you must manually 
+            re-enter these exact-day collections by editing the auto-generated row and selecting "Exact Days" mode.
+          </div>
+        </div>
+      </Card>
+
       <Card title="Access Codes" subtitle="Matches admin_password, operator_code, and viewer_code in app_settings">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Input
@@ -432,7 +501,7 @@ const SettingsPage: React.FC = () => {
           <p>
             Active columns used here: <code>society_name</code>, <code>currency</code>, <code>loan_processing_fee</code>,
             <code> default_loan_interest_rate</code>, <code>admin_password</code>, <code>operator_code</code>,
-            <code> viewer_code</code>, <code>theme_mode</code>, <code>accent_color</code>, and <code>banner_image</code>.
+            <code> viewer_code</code>, <code>theme_mode</code>, <code>accent_color</code>, <code>banner_image</code>, and <code>prorate_override_dates</code>.
           </p>
         </div>
       </Card>

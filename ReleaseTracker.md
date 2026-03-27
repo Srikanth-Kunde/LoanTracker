@@ -1,3 +1,16 @@
+**v1.4.0 — Audit Hardening & Precision Recovery**
+
+This release focuses on long-term maintainability, logic consolidation, and audit-ready data persistence.
+
+- **Centralized Financial Logic**: 100% of principal math and transaction labeling is now unified into `utils/loanMath.ts`. This eliminates inconsistent calculations ("repeated bugs") across UI components and reports.
+- **Prorate Persistence (Snapshots)**: Implemented an automated safety mechanism in `FinancialContext` that snapshots manual "Prorated Day" date overrides to `app_settings` before any interest wipe or cleanup. 
+- **Bulk XLSX Multi-Sheet Export**: Added "Download All Ledgers" to the Special Loans tab, enabling a single-click full-portfolio backup in a professionally formatted multi-sheet Excel workbook.
+- **Mixed-Repayment Cleansing**: Hardened the interest-wipe logic to intelligently preserve principal payments and late fees while cleaning stale interest-only rows.
+- **Database Validation Triggers**: Integrated PL/pgSQL triggers to enforce chronological data entry, rejecting any loan events that pre-date the original loan start.
+- **Schema Update**: Added `prorate_override_dates` (JSONB) to `app_settings`.
+
+---
+
 **v1.3.1 — Dependency Hardening & Security Patch**
 
 This release focuses on enterprise-grade security and build toolchain modernization.

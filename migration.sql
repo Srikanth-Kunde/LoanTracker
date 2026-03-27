@@ -128,6 +128,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
 -- Add interest waiver periods column (v1.3.0)
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS interest_waiver_periods JSONB DEFAULT '[]'::jsonb;
 
+-- Add prorate override dates snapshot column (v1.4.0)
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS prorate_override_dates JSONB DEFAULT '[]'::jsonb;
+
 -- 6. Audit Logs Table
 CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGSERIAL PRIMARY KEY,

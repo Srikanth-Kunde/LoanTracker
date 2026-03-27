@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useSettings } from './SettingsContext';
-import { Loan, LoanRepayment, LoanStatus, PaymentMethod, LoanType, LoanCalculationMethod, LoanTopup, InterestCalculationType } from '../types';
+import { Loan, LoanRepayment, LoanStatus, PaymentMethod, LoanType, LoanCalculationMethod, LoanTopup, InterestCalculationType, ProrateOverrideDate } from '../types';
 import { getIndianFinancialYear } from '../constants';
 import { supabase } from '../supabaseClient';
 import { logger } from '../utils/logger';
@@ -27,7 +27,7 @@ interface FinancialContextType {
   addLoanTopup: (topup: Omit<LoanTopup, 'id' | 'createdAt'>) => Promise<void>;
   updateLoanTopup: (topup: LoanTopup) => Promise<void>;
   deleteLoanTopup: (id: string) => Promise<void>;
-  wipeLoanInterest: (loanId: string) => Promise<void>;
+  wipeLoanInterest: (loanId: string, memberLabel?: string) => Promise<void>;
   cleanupInvalidLoanInterest: (loanId: string) => Promise<number>;
   getSpecialLoanOutstanding: (loanId: string, asOfDate?: string) => number;
 
@@ -47,7 +47,7 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
   const [loanRepayments, setLoanRepayments] = useState<LoanRepayment[]>([]);
   const [loanTopups, setLoanTopups] = useState<LoanTopup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
 
   const roundCurrency = useCallback((value: number) => Math.round(value * 100) / 100, []);
 
@@ -368,25 +368,18 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     await fetchFinancials(false);
   }, [fetchFinancials]);
 
-  const cleanupInvalidInterestRowsForLoan = useCallback(async (loan: Loan) => {
-    const today = new Date();
-    const endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
-    const invalidRows = getInvalidInterestRepayments(
-      loan,
-      loanTopups.filter(t => t.loanId === loan.id),
-      loanRepayments.filter(r => r.loanId === loan.id),
-      endPeriod,
-      settings
-    );
+  /**
+   * Internal helper to sync interest-clearing changes to the database.
+   * Separates rows that can be fully deleted from rows that must be updated (mixed principal/late fees).
+   */
+  const syncInterestCleansing = useCallback(async (rows: LoanRepayment[]) => {
+    if (!rows.length) return 0;
 
-    if (!invalidRows.length) {
-      return 0;
-    }
-
-    const fullDeleteIds = invalidRows
-      .filter(row => (row.principalPaid || 0) === 0 && (row.lateFee || 0) === 0)
-      .map(row => row.id);
-    const mixedRows = invalidRows.filter(row => !fullDeleteIds.includes(row.id));
+    const fullDeleteIds = rows
+      .filter(r => (r.principalPaid || 0) === 0 && (r.lateFee || 0) === 0)
+      .map(r => r.id);
+    
+    const mixedRows = rows.filter(r => !fullDeleteIds.includes(r.id));
 
     if (fullDeleteIds.length > 0) {
       const { error } = await supabase.from('loan_repayments')
@@ -408,8 +401,22 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
       if (error) throw error;
     }
 
-    return invalidRows.length;
-  }, [loanRepayments, loanTopups, roundCurrency]);
+    return rows.length;
+  }, [roundCurrency]);
+
+  const cleanupInvalidInterestRowsForLoan = useCallback(async (loan: Loan) => {
+    const today = new Date();
+    const endPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
+    const invalidRows = getInvalidInterestRepayments(
+      loan,
+      loanTopups.filter(t => t.loanId === loan.id),
+      loanRepayments.filter(r => r.loanId === loan.id),
+      endPeriod,
+      settings
+    );
+
+    return await syncInterestCleansing(invalidRows);
+  }, [loanRepayments, loanTopups, settings, syncInterestCleansing]);
 
   const closeLoan = useCallback(async (loanId: string, endDate?: string) => {
     const normalizedEndDate = normalizeISODate(endDate || new Date().toISOString().split('T')[0]);
@@ -478,36 +485,36 @@ export const FinancialProvider = ({ children }: { children: React.ReactNode }) =
     await fetchFinancials(false);
   }, [fetchFinancials]);
 
-  const wipeLoanInterest = useCallback(async (loanId: string) => {
+  const wipeLoanInterest = useCallback(async (loanId: string, memberLabel?: string) => {
     const interestRows = loanRepayments.filter(r => r.loanId === loanId && (r.interestPaid || 0) > 0);
-    const fullDeleteIds = interestRows
-      .filter(r => (r.principalPaid || 0) === 0 && (r.lateFee || 0) === 0)
-      .map(r => r.id);
 
-    const mixedRows = interestRows.filter(r => !fullDeleteIds.includes(r.id));
-
-    if (fullDeleteIds.length > 0) {
-      const { error } = await supabase.from('loan_repayments')
-        .delete()
-        .in('id', fullDeleteIds);
-      if (error) throw error;
+    // ── Snapshot exact-day (PRORATED_DAYS) entries before wiping ────────────
+    const prorateRows = interestRows.filter(r => r.interestCalculationType === 'PRORATED_DAYS' && (r.interestDays || 0) > 0);
+    if (prorateRows.length > 0) {
+      const existingOverrides = settings.prorateOverrideDates || [];
+      // Avoid duplicates by date+loanId key
+      const existingKeys = new Set(existingOverrides.map(o => `${o.loanId}:${o.date}:${o.days}`));
+      const newOverrides: ProrateOverrideDate[] = prorateRows
+        .filter(r => !existingKeys.has(`${r.loanId}:${r.date}:${r.interestDays}`))
+        .map(r => ({
+          id: `pod_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          loanId: r.loanId,
+          memberLabel: memberLabel || loanId,
+          date: r.date,
+          days: r.interestDays!,
+          interestForMonth: r.interestForMonth,
+          interestForYear: r.interestForYear,
+          notes: r.notes
+        }));
+      if (newOverrides.length > 0) {
+        updateSettings({ prorateOverrideDates: [...existingOverrides, ...newOverrides] });
+      }
     }
+    // ─────────────────────────────────────────────────────────────────────────
 
-    for (const row of mixedRows) {
-      const { error } = await supabase.from('loan_repayments').update({
-        amount: roundCurrency(Number(row.principalPaid || 0)),
-        interest_paid: 0,
-        interest_for_month: null,
-        interest_for_year: null,
-        interest_days: null,
-        interest_calculation_type: null
-      }).eq('id', row.id);
-
-      if (error) throw error;
-    }
-
+    await syncInterestCleansing(interestRows);
     await fetchFinancials(false);
-  }, [fetchFinancials, loanRepayments, roundCurrency]);
+  }, [fetchFinancials, loanRepayments, settings.prorateOverrideDates, updateSettings, syncInterestCleansing]);
 
   const cleanupInvalidLoanInterest = useCallback(async (loanId: string) => {
     const loan = loans.find(existingLoan => existingLoan.id === loanId);

@@ -1,4 +1,4 @@
-# Legacy Loan Tracker - PRD v1.3.0
+# Legacy Loan Tracker - PRD v1.4.0
 ## Product Overview
 Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present).
 
@@ -57,6 +57,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   **Audit Ledger Sorting**: Operators can sort transactions by Date or Amount (Ascending/Descending) for easier reconciliation.
 *   **Top-up Recording Edit**: Existing top-up records can be edited directly from the audit ledger to correct historical entry errors.
 *   **Live Ledger Summary & Export:** The Special Loan Audit Ledger now shows live `Interest Paid` totals and supports direct ledger CSV download from the eye-view modal.
+*   **Bulk Audit Export (v1.4.0):** Operators can download a complete audit trail for the entire society in a single multi-sheet XLSX file. This provides a portable, full-fidelity offline backup of all financial activities.
 *   **Enhanced Audit Narration (v1.2.1):** CSV exports now include detailed, numbered narrations for every event (e.g., "Payment 1", "Interest @1.5% (Jan 2026)") to ensure complete audit traceability.
 *   **Advanced Repayment Edit Workflow (v1.2.1):** Operators can edit any repayment record directly from the audit ledger, with full control over transaction date, interest month/year, and principal/interest breakout.
 *   **Member ID Multi-Search (v1.2.1):** Support for phone number search added to Special Loans tab; search engine hardened for consistency across all views.
@@ -114,6 +115,8 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
     *   Adds a "Zap Missing Interest Periods" tool to the success screen after a mass import.
     *   **Progress-Tracked Batch Processing**: Analyzes all active loans and inserts missing records in batches of 50 to ensure database stability.
     *   **Live UI Progress**: Uses asynchronous callbacks to provide the operator with a real-time progress bar and status labels during the analysis and sync phases.
+*   **Prorate Override Persistence (v1.4.0):** To prevent data loss during interest wipes, the system automatically snapshots manual "Prorated Day" overrides into `app_settings.prorate_override_dates`. A reference list is provided in the Settings UI so operators can manually re-apply these overrides after a mass regeneration.
+*   **Centralized Math Engine (v1.4.0):** To eliminate "repeated bugs" and logic drift, all principal calculations and transaction labeling are consolidated into `utils/loanMath.ts`. No financial math is allowed to reside directly within UI components.
 
 *   No new tables or columns are required for the latest month-interest override, remaining-principal settlement, admin-only audit-log tab, member-ID edit flow, or audit-report disbursal view. These changes operate on the existing `members`, `loans`, `loan_repayments`, and `audit_logs` structures.
 *   The legacy `payments` table is not part of the active product and should not exist after the latest migration.
@@ -121,6 +124,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 
 #### Data Flow (FinancialContext)
 *   All calculations are derived dynamically on the client side from the Supabase tables.
+*   **Centralized Utility**: All business logic for outstanding balances, principal paid, and voucher labeling must reside in `utils/loanMath.ts`. UI components must only call these shared utilities.
 *   **Pagination Resiliency**: API requests to `loans`, `loan_repayments`, and `loan_topups` strictly use a `.range()` pagination loop to defeat Supabase's mandatory 1,000-row limit. This ensures the comprehensive history of operations correctly reaches the UI engine.
 *   `getSpecialLoanOutstanding(loanId, asOfDate?)`: Calculates the exact principal balance by netting the original principal, top-ups up to the date, and principal repayments up to the date.
 *   Shared loan math utilities now drive arrears detection, current-month due, auto-generation, running balances, and interest-settlement status from the same event model.

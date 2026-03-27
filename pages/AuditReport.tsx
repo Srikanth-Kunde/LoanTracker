@@ -11,6 +11,8 @@ import {
   getLastDayOfMonthISO,
   isISODateOnOrBefore
 } from '../utils/date';
+import { calculatePrincipalPaid } from '../utils/loanMath';
+import { downloadAs, DownloadFormat } from '../utils/xlsxUtils';
 
 interface AuditRow {
   memberId: string;
@@ -123,7 +125,7 @@ const AuditReport: React.FC = () => {
         const memberRepayments = loanRepayments.filter(r => loanIds.has(r.loanId) && isISODateOnOrBefore(r.date, periodConfig.balanceEnd));
 
         const topupsDisbursed = memberTopups.reduce((s, t) => s + t.amount, 0);
-        const principalRecovered = memberRepayments.reduce((s, r) => s + (r.principalPaid || 0), 0);
+        const principalRecovered = memberRepayments.reduce((s, r) => s + calculatePrincipalPaid(r), 0);
         const interestCollected = memberRepayments.reduce((s, r) => s + (r.interestPaid || 0), 0);
         const originalLoanDisbursed = memberLoans.reduce((s, l) => s + l.principalAmount, 0);
         const outstanding = Math.max(0, originalLoanDisbursed + topupsDisbursed - principalRecovered);
@@ -189,7 +191,8 @@ const AuditReport: React.FC = () => {
       .forEach(r => {
         const l = loans.find(ln => ln.id === r.loanId)!;
         const m = members.find(mem => mem.id === l.memberId);
-        if ((r.principalPaid || 0) > 0) txs.push({ date: r.date, values: ['', formatDisplayDate(r.date), m?.id || l.memberId, m?.name || l.memberId, m?.name || l.memberId, 'Receipt', '', r.principalPaid || 0, 'Special Loan Principal Recovery'] });
+        const pPaid = calculatePrincipalPaid(r);
+        if (pPaid > 0) txs.push({ date: r.date, values: ['', formatDisplayDate(r.date), m?.id || l.memberId, m?.name || l.memberId, m?.name || l.memberId, 'Receipt', '', pPaid, 'Special Loan Principal Recovery'] });
         if ((r.interestPaid || 0) > 0) txs.push({ date: r.date, values: ['', formatDisplayDate(r.date), m?.id || l.memberId, m?.name || l.memberId, m?.name || l.memberId, 'Receipt', '', r.interestPaid || 0, 'Special Loan Interest'] });
         if ((r.lateFee || 0) > 0) txs.push({ date: r.date, values: ['', formatDisplayDate(r.date), m?.id || l.memberId, m?.name || l.memberId, m?.name || l.memberId, 'Receipt', '', r.lateFee || 0, 'Manual Late Fee'] });
       });
@@ -220,29 +223,33 @@ const AuditReport: React.FC = () => {
     });
   }, [filteredData]);
 
-  const downloadCsv = (headers: string[], rows: (string | number)[][], filename: string) => {
-    const csv = [headers.map(escapeCsvValue).join(','), ...rows.map(row => row.map(escapeCsvValue).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+  const [auditFormat, setAuditFormat] = useState<DownloadFormat>('XLSX');
+  const [tallyFormat, setTallyFormat] = useState<DownloadFormat>('XLSX');
 
   const handleAuditCsvExport = () => {
-    downloadCsv(
-      ['Balance As Of', 'Member ID', 'Member Name', 'Status', 'Loan Count', 'Original Loan Disbursed', 'Outstanding Principal', 'Top-ups Disbursed', 'Principal Recovered', 'Interest Collected', 'Last Activity'],
-      filteredData.map(row => [periodConfig.balanceEnd, row.memberId, row.memberName, row.isActive ? 'Active' : 'Inactive', row.loanCount, row.originalLoanDisbursed, row.outstanding, row.topupsDisbursed, row.principalRecovered, row.interestCollected, row.lastActivity ? formatDisplayDate(row.lastActivity) : '']),
-      `Audit_Report_${filterFY}${filterMonth ? `_${filterMonth}` : ''}.csv`
-    );
+    const headers = ['Balance As Of', 'Member ID', 'Member Name', 'Status', 'Loan Count', 'Original Loan Disbursed', 'Outstanding Principal', 'Top-ups Disbursed', 'Principal Recovered', 'Interest Collected', 'Last Activity'];
+    const rows = filteredData.map(row => [
+      periodConfig.balanceEnd, 
+      row.memberId, 
+      row.memberName, 
+      row.isActive ? 'Active' : 'Inactive', 
+      row.loanCount, 
+      row.originalLoanDisbursed, 
+      row.outstanding, 
+      row.topupsDisbursed, 
+      row.principalRecovered, 
+      row.interestCollected, 
+      row.lastActivity ? formatDisplayDate(row.lastActivity) : ''
+    ]);
+    
+    const filename = `Audit_Report_${filterFY}${filterMonth ? `_${filterMonth}` : ''}`;
+    downloadAs([headers, ...rows], filename, auditFormat, 'Audit Summary');
   };
 
   const handleTallyExport = () => {
-    downloadCsv(['Voucher No', 'Date', 'Member ID', 'Member Name', 'Ledger', 'Voucher Type', 'Debit', 'Credit', 'Narration'], tallyTransactions, `Audit_Tally_${filterFY}${filterMonth ? `_${filterMonth}` : ''}.csv`);
+    const headers = ['Voucher No', 'Date', 'Member ID', 'Member Name', 'Ledger', 'Voucher Type', 'Debit', 'Credit', 'Narration'];
+    const filename = `Audit_Tally_${filterFY}${filterMonth ? `_${filterMonth}` : ''}`;
+    downloadAs([headers, ...tallyTransactions], filename, tallyFormat, 'Tally Transactions');
   };
 
   return (
@@ -253,8 +260,47 @@ const AuditReport: React.FC = () => {
           <p className="text-slate-500 dark:text-slate-400">Historical special-loan balances and transaction exports for {periodConfig.label}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={handleTallyExport} className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium"><Download size={16} className="mr-2" /> Audit Tally CSV</button>
-          <button onClick={handleAuditCsvExport} className="flex items-center px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium"><ClipboardList size={16} className="mr-2" /> Full Audit CSV</button>
+          {/* Tally Export with format picker */}
+          <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm bg-white dark:bg-slate-800">
+            <button 
+              onClick={handleTallyExport} 
+              className="flex items-center px-4 py-2 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium text-sm border-r border-slate-200 dark:border-slate-700 transition-colors"
+            >
+              <Download size={16} className="mr-2" /> Audit Tally
+            </button>
+            <div className="flex text-[10px] font-bold">
+              {(['CSV', 'XLSX'] as const).map(fmt => (
+                <button 
+                  key={fmt} 
+                  onClick={() => setTallyFormat(fmt)}
+                  className={`px-2 py-2 transition-colors ${tallyFormat === fmt ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  {fmt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Full Audit Export with format picker */}
+          <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm bg-white dark:bg-slate-800">
+            <button 
+              onClick={handleAuditCsvExport} 
+              className="flex items-center px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-sm border-r border-slate-200 dark:border-slate-700 transition-colors"
+            >
+              <ClipboardList size={16} className="mr-2" /> Full Audit
+            </button>
+            <div className="flex text-[10px] font-bold">
+              {(['CSV', 'XLSX'] as const).map(fmt => (
+                <button 
+                  key={fmt} 
+                  onClick={() => setAuditFormat(fmt)}
+                  className={`px-2 py-2 transition-colors ${auditFormat === fmt ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  {fmt}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
