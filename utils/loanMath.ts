@@ -127,12 +127,21 @@ export const calculatePrincipalPaid = (rep: {
 
 /**
  * Shared utility for human-readable transaction labels.
+ * Can use transaction amounts to provide a more descriptive repayment label.
  */
-export const getVoucherTypeLabel = (entryType?: string): string => {
+export const getVoucherTypeLabel = (entryType?: string, tx?: any): string => {
   switch (entryType) {
     case 'DISBURSAL': return 'Loan Disbursal';
     case 'TOPUP': return 'Loan Top-Up';
-    case 'REPAYMENT': return 'Principal Repayment';
+    case 'REPAYMENT':
+      if (tx) {
+         const pPaid = Number(tx.principalPaid || 0);
+         const iPaid = Number(tx.interestPaid || 0);
+         if (pPaid > 0 && iPaid > 0) return 'Principal & Interest Payment';
+         if (pPaid > 0 && iPaid === 0) return 'Principal Repayment';
+         if (pPaid === 0 && iPaid > 0) return 'Interest Payment';
+      }
+      return 'Principal Repayment';
     case 'INTEREST': return 'Interest Payment';
     case 'CLOSE': return 'Loan Closure';
     default: return 'Transaction';

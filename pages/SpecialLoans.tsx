@@ -1117,7 +1117,7 @@ const SpecialLoans: React.FC = () => {
             const isDisbursal = tx.entryType === 'DISBURSAL';
             const isTopup = tx.entryType === 'TOPUP';
             const isRepayment = tx.entryType === 'REPAYMENT';
-            const vchType = getVoucherTypeLabel(tx.entryType);
+            const vchType = getVoucherTypeLabel(tx.entryType, tx);
             let narration = '';
 
             if (isDisbursal) {
@@ -2307,7 +2307,7 @@ const SpecialLoans: React.FC = () => {
                                                             <div className="text-[10px] text-slate-500">ID: {activeLoan.memberId}</div>
                                                         </td>
                                                         <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                                                            {getVoucherTypeLabel(tx.entryType)}
+                                                            {getVoucherTypeLabel(tx.entryType, tx)}
                                                         </td>
                                                         <td className="px-4 py-3 text-right font-bold text-blue-600 dark:text-blue-400">
                                                             {tx.entryType === 'DISBURSAL' || tx.entryType === 'TOPUP' ? formatCurrency(tx.amount || 0, settings.currency) : '—'}
