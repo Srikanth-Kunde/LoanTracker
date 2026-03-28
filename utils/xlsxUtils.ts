@@ -50,18 +50,83 @@ export const downloadAsXLSX = (
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
 };
 
-/** Download multiple named sheets as a single XLSX workbook */
-export const downloadMultiSheetXLSX = (
+/** Download multiple named sheets as a single XLSX workbook with ExcelJS styling */
+export const downloadMultiSheetXLSX = async (
   sheets: { name: string; rows: (string | number | null | undefined)[][] }[],
   filename: string
-): void => {
-  const wb = XLSX.utils.book_new();
+): Promise<void> => {
+  const workbook = new ExcelJS.Workbook();
+  
   sheets.forEach(({ name, rows }) => {
     const safeName = name.replace(/[:\\/?*[\]]/g, '_').slice(0, 31);
-    const ws = XLSX.utils.aoa_to_sheet(rows as any[][]);
-    XLSX.utils.book_append_sheet(wb, ws, safeName);
+    const worksheet = workbook.addWorksheet(safeName);
+    const headerIdx = rows.findIndex(r => r.includes('Sl.No'));
+    
+    rows.forEach((row, i) => {
+      const wsRow = worksheet.addRow(row);
+      
+      if (headerIdx !== -1 && i < headerIdx) {
+        const cellA = wsRow.getCell(1);
+        const cellB = wsRow.getCell(2);
+        cellA.font = { bold: true };
+        cellA.alignment = { horizontal: 'left' };
+        cellB.alignment = { horizontal: 'right' };
+        if (typeof row[1] === 'number') {
+          cellB.numFmt = '#,##0.00';
+        }
+      }
+
+      if (i === headerIdx) {
+        wsRow.eachCell((cell) => {
+          cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF444444' }
+          };
+          cell.border = {
+            top: { style: 'thin' }, left: { style: 'thin' },
+            bottom: { style: 'thin' }, right: { style: 'thin' }
+          };
+          cell.alignment = { horizontal: 'center' };
+        });
+      }
+
+      if (headerIdx !== -1 && i > headerIdx) {
+        wsRow.eachCell((cell, colNumber) => {
+          cell.border = {
+            top: { style: 'thin' }, left: { style: 'thin' },
+            bottom: { style: 'thin' }, right: { style: 'thin' }
+          };
+          
+          if ([6, 7, 8, 9].includes(colNumber)) {
+            cell.alignment = { horizontal: 'right' };
+            cell.numFmt = '#,##0.00';
+          }
+
+          if (String(row[4]).includes('GRAND TOTAL')) {
+            cell.font = { bold: true };
+            cell.fill = {
+              type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' }
+            };
+          }
+        });
+      }
+    });
+
+    worksheet.columns.forEach(column => {
+      let maxLen = 0;
+      column.eachCell?.({ includeEmpty: true }, cell => {
+        const len = cell.value ? String(cell.value).length : 5;
+        if (len > maxLen) maxLen = len;
+      });
+      column.width = Math.min(maxLen + 2, 40);
+    });
   });
-  XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  triggerDownload(blob, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
 };
 
 /** Dispatcher — calls the appropriate download based on format */
@@ -259,7 +324,7 @@ const drawSummaryGrid = (doc: jsPDF, summary: (string | number | null | undefine
     
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(30, 41, 59); // slate-800
-    doc.text(value, x + 35, y);
+    doc.text(value, x + 46, y);
     
     if ((i + 1) % 3 === 0) {
       x = margin;
@@ -321,6 +386,19 @@ export const downloadAsPDF = (
         6: { halign: 'right' }, 
         7: { halign: 'right' }, 
         8: { halign: 'right' }, 
+      },
+      didDrawPage: (data) => {
+        const memberNameRow = summary.find(r => r[0] === 'Member Name' || r[0] === 'Member');
+        const memberIdRow = summary.find(r => r[0] === 'Member ID' || r[0] === 'ID');
+        const memberName = memberNameRow ? String(memberNameRow[1]) : '';
+        const memberId = memberIdRow ? String(memberIdRow[1]) : '';
+        const memberInfo = memberName ? `Member: ${memberName} (ID: ${memberId})` : '';
+        
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        if (memberInfo) {
+          doc.text(memberInfo, 15, 205);
+        }
       },
       didParseCell: (data) => {
         const row = data.row.raw as any[];
@@ -395,6 +473,19 @@ export const downloadAllAsPDF = (
           6: { halign: 'right' },
           7: { halign: 'right' },
           8: { halign: 'right' },
+        },
+        didDrawPage: (data) => {
+          const memberNameRow = summary.find(r => r[0] === 'Member Name' || r[0] === 'Member');
+          const memberIdRow = summary.find(r => r[0] === 'Member ID' || r[0] === 'ID');
+          const memberName = memberNameRow ? String(memberNameRow[1]) : '';
+          const memberId = memberIdRow ? String(memberIdRow[1]) : '';
+          const memberInfo = memberName ? `Member: ${memberName} (ID: ${memberId})` : '';
+          
+          doc.setFontSize(8);
+          doc.setTextColor(148, 163, 184);
+          if (memberInfo) {
+            doc.text(memberInfo, 15, 205);
+          }
         },
         didParseCell: (data) => {
           const row = data.row.raw as any[];

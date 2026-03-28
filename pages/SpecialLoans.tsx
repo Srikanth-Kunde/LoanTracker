@@ -85,7 +85,15 @@ const SpecialLoans: React.FC = () => {
         topup: boolean;
         autoGen: boolean;
         globalZap: boolean;
-    }>({ create: false, repay: false, calc: false, history: false, edit: false, editInterest: false, topup: false, autoGen: false, globalZap: false });
+        export: boolean;
+    }>({ create: false, repay: false, calc: false, history: false, edit: false, editInterest: false, topup: false, autoGen: false, globalZap: false, export: false });
+
+    // Export Header Control State
+    const REPORT_HEADERS = ["Member ID", "Member Name", "Start Date", "Original Principal", "Top-ups", "Top-up Dates", "Outstanding", "Rate %/mo", "Interest Earned", "Late Fee (Period)", "Late Fee (Total)", "Last Payment", "Status"];
+    const LEDGER_HEADERS = ['Sl.No', 'Date', 'CalcType', 'Days', 'Voucher Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'];
+    const [exportTarget, setExportTarget] = useState<'REPORT' | 'BULK_LEDGERS' | 'SINGLE_LEDGER' | null>(null);
+    const [availableExportCols, setAvailableExportCols] = useState<string[]>([]);
+    const [selectedExportCols, setSelectedExportCols] = useState<string[]>([]);
 
     const [printScheduleLoan, setPrintScheduleLoan] = useState<EnrichedLoan | null>(null);
 
@@ -160,6 +168,14 @@ const SpecialLoans: React.FC = () => {
     const [reportFormat, setReportFormat] = useState<DownloadFormat>('XLSX');
     const [ledgerFormat, setLedgerFormat] = useState<DownloadFormat>('XLSX');
     const [bulkDownloadFormat, setBulkDownloadFormat] = useState<DownloadFormat>('XLSX');
+
+    const handleOpenExportModal = (target: 'REPORT' | 'BULK_LEDGERS' | 'SINGLE_LEDGER') => {
+        setExportTarget(target);
+        const headers = target === 'REPORT' ? REPORT_HEADERS : LEDGER_HEADERS;
+        setAvailableExportCols(headers);
+        setSelectedExportCols(headers);
+        setModals(m => ({ ...m, export: true }));
+    };
 
     // Sync rates with dates based on rules
     React.useEffect(() => {
@@ -1047,7 +1063,6 @@ const SpecialLoans: React.FC = () => {
     };
 
     const downloadReport = () => {
-        const headers = ["Member ID", "Member Name", "Start Date", "Original Principal", "Top-ups", "Top-up Dates", "Outstanding", "Rate %/mo", "Interest Earned", "Late Fee (Period)", "Late Fee (Total)", "Last Payment", "Status"];
         const rows = loansInSelectedPeriod.map(l => {
             const loanTopupsForLoan = loanTopups.filter(t => t.loanId === l.id).sort((a, b) => compareISODate(a.date, b.date));
             const topupTotal = loanTopupsForLoan.reduce((s, t) => s + t.amount, 0);
@@ -1060,24 +1075,25 @@ const SpecialLoans: React.FC = () => {
                 .sort(compareISODate)
                 .at(-1);
 
-            return [
-                l.memberId,
-                l.memberName,
-                l.startDate,
-                l.principalAmount,
-                topupTotal,
-                topupDatesStr,
-                outstanding,
-                `${l.interestRate}%`,
-                l.historicalInterestPaid,
-                l.selectedMonthLateFee,
-                lateFeesTotal,
-                lastPaymentDate ? formatDisplayDate(lastPaymentDate) : '',
-                l.status
-            ];
+            const fullRow = {
+                "Member ID": String(l.memberId),
+                "Member Name": l.memberName,
+                "Start Date": formatDisplayDate(l.startDate),
+                "Original Principal": Number(l.principalAmount),
+                "Top-ups": Number(topupTotal),
+                "Top-up Dates": topupDatesStr,
+                "Outstanding": Number(outstanding),
+                "Rate %/mo": `${l.interestRate}%`,
+                "Interest Earned": Number(l.historicalInterestPaid),
+                "Late Fee (Period)": Number(l.selectedMonthLateFee),
+                "Late Fee (Total)": Number(lateFeesTotal),
+                "Last Payment": lastPaymentDate ? formatDisplayDate(lastPaymentDate) : '',
+                "Status": l.status
+            };
+            return selectedExportCols.map(col => fullRow[col as keyof typeof fullRow]);
         });
 
-        const allRows = [headers, ...rows];
+        const allRows = [selectedExportCols, ...rows];
         const filename = `Special_Loans_Report_${MONTHS[selectedMonth - 1]}_${selectedYear}`;
         downloadAs(allRows, filename, reportFormat, `${MONTHS[selectedMonth - 1]} ${selectedYear}`);
     };
@@ -1129,19 +1145,31 @@ const SpecialLoans: React.FC = () => {
             const credit = isRepayment ? calculatePrincipalPaid(tx) : 0;
             const interest = (tx.interestPaid || 0) > 0 ? tx.interestPaid : 0;
 
-            return [
-                idx + 1,
-                formatDisplayDate(tx.date),
-                tx.interestCalculationType || 'Monthly',
-                tx.interestDays || 30,
-                vchType,
-                Number(debit),
-                Number(credit),
-                Number(interest),
-                Number(tx.balanceAfter || 0),
-                narration || tx.notes || ''
-            ];
+            const fullRow = {
+                'Sl.No': idx + 1,
+                'Date': formatDisplayDate(tx.date),
+                'CalcType': tx.interestCalculationType || 'Monthly',
+                'Days': tx.interestDays || 30,
+                'Voucher Type': vchType,
+                'Debit': Number(debit),
+                'Credit': Number(credit),
+                'Interest': Number(interest),
+                'Balance': Number(tx.balanceAfter || 0),
+                'Narration': narration || tx.notes || ''
+            };
+            return selectedExportCols.map(col => fullRow[col as keyof typeof fullRow]);
         });
+
+        const totalRowVals = {
+            'Sl.No': '', 'Date': '', 'CalcType': '', 'Days': '',
+            'Voucher Type': 'GRAND TOTAL',
+            'Debit': topupsTotal + loan.principalAmount,
+            'Credit': principalRepaid,
+            'Interest': interestPaid,
+            'Balance': liveBalance,
+            'Narration': ''
+        };
+        const totalRow = selectedExportCols.map(col => col in totalRowVals ? totalRowVals[col as keyof typeof totalRowVals] : '');
 
         return [
             ['Member Name', loan.memberName],
@@ -1154,10 +1182,10 @@ const SpecialLoans: React.FC = () => {
             ['Interest', interestPaid],
             ['Outstanding Principal', liveBalance],
             [],
-            ['Sl.No', 'Date', 'CalcType', 'Days', 'Voucher Type', 'Debit', 'Credit', 'Interest', 'Balance', 'Narration'],
+            selectedExportCols,
             ...ledgerRows,
             [], // Spacer
-            ['', '', '', '', 'GRAND TOTAL', topupsTotal + loan.principalAmount, principalRepaid, interestPaid, liveBalance, '']
+            totalRow
         ] as (string | number | null | undefined)[][];
     };
 
@@ -1512,7 +1540,7 @@ const SpecialLoans: React.FC = () => {
                     <div className="flex flex-wrap gap-2 items-center">
                         {canDownload && (
                             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
-                                <Button variant="outline" icon={Download} onClick={downloadReport} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700">Report</Button>
+                                <Button variant="outline" icon={Download} onClick={() => handleOpenExportModal('REPORT')} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700">Report</Button>
                                 <div className="flex text-[10px] font-bold">
                                     {(['CSV', 'XLSX'] as const).map(fmt => (
                                         <button key={fmt} onClick={() => setReportFormat(fmt)}
@@ -1527,7 +1555,7 @@ const SpecialLoans: React.FC = () => {
                         {/* Bulk Download All Ledgers with format picker */}
                         {canDownload && (
                             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
-                                <Button variant="outline" icon={Download} onClick={downloadAllLedgers} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/10" title={`Download all ${loansInSelectedPeriod.length} ledger(s) as ${bulkDownloadFormat}`}>
+                                <Button variant="outline" icon={Download} onClick={() => handleOpenExportModal('BULK_LEDGERS')} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/10" title={`Download all ${loansInSelectedPeriod.length} ledger(s) as ${bulkDownloadFormat}`}>
                                     All Ledgers
                                 </Button>
                                 <div className="flex text-[10px] font-bold">
@@ -2385,7 +2413,7 @@ const SpecialLoans: React.FC = () => {
                                         {/* Format picker + download */}
                                         <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm text-[10px] font-bold">
                                             <button
-                                                onClick={downloadActiveLoanLedger}
+                                                onClick={() => handleOpenExportModal('SINGLE_LEDGER')}
                                                 className="flex items-center gap-1 px-2 py-1.5 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors"
                                             >
                                                 <Download size={11} /> Download
@@ -2870,6 +2898,52 @@ const SpecialLoans: React.FC = () => {
                         repayments={loanRepayments.filter(r => r.loanId === printScheduleLoan.id)}
                     />
                 )}
+            </Modal>
+
+            {/* UNIVERSAL EXPORT MODAL */}
+            <Modal isOpen={modals.export} onClose={() => setModals({ ...modals, export: false })} title="Configure Export Headers" maxWidth="md">
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                        Select the columns you wish to include in your downloaded {exportTarget === 'REPORT' ? reportFormat : (exportTarget === 'BULK_LEDGERS' ? bulkDownloadFormat : ledgerFormat)} report.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                        {availableExportCols.map(col => (
+                            <label key={col} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedExportCols.includes(col)}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            // Maintain original order when adding back columns
+                                            const newCols = [...selectedExportCols, col];
+                                            const sortedCols = availableExportCols.filter(c => newCols.includes(c));
+                                            setSelectedExportCols(sortedCols);
+                                        } else {
+                                            setSelectedExportCols(prev => prev.filter(c => c !== col));
+                                        }
+                                    }}
+                                    className="rounded border-slate-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                                />
+                                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">{col}</span>
+                            </label>
+                        ))}
+                    </div>
+                    <div className="flex gap-3 justify-end mt-6">
+                        <Button variant="outline" onClick={() => setSelectedExportCols(availableExportCols)} className="px-4 py-2">Select All</Button>
+                        <Button 
+                            className={`bg-primary-600 font-bold text-white shadow-lg flex items-center gap-2 px-6 py-2 ${selectedExportCols.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-700'}`}
+                            disabled={selectedExportCols.length === 0}
+                            onClick={() => {
+                                setModals({ ...modals, export: false });
+                                if (exportTarget === 'REPORT') downloadReport();
+                                else if (exportTarget === 'BULK_LEDGERS') downloadAllLedgers();
+                                else if (exportTarget === 'SINGLE_LEDGER') downloadActiveLoanLedger();
+                            }}
+                        >
+                            <Download size={16} /> Confirm Download
+                        </Button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

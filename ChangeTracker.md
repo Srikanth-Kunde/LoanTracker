@@ -4,6 +4,20 @@ This document serves as an exhaustive audit trail for all changes performed duri
 
 ---
 
+## 📅 March 28, 2026: v1.4.6 (Beautification & Universal Exports)
+
+### **1. Universal Report Customization**
+- **Action**: Injected an `ExportModal` capable of handling dynamic array restructuring across single, bulk, and portfolio reports.
+- **Rationale**: Auditors required the ability to exclude technical columns (like `Days` or `CalcType`) to preserve horizontal layout space on custom print-outs.
+- **Fail-safe**: Form validation ensures users cannot execute an export when 0 columns are selected, avoiding crash conditions.
+
+### **2. Platinum Styling Engine**
+- **Action**: Converted the `downloadMultiSheetXLSX` engine from basic SheetJS to `ExcelJS`.
+- **UI UX Impact**: Applied `animate-in` fades to the main application body and extended the bottom scroll clearance (`pb-32`) explicitly for narrow mobile viewport accessibility.
+- **Action**: Augmented the PDF generator to explicitly imprint **Member Name & ID** diagonally opposite the page numbers, firmly binding floating metadata during physical audits.
+
+---
+
 ## 📅 March 28, 2026: v1.4.4 & v1.4.5 (Final Polish & Defense-In-Depth)
 
 ### **1. Security Hardening (Defense-in-Depth)**

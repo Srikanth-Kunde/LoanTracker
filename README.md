@@ -1,8 +1,8 @@
-# Legacy Loan Tracker v1.4.5 (Production Hardened)
+# Legacy Loan Tracker v1.4.6 (Beautification & Universal Exports)
 Digitize and audit historical handwritten loan records starting from 2012 with absolute precision. This specialized tool focuses exclusively on **Special Loans** (Interest-only, with multiple top-ups and flexible repayments).
 
 > [!IMPORTANT]
-> **Production Status (v1.4.5)**: This system has undergone the final "Senior Auditor" cross-check. All destructive actions are guarded by **Defense-in-Depth RBAC**, and premium high-fidelity reporting is standardized for professional financial audits.
+> **Production Status (v1.4.6)**: This system has undergone the final "Senior Auditor" cross-check. All destructive actions are guarded by **Defense-in-Depth RBAC**, and premium high-fidelity reporting is standardized for professional financial audits.
 
 ## 🛡️ Security & Audit Readiness
 
@@ -11,7 +11,8 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
     *   **Operator**: Authorized to view records, record collections, and download reports. Administrative modules are hidden and guarded.
     *   **Viewer**: Read-only access. No data entry, editing, or report downloads allowed.
 *   **⚠️ Double-Confirmation Safeguards**: Mandatory secondary "Final Warning" dialogs for all delete, wipe, and loan-closure operations.
-*   **📊 Premium Auditor PDFs**: Export professional 3-column grid summary reports with zebra-striping, custom society branding, and automatic page numbering.
+*   **📊 Premium Auditor Exports**: Export professional 3-column grid PDFs with custom society branding, automatic page numbering, and integrated Member ID footers. Bulk XLSX ledgers are comprehensively styled with ExcelJS.
+*   **🎛️ Universal Column Selection**: A completely dynamic Export Modal allows real-time selection and exclusion of audit columns (`CalcType`, `Days`, `Narration`, etc.) before generating any report, ensuring horizontally efficient print-outs.
 *   **🔐 Defense-in-Depth**: Role-based access is enforced via Sidebar filtering, Route Guards in `App.tsx`, and explicit **Internal Guard Clauses** inside all mutation functions (`handleDelete`, `handleWipe`, `handlePreClose`).
 
 ## 🌟 Key Features

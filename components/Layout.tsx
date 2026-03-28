@@ -219,14 +219,14 @@ export const Layout = () => {
           <div className="w-6" /> {/* Spacer */}
         </header>
 
-        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 pb-32">
           {isOffline && (
             <div className="mb-4 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-xl text-sm">
               <WifiOff size={16} className="shrink-0" />
               <span><strong>Live sync unavailable</strong> — automatic refresh may be delayed. Check your network, VPN, or Supabase credentials.</span>
             </div>
           )}
-          <div className="mx-auto max-w-[1500px]">
+          <div className="mx-auto max-w-[1500px] animate-in fade-in zoom-in-95 duration-200">
             <Outlet />
           </div>
         </main>

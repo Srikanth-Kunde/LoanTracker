@@ -1,6 +1,6 @@
-# Legacy Loan Tracker - PRD v1.4.5 (Production Hardened)
+# Legacy Loan Tracker - PRD v1.4.6 (Beautification & Universal Exports)
 ## Product Overview
-Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present). This v1.4.5 release is the **"Auditor's Edition"**, providing bulletproof security and premium-tier reporting outputs.
+Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present). This v1.4.6 release focuses on **Universal Report Customization**, providing auditors with granular control over exported datasets while delivering pixel-perfect PDF and Excel representations.
 
 ---
 
