@@ -1,6 +1,6 @@
-# Legacy Loan Tracker - PRD v1.4.3 (Production Hardened)
+# Legacy Loan Tracker - PRD v1.4.5 (Production Hardened)
 ## Product Overview
-Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present).
+Legacy Loan Tracker is a dedicated tool for digitizing and auditing historical handwritten loan records (2012-Present). This v1.4.5 release is the **"Auditor's Edition"**, providing bulletproof security and premium-tier reporting outputs.
 
 ---
 
@@ -11,7 +11,7 @@ A dedicated digital ledger designed to digitize and audit handwritten loan recor
 *   **Manual Override is King**: The physical ledger contains many exceptions (e.g., waived late fees, prorated interest). The system must never auto-enforce strict calculations that prevent the operator from matching the physical book.
 *   **Top-Ups over New Loans**: Rather than creating a new loan ID every time a member borrows more, the system must allow "Top-Ups" to a single active loan, dynamically adjusting the outstanding principal.
 *   **Interest-Only Default**: Members typically pay only the monthly interest. Principal repayments are optional and serve to lower the outstanding balance (and future interest).
-*   **Defense-in-Depth Security (v1.4.3)**: Access control is not just a UI filter but is enforced at the component level. Administrative tools (Imports, Settings, Audit Logs) are strictly isolated.
+*   **Defense-in-Depth Security (v1.4.5)**: Access control is enforced at both the UI level and the **Internal Logic level**. Administrative tools are strictly isolated using guard clauses.
 
 ---
 

@@ -1166,7 +1166,7 @@ const SpecialLoans: React.FC = () => {
         const rows = buildLedgerRowsForLoan(activeLoan);
         const safeName = activeLoan.memberName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || activeLoan.id;
         const filename = `Special_Loan_Audit_Ledger_${safeName}`;
-        downloadAs(rows, filename, ledgerFormat, activeLoan.memberName.slice(0, 31));
+        downloadAs(rows, filename, ledgerFormat, activeLoan.memberName.slice(0, 31), settings.societyName);
     };
 
     const downloadAllLedgers = () => {
@@ -1181,7 +1181,7 @@ const SpecialLoans: React.FC = () => {
         } else if (bulkDownloadFormat === 'PDF') {
             const sheets = loansInSelectedPeriod.map(loan => buildLedgerRowsForLoan(loan));
             const filename = `All_Audit_Ledgers_${MONTHS[selectedMonth - 1]}_${selectedYear}`;
-            downloadAllAsPDF(sheets, filename);
+            downloadAllAsPDF(sheets, filename, settings.societyName);
         } else {
             // CSV: download all loans as a single ZIP file
             const files = loansInSelectedPeriod.map(loan => {
@@ -1318,6 +1318,10 @@ const SpecialLoans: React.FC = () => {
     };
 
     const handlePreClose = async (loan: EnrichedLoan) => {
+        if (role !== UserRole.ADMIN) {
+            alert("Restricted: Only society administrators can pre-close historical loans.");
+            return;
+        }
         const amount = loan.historicalOutstanding;
         if (confirm(`Are you sure you want to pre-close this loan? Full outstanding principal of ${formatCurrency(amount, settings.currency)} will be recorded as paid.`)) {
             if (confirm(`FINAL CONFIRMATION: Are you sure you want to PRE-CLOSE this loan for ${loan.memberName}? This record cannot be undone easily.`)) {
@@ -1342,6 +1346,10 @@ const SpecialLoans: React.FC = () => {
     };
 
     const handleDeleteLoan = async (id: string) => {
+        if (role !== UserRole.ADMIN) {
+            alert("Security Breach: Only admins can delete loan records.");
+            return;
+        }
         if (confirm("Are you sure you want to delete this loan? This will also remove all its repayment history.")) {
             if (confirm("FINAL CONFIRMATION: This action is PERMANENT. All history for this loan will be lost forever. Proceed?")) {
             try {
@@ -1356,6 +1364,10 @@ const SpecialLoans: React.FC = () => {
     };
 
     const handleWipeInterest = async () => {
+        if (role !== UserRole.ADMIN) {
+            alert("Restricted: Only admins can wipe historical interest records.");
+            return;
+        }
         const target = activeLoan || autoGenLoan;
         if (!target) return;
 

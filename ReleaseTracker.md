@@ -1,3 +1,15 @@
+**v1.4.4 — PDF Beautification & Premium Reporting**
+
+This release overhauls the PDF reporting engine to provide a premium, audit-ready layout with structured grid summaries and professional branding.
+
+- **3-Column Summary Grid**: Replaced the vertical list of metadata with a structured horizontal grid for the member loan summary.
+- **Audit-Blue Headers**: Standardized the table headers with a professional 'Audit Blue' (Slate-700) palette.
+- **Society Branding**: Reports now dynamically include the Society Name from settings as a clear banner.
+- **Zebra Striping**: Added alternating row stripes to all generated PDF tables for easier horizontal reading.
+- **Page Numbering**: Implemented automatic page numbering (e.g., "Page 1 of 2") for all multi-page ledger reports.
+
+---
+
 **v1.4.3 — Final Production Audit & Standardized Reporting**
 
 This final release hardens the security architecture with defensive component-level guards and standardizes all financial reporting labels for high-fidelity auditing.

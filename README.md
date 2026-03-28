@@ -1,8 +1,8 @@
-# Legacy Loan Tracker v1.4.3 (Production Hardened)
+# Legacy Loan Tracker v1.4.5 (Production Hardened)
 Digitize and audit historical handwritten loan records starting from 2012 with absolute precision. This specialized tool focuses exclusively on **Special Loans** (Interest-only, with multiple top-ups and flexible repayments).
 
 > [!IMPORTANT]
-> **Production Status (v1.4.3)**: This system has undergone final production hardening. All destructive actions are guarded by double-confirmation, and a strict 3-tier RBAC system is enforced at both the UI and Component levels.
+> **Production Status (v1.4.5)**: This system has undergone the final "Senior Auditor" cross-check. All destructive actions are guarded by **Defense-in-Depth RBAC**, and premium high-fidelity reporting is standardized for professional financial audits.
 
 ## 🛡️ Security & Audit Readiness
 
@@ -10,9 +10,9 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
     *   **Admin**: Full access to all database mutations, system settings, access codes, and audit logs.
     *   **Operator**: Authorized to view records, record collections, and download reports. Administrative modules are hidden and guarded.
     *   **Viewer**: Read-only access. No data entry, editing, or report downloads allowed.
-*   **⚠️ Double-Confirmation Safeguards**: Mandatory secondary "Final Warning" dialogs for all delete, wipe, and loan-closure operations to prevent accidental data loss.
-*   **📊 High-Fidelity Reporting**: Export professional PDF (Landscape) or XLSX (Formula-ready) reports with standardized headers: `Sl.no`, `Member Name`, `ID`, `Start Date`, `Loan`, `Top-ups`, `Total Loan`, `Recovered`, `Interest`, and `Outstanding Principal`.
-*   **🔐 Defense-in-Depth**: Role-based access is enforced via Sidebar filtering, Route Guards in `App.tsx`, and defensive Component-level checks in `Settings.tsx` and `ImportData.tsx`.
+*   **⚠️ Double-Confirmation Safeguards**: Mandatory secondary "Final Warning" dialogs for all delete, wipe, and loan-closure operations.
+*   **📊 Premium Auditor PDFs**: Export professional 3-column grid summary reports with zebra-striping, custom society branding, and automatic page numbering.
+*   **🔐 Defense-in-Depth**: Role-based access is enforced via Sidebar filtering, Route Guards in `App.tsx`, and explicit **Internal Guard Clauses** inside all mutation functions (`handleDelete`, `handleWipe`, `handlePreClose`).
 
 ## 🌟 Key Features
 

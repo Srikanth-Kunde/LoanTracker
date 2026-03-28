@@ -195,6 +195,10 @@ const Members: React.FC = () => {
     };
 
     const handleDelete = async (member: Member) => {
+        if (role !== UserRole.ADMIN) {
+            alert("Security Violation: Only admins can delete profiles.");
+            return;
+        }
         if (!window.confirm(`Are you sure you want to delete ${member.name}? This may affect linked loans.`)) return;
         if (!window.confirm(`Please confirm again to DELETE ${member.name}. This action is irreversible.`)) return;
         try {

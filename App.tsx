@@ -49,7 +49,7 @@ const AppRoutes: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  console.log("APP VERSION: 1.4.2 (Production Hardened)");
+  console.log("APP VERSION: 1.4.4 (Production Hardened)");
   return (
     <ErrorBoundary>
       <SettingsProvider>

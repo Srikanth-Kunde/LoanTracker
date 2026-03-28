@@ -69,12 +69,13 @@ export const downloadAs = (
   rows: (string | number | null | undefined)[][],
   filename: string,
   format: DownloadFormat,
-  sheetName?: string
+  sheetName?: string,
+  societyName?: string
 ): void => {
   if (format === 'XLSX') {
     downloadAsStylishXLSX(rows, filename, sheetName);
   } else if (format === 'PDF') {
-    downloadAsPDF(rows, filename);
+    downloadAsPDF(rows, filename, societyName);
   } else {
     downloadAsCSV(rows, filename);
   }
@@ -235,10 +236,47 @@ export const downloadStylishGenericXLSX = async (
   triggerDownload(blob, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
 };
 
+/** Helper to draw a structured 3-column summary grid */
+const drawSummaryGrid = (doc: jsPDF, summary: (string | number | null | undefined)[][], startY: number): number => {
+  const margin = 15;
+  const colWidth = 90; 
+  let x = margin;
+  let y = startY;
+  
+  doc.setFontSize(9);
+  
+  summary.forEach((row, i) => {
+    const label = String(row[0] || '');
+    const value = String(row[1] ?? '');
+    
+    // Draw background for label
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.rect(x, y - 4, colWidth - 5, 6, 'F');
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`${label}:`, x + 2, y);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.text(value, x + 35, y);
+    
+    if ((i + 1) % 3 === 0) {
+      x = margin;
+      y += 8;
+    } else {
+      x += colWidth;
+    }
+  });
+
+  return (summary.length % 3 === 0) ? y : y + 8;
+};
+
 /** Download 2D array as a Landscape PDF using jsPDF + AutoTable */
 export const downloadAsPDF = (
   rows: (string | number | null | undefined)[][],
-  filename: string
+  filename: string,
+  societyName?: string
 ): void => {
   const doc = new jsPDF({
     orientation: 'landscape',
@@ -246,55 +284,61 @@ export const downloadAsPDF = (
     format: 'a4',
   });
 
-  // Find the header row (has 'Sl.No')
   const headerIdx = rows.findIndex(r => r.includes('Sl.No'));
   
   if (headerIdx === -1) {
-    // If no table structure, just dump rows (fallback)
     doc.text(rows.map(r => r.join(' | ')).join('\n'), 10, 10);
   } else {
-    // Top summary block
-    const summary = rows.slice(0, headerIdx).filter(r => r.length > 0 && r[0]);
-    let y = 15;
-    
-    doc.setFontSize(14);
-    doc.text('Loan Ledger Report', 140, 10, { align: 'center' });
+    // Top Header & Branding
     doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.text(societyName || 'Society Ledger System', 15, 10);
     
-    summary.forEach(row => {
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${String(row[0])}:`, 15, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${String(row[1] ?? '')}`, 50, y);
-      y += 5;
-    });
+    doc.setFontSize(18);
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.text('Loan Ledger Report', 282, 12, { align: 'right' });
+    
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.line(15, 15, 282, 15);
 
-    // Main Table
+    const summary = rows.slice(0, headerIdx).filter(r => r.length > 0 && r[0]);
+    const finalGridY = drawSummaryGrid(doc, summary, 25);
+
     const tableHeaders = rows[headerIdx];
     const tableData = rows.slice(headerIdx + 1);
 
     autoTable(doc, {
-      startY: y + 5,
+      startY: finalGridY + 5,
       head: [tableHeaders],
       body: tableData as any[][],
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [68, 68, 68], textColor: 255 },
+      styles: { fontSize: 8, cellPadding: 2, lineColor: [226, 232, 240] },
+      headStyles: { fillColor: [51, 65, 85], textColor: 255, fontStyle: 'bold' }, 
+      alternateRowStyles: { fillColor: [248, 250, 252] }, 
       columnStyles: {
-        5: { halign: 'right' }, // Debit
-        6: { halign: 'right' }, // Credit
-        7: { halign: 'right' }, // Interest
-        8: { halign: 'right' }, // Balance
+        5: { halign: 'right' }, 
+        6: { halign: 'right' }, 
+        7: { halign: 'right' }, 
+        8: { halign: 'right' }, 
       },
       didParseCell: (data) => {
-        // Bold the totals row
         const row = data.row.raw as any[];
         if (row && row[4] === 'GRAND TOTAL') {
           data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.fillColor = [240, 240, 240];
+          data.cell.styles.fillColor = [226, 232, 240]; 
+          data.cell.styles.textColor = [30, 41, 59];
         }
       }
     });
+
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`Page ${i} of ${pageCount}`, 282, 205, { align: 'right' });
+    }
   }
 
   doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
@@ -303,7 +347,8 @@ export const downloadAsPDF = (
 /** Download multiple 2D arrays into a single multi-page PDF */
 export const downloadAllAsPDF = (
   sheets: (string | number | null | undefined)[][][],
-  filename: string
+  filename: string,
+  societyName?: string
 ): void => {
   const doc = new jsPDF({
     orientation: 'landscape',
@@ -314,56 +359,61 @@ export const downloadAllAsPDF = (
   sheets.forEach((rows, index) => {
     if (index > 0) doc.addPage();
 
-    // Find the header row (has 'Sl.No')
     const headerIdx = rows.findIndex(r => r.includes('Sl.No'));
     
     if (headerIdx === -1) {
       doc.text(rows.map(r => r.join(' | ')).join('\n'), 10, 10);
     } else {
-      // Top summary block
-      const summary = rows.slice(0, headerIdx).filter(r => r.length > 0 && r[0]);
-      let y = 15;
-      
-      doc.setFontSize(14);
-      doc.text('Loan Ledger Report', 140, 10, { align: 'center' });
       doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(148, 163, 184);
+      doc.text(societyName || 'Society Ledger System', 15, 10);
       
-      summary.forEach(row => {
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${String(row[0])}:`, 15, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${String(row[1] ?? '')}`, 50, y);
-        y += 5;
-      });
+      doc.setFontSize(18);
+      doc.setTextColor(30, 41, 59);
+      doc.text('Loan Ledger Report', 282, 12, { align: 'right' });
+      
+      doc.setDrawColor(226, 232, 240);
+      doc.line(15, 15, 282, 15);
 
-      // Main Table
+      const summary = rows.slice(0, headerIdx).filter(r => r.length > 0 && r[0]);
+      const finalGridY = drawSummaryGrid(doc, summary, 25);
+
       const tableHeaders = rows[headerIdx];
       const tableData = rows.slice(headerIdx + 1);
 
       autoTable(doc, {
-        startY: y + 5,
+        startY: finalGridY + 5,
         head: [tableHeaders],
         body: tableData as any[][],
         theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [68, 68, 68], textColor: 255 },
+        styles: { fontSize: 8, cellPadding: 2, lineColor: [226, 232, 240] },
+        headStyles: { fillColor: [51, 65, 85], textColor: 255 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
-          5: { halign: 'right' }, // Debit
-          6: { halign: 'right' }, // Credit
-          7: { halign: 'right' }, // Interest
-          8: { halign: 'right' }, // Balance
+          5: { halign: 'right' },
+          6: { halign: 'right' },
+          7: { halign: 'right' },
+          8: { halign: 'right' },
         },
         didParseCell: (data) => {
-          // Bold the totals row
           const row = data.row.raw as any[];
           if (row && row[4] === 'GRAND TOTAL') {
             data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fillColor = [240, 240, 240];
+            data.cell.styles.fillColor = [226, 232, 240];
           }
         }
       });
     }
   });
+
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Page ${i} of ${pageCount}`, 282, 205, { align: 'right' });
+  }
 
   doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
 };
@@ -397,7 +447,8 @@ export const downloadAsZip = async (
 export const downloadGenericTableAsPDF = (
   rows: (string | number | null | undefined)[][],
   filename: string,
-  title: string
+  title: string,
+  societyName?: string
 ): void => {
   if (rows.length === 0) return;
   const doc = new jsPDF({
@@ -406,8 +457,17 @@ export const downloadGenericTableAsPDF = (
     format: 'a4',
   });
 
-  doc.setFontSize(14);
-  doc.text(title, 140, 15, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(148, 163, 184); // slate-400
+  doc.text(societyName || 'Society Ledger System', 15, 10);
+  
+  doc.setFontSize(18);
+  doc.setTextColor(30, 41, 59); // slate-800
+  doc.text(title, 282, 12, { align: 'right' });
+  
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.line(15, 15, 282, 15);
 
   const headers = rows[0];
   const tableData = rows.slice(1);

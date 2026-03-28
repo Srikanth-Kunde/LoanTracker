@@ -272,11 +272,11 @@ const AuditReport: React.FC = () => {
     const filename = `Audit_Report_${filterFY}${filterMonth ? `_${filterMonth}` : ''}`;
     
     if (auditFormat === 'PDF') {
-      downloadGenericTableAsPDF([activeHeaders, ...rows], filename, 'Audit Summary Report');
+      downloadGenericTableAsPDF([activeHeaders, ...rows], filename, 'Audit Summary Report', settings.societyName);
     } else if (auditFormat === 'XLSX') {
       downloadStylishGenericXLSX([activeHeaders, ...rows], filename, 'Audit Summary');
     } else {
-      downloadAs([activeHeaders, ...rows], filename, auditFormat, 'Audit Summary');
+      downloadAs([activeHeaders, ...rows], filename, auditFormat, 'Audit Summary', settings.societyName);
     }
     setShowColumnModal(false);
   };
@@ -287,7 +287,7 @@ const AuditReport: React.FC = () => {
     if (tallyFormat === 'XLSX') {
       downloadStylishGenericXLSX([headers, ...tallyTransactions], filename, 'Tally Transactions');
     } else {
-      downloadAs([headers, ...tallyTransactions], filename, tallyFormat, 'Tally Transactions');
+      downloadAs([headers, ...tallyTransactions], filename, tallyFormat, 'Tally Transactions', settings.societyName);
     }
   };
 
