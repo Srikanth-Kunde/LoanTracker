@@ -235,9 +235,8 @@ const AuditReport: React.FC = () => {
   const [showColumnModal, setShowColumnModal] = useState(false);
   
   const allAuditHeaders = [
-    'Balance As Of', 'Member ID', 'Member Name', 'Status', 'Loan Count', 
-    'Original Loan Disbursed', 'Outstanding Principal', 'Top-ups Disbursed', 
-    'Principal Recovered', 'Interest Collected', 'Last Activity'
+    'Sl.no', 'Member Name', 'ID', 'Start Date', 'Loan', 'Top-ups', 'Total Loan', 
+    'Principal Recovered', 'Interest Collected', 'Outstanding Principal'
   ];
   const [selectedColumns, setSelectedColumns] = useState<string[]>(allAuditHeaders);
 
@@ -254,19 +253,18 @@ const AuditReport: React.FC = () => {
   const handleAuditCsvExport = () => {
     const activeHeaders = allAuditHeaders.filter(h => selectedColumns.includes(h));
     
-    const rows = filteredData.map(row => {
+    const rows = filteredData.map((row, index) => {
       const fullRowOptions: Record<string, any> = {
-        'Balance As Of': periodConfig.balanceEnd, 
-        'Member ID': row.memberId, 
-        'Member Name': row.memberName, 
-        'Status': row.isActive ? 'Active' : 'Inactive', 
-        'Loan Count': row.loanCount, 
-        'Original Loan Disbursed': row.originalLoanDisbursed, 
-        'Outstanding Principal': row.outstanding, 
-        'Top-ups Disbursed': row.topupsDisbursed, 
-        'Principal Recovered': row.principalRecovered, 
-        'Interest Collected': row.interestCollected, 
-        'Last Activity': row.lastActivity ? formatDisplayDate(row.lastActivity) : ''
+        'Sl.no': index + 1,
+        'Member Name': row.memberName,
+        'ID': row.memberId,
+        'Start Date': row.originalLoanStartDate ? formatDisplayDate(row.originalLoanStartDate) : '',
+        'Loan': row.originalLoanDisbursed,
+        'Top-ups': row.topupsDisbursed,
+        'Total Loan': row.originalLoanDisbursed + row.topupsDisbursed,
+        'Principal Recovered': row.principalRecovered,
+        'Interest Collected': row.interestCollected,
+        'Outstanding Principal': row.outstanding
       };
       return activeHeaders.map(h => fullRowOptions[h]);
     });
@@ -393,20 +391,32 @@ const AuditReport: React.FC = () => {
         <div className="overflow-x-auto max-h-[600px]">
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0">
-              <tr>{['ID', 'Member', 'Original Start Date', 'Original Disb.', 'Outstanding', 'Top-ups', 'Principal Rec.', 'Interest Col.', 'Last Activity'].map(header => <th key={header} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">{header}</th>)}</tr>
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Sl.no</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Member Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Start Date</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Loan</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Top-ups</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Total Loan</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Recovered</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Interest</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Outstanding</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              {filteredData.map(row => (
+              {filteredData.map((row, index) => (
                 <tr key={row.memberId} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                  <td className="px-4 py-3 text-xs text-slate-400 font-mono">{index + 1}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900 dark:text-white uppercase tracking-tight">{row.memberName}</td>
                   <td className="px-4 py-3 text-xs font-mono text-slate-400">{row.memberId}</td>
-                  <td className="px-4 py-3"><div className="font-medium text-slate-900 dark:text-white">{row.memberName}</div><div className="text-xs text-slate-500 dark:text-slate-400">{row.address}</div></td>
                   <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{row.originalLoanStartDate ? formatDisplayDate(row.originalLoanStartDate) : '-'}</td>
-                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatCurrency(row.originalLoanDisbursed, settings.currency)}</td>
-                  <td className="px-4 py-3 font-semibold text-violet-700 dark:text-violet-300">{formatCurrency(row.outstanding, settings.currency)}</td>
-                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{formatCurrency(row.topupsDisbursed, settings.currency)}</td>
-                  <td className="px-4 py-3 text-blue-700 dark:text-blue-300">{formatCurrency(row.principalRecovered, settings.currency)}</td>
-                  <td className="px-4 py-3 text-emerald-700 dark:text-emerald-300">{formatCurrency(row.interestCollected, settings.currency)}</td>
-                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{row.lastActivity ? formatDisplayDate(row.lastActivity) : '-'}</td>
+                  <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{formatCurrency(row.originalLoanDisbursed, settings.currency)}</td>
+                  <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{formatCurrency(row.topupsDisbursed, settings.currency)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">{formatCurrency(row.originalLoanDisbursed + row.topupsDisbursed, settings.currency)}</td>
+                  <td className="px-4 py-3 text-right text-blue-700 dark:text-blue-300">{formatCurrency(row.principalRecovered, settings.currency)}</td>
+                  <td className="px-4 py-3 text-right text-emerald-700 dark:text-emerald-300">{formatCurrency(row.interestCollected, settings.currency)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-violet-700 dark:text-violet-300">{formatCurrency(row.outstanding, settings.currency)}</td>
                 </tr>
               ))}
             </tbody>

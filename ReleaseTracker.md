@@ -1,3 +1,14 @@
+**v1.4.3 — Final Production Audit & Standardized Reporting**
+
+This final release hardens the security architecture with defensive component-level guards and standardizes all financial reporting labels for high-fidelity auditing.
+
+- **Defensive Component-Level RBAC**: Implemented secondary security guards in `ImportData.tsx` and `Settings.tsx` that return a "Restricted Access" UI if accessed by non-admins, providing defense-in-depth even if route guards are bypassed.
+- **Standardized Audit Headers**: Synchronized column naming and order across all reporting engines (PDF, XLSX, CSV) and the UI Audit Report table: `Sl.no`, `Member Name`, `ID`, `Start Date`, `Loan`, `Top-ups`, `Total Loan`, `Recovered`, `Interest`, and `Outstanding Principal`.
+- **Individual Ledger Alignment**: Updated the Special Loan "Eye-View" ledger summary labels to match the new audit standards for cross-report consistency.
+- **Production Build Integrity**: Verified the entire toolchain with a clean `vite build` to ensure enterprise-grade stability.
+
+---
+
 **v1.4.2 — Production Hardening & RBAC (Final Audit Ready)**
 
 This release finalizes the security architecture and reporting fidelity for production deployment.

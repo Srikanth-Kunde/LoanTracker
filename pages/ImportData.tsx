@@ -13,10 +13,11 @@ import {
   FileSpreadsheet,
   Loader2
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { useFinancials } from '../context/FinancialContext';
 import { useMembers } from '../context/MemberContext';
 import { useSettings } from '../context/SettingsContext';
-import { Member, Loan, LoanStatus, LoanType, PaymentMethod } from '../types';
+import { Member, Loan, LoanStatus, LoanType, PaymentMethod, UserRole } from '../types';
 import { normalizeISODate } from '../utils/date';
 import { getInterestRateForDate } from '../utils/interest';
 import { logger } from '../utils/logger';
@@ -39,7 +40,24 @@ interface ImportRow {
 }
 
 export const ImportData: React.FC = () => {
+  const { role } = useAuth();
   const { members, addMember } = useMembers();
+
+  if (role !== UserRole.ADMIN) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-700">
+        <div className="p-6 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 mb-6 shadow-2xl shadow-rose-500/20">
+          <ShieldCheck size={72} />
+        </div>
+        <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-2">Restricted Access</h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-md text-center">
+          Legacy Data Importer is restricted to society administrators only. 
+          Please contact our senior auditor if you believe you require access to this utility.
+        </p>
+      </div>
+    );
+  }
+
   const { settings } = useSettings();
   const { loans, createLoan, addLoanTopup, recordLoanRepayment, globalAutoGenLoanInterest } = useFinancials();
   const [pasteContent, setPasteContent] = useState('');

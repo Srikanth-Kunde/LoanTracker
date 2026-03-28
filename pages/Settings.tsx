@@ -26,6 +26,21 @@ const SettingsPage: React.FC = () => {
     setForm(settings);
   }, [settings]);
 
+  if (role !== UserRole.ADMIN) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-700">
+        <div className="p-6 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 mb-6 shadow-2xl shadow-rose-500/20">
+          <Database size={72} />
+        </div>
+        <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-2">Restricted Access</h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-md text-center">
+          System settings and access codes are restricted to society administrators only. 
+          Please contact our senior auditor if you believe you require access to this configuration hub.
+        </p>
+      </div>
+    );
+  }
+
   const setField = <K extends keyof SocietySettings>(key: K, value: SocietySettings[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
@@ -111,11 +126,6 @@ const SettingsPage: React.FC = () => {
         <p className="text-slate-500 dark:text-slate-400">
           This page is aligned to the existing <code>app_settings</code> columns defined in <code>migration.sql</code>.
         </p>
-        {!canEdit && (
-          <p className="text-amber-600 dark:text-amber-400 text-sm">
-            You are in read-only mode. Admin access is required to change system settings or access codes.
-          </p>
-        )}
       </div>
 
       <Card title="General" subtitle="Core defaults used by the special-loan workflow">
