@@ -1,3 +1,18 @@
+**v1.4.2 — Production Hardening & RBAC (Final Audit Ready)**
+
+This release finalizes the security architecture and reporting fidelity for production deployment.
+
+- **Strict Role-Based Access Control (RBAC)**: Implemented a 3-tier permission system across the entire application:
+    - **Admin**: Full control over all operations, settings, and audit logs.
+    - **Operator**: View-only and Download-only access. Data entry, editing, and deletion are strictly disabled and routing-guarded.
+    - **Viewer**: Read-only access to summaries. All action buttons (including downloads) and the Settings/Audit Log tabs are hidden.
+- **Double-Confirmation Security**: Enforced mandatory secondary "Final Confirmation" dialogs for all destructive data operations (Delete Member, Delete Loan, Delete Transaction, Wipe Interest, Pre-close Loan).
+- **High-Fidelity PDF Exports**: Integrated professional Landscape-mode PDF generation for all ledgers and audit reports, ensuring zero column overlap and audit-ready headers.
+- **Enhanced XLSX Reporting**: Upgraded the Audit Report XLSX export with column-selection capabilities and native Excel Auto-Sum functionality.
+- **Navigation Guarding**: Integrated `useAuth` into the main `Layout` and `App` routing to dynamically hide sensitive tabs and prevent unauthorized direct-URL access.
+
+---
+
 **v1.4.1 — Reliability & Export Precision (Production Ready)**
 
 This release hardens the project for production deployment by resolving critical export formatting and interest-recalculation bugs.

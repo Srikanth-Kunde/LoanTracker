@@ -12,7 +12,11 @@ import {
   isISODateOnOrBefore
 } from '../utils/date';
 import { calculatePrincipalPaid } from '../utils/loanMath';
-import { downloadAs, DownloadFormat } from '../utils/xlsxUtils';
+import { downloadAs, downloadStylishGenericXLSX, downloadGenericTableAsPDF, DownloadFormat } from '../utils/xlsxUtils';
+import { useAuth } from '../context/AuthContext';
+import { UserRole } from '../types';
+import { Modal } from '../components/ui/Modal';
+import { Button } from '../components/ui/Button';
 
 interface AuditRow {
   memberId: string;
@@ -41,6 +45,7 @@ const isDateWithinRange = (date: string, start: string, end: string) =>
   compareISODate(date, start) >= 0 && compareISODate(date, end) <= 0;
 
 const AuditReport: React.FC = () => {
+  const { role } = useAuth();
   const { members } = useMembers();
   const { loans, loanRepayments, loanTopups } = useFinancials();
   const { settings } = useSettings();
@@ -226,30 +231,66 @@ const AuditReport: React.FC = () => {
   const [auditFormat, setAuditFormat] = useState<DownloadFormat>('XLSX');
   const [tallyFormat, setTallyFormat] = useState<DownloadFormat>('XLSX');
 
+  // Column Selection Modal State
+  const [showColumnModal, setShowColumnModal] = useState(false);
+  
+  const allAuditHeaders = [
+    'Balance As Of', 'Member ID', 'Member Name', 'Status', 'Loan Count', 
+    'Original Loan Disbursed', 'Outstanding Principal', 'Top-ups Disbursed', 
+    'Principal Recovered', 'Interest Collected', 'Last Activity'
+  ];
+  const [selectedColumns, setSelectedColumns] = useState<string[]>(allAuditHeaders);
+
+  const toggleColumn = (header: string) => {
+    if (selectedColumns.includes(header)) {
+      if (selectedColumns.length > 1) { // Prevent unselecting all
+        setSelectedColumns(selectedColumns.filter(c => c !== header));
+      }
+    } else {
+      setSelectedColumns([...selectedColumns, header]);
+    }
+  };
+
   const handleAuditCsvExport = () => {
-    const headers = ['Balance As Of', 'Member ID', 'Member Name', 'Status', 'Loan Count', 'Original Loan Disbursed', 'Outstanding Principal', 'Top-ups Disbursed', 'Principal Recovered', 'Interest Collected', 'Last Activity'];
-    const rows = filteredData.map(row => [
-      periodConfig.balanceEnd, 
-      row.memberId, 
-      row.memberName, 
-      row.isActive ? 'Active' : 'Inactive', 
-      row.loanCount, 
-      row.originalLoanDisbursed, 
-      row.outstanding, 
-      row.topupsDisbursed, 
-      row.principalRecovered, 
-      row.interestCollected, 
-      row.lastActivity ? formatDisplayDate(row.lastActivity) : ''
-    ]);
+    const activeHeaders = allAuditHeaders.filter(h => selectedColumns.includes(h));
+    
+    const rows = filteredData.map(row => {
+      const fullRowOptions: Record<string, any> = {
+        'Balance As Of': periodConfig.balanceEnd, 
+        'Member ID': row.memberId, 
+        'Member Name': row.memberName, 
+        'Status': row.isActive ? 'Active' : 'Inactive', 
+        'Loan Count': row.loanCount, 
+        'Original Loan Disbursed': row.originalLoanDisbursed, 
+        'Outstanding Principal': row.outstanding, 
+        'Top-ups Disbursed': row.topupsDisbursed, 
+        'Principal Recovered': row.principalRecovered, 
+        'Interest Collected': row.interestCollected, 
+        'Last Activity': row.lastActivity ? formatDisplayDate(row.lastActivity) : ''
+      };
+      return activeHeaders.map(h => fullRowOptions[h]);
+    });
     
     const filename = `Audit_Report_${filterFY}${filterMonth ? `_${filterMonth}` : ''}`;
-    downloadAs([headers, ...rows], filename, auditFormat, 'Audit Summary');
+    
+    if (auditFormat === 'PDF') {
+      downloadGenericTableAsPDF([activeHeaders, ...rows], filename, 'Audit Summary Report');
+    } else if (auditFormat === 'XLSX') {
+      downloadStylishGenericXLSX([activeHeaders, ...rows], filename, 'Audit Summary');
+    } else {
+      downloadAs([activeHeaders, ...rows], filename, auditFormat, 'Audit Summary');
+    }
+    setShowColumnModal(false);
   };
 
   const handleTallyExport = () => {
     const headers = ['Voucher No', 'Date', 'Member ID', 'Member Name', 'Ledger', 'Voucher Type', 'Debit', 'Credit', 'Narration'];
     const filename = `Audit_Tally_${filterFY}${filterMonth ? `_${filterMonth}` : ''}`;
-    downloadAs([headers, ...tallyTransactions], filename, tallyFormat, 'Tally Transactions');
+    if (tallyFormat === 'XLSX') {
+      downloadStylishGenericXLSX([headers, ...tallyTransactions], filename, 'Tally Transactions');
+    } else {
+      downloadAs([headers, ...tallyTransactions], filename, tallyFormat, 'Tally Transactions');
+    }
   };
 
   return (
@@ -260,47 +301,51 @@ const AuditReport: React.FC = () => {
           <p className="text-slate-500 dark:text-slate-400">Historical special-loan balances and transaction exports for {periodConfig.label}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {/* Tally Export with format picker */}
-          <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm bg-white dark:bg-slate-800">
-            <button 
-              onClick={handleTallyExport} 
-              className="flex items-center px-4 py-2 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium text-sm border-r border-slate-200 dark:border-slate-700 transition-colors"
-            >
-              <Download size={16} className="mr-2" /> Audit Tally
-            </button>
-            <div className="flex text-[10px] font-bold">
-              {(['CSV', 'XLSX'] as const).map(fmt => (
+          {role !== UserRole.VIEWER && (
+            <>
+              {/* Tally Export with format picker */}
+              <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm bg-white dark:bg-slate-800">
                 <button 
-                  key={fmt} 
-                  onClick={() => setTallyFormat(fmt)}
-                  className={`px-2 py-2 transition-colors ${tallyFormat === fmt ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'text-slate-400 hover:text-slate-600'}`}
+                  onClick={handleTallyExport} 
+                  className="flex items-center px-4 py-2 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium text-sm border-r border-slate-200 dark:border-slate-700 transition-colors"
                 >
-                  {fmt}
+                  <Download size={16} className="mr-2" /> Audit Tally
                 </button>
-              ))}
-            </div>
-          </div>
+                <div className="flex text-[10px] font-bold">
+                  {(['CSV', 'XLSX'] as const).map(fmt => (
+                    <button 
+                      key={fmt} 
+                      onClick={() => setTallyFormat(fmt)}
+                      className={`px-2 py-2 transition-colors ${tallyFormat === fmt ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* Full Audit Export with format picker */}
-          <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm bg-white dark:bg-slate-800">
-            <button 
-              onClick={handleAuditCsvExport} 
-              className="flex items-center px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-sm border-r border-slate-200 dark:border-slate-700 transition-colors"
-            >
-              <ClipboardList size={16} className="mr-2" /> Full Audit
-            </button>
-            <div className="flex text-[10px] font-bold">
-              {(['CSV', 'XLSX'] as const).map(fmt => (
+              {/* Full Audit Export with format picker */}
+              <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm bg-white dark:bg-slate-800">
                 <button 
-                  key={fmt} 
-                  onClick={() => setAuditFormat(fmt)}
-                  className={`px-2 py-2 transition-colors ${auditFormat === fmt ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-slate-400 hover:text-slate-600'}`}
+                  onClick={() => setShowColumnModal(true)} 
+                  className="flex items-center px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-sm border-r border-slate-200 dark:border-slate-700 transition-colors"
                 >
-                  {fmt}
+                  <ClipboardList size={16} className="mr-2" /> Full Audit
                 </button>
-              ))}
-            </div>
-          </div>
+                <div className="flex text-[10px] font-bold">
+                  {(['CSV', 'XLSX', 'PDF'] as const).map(fmt => (
+                    <button 
+                      key={fmt} 
+                      onClick={() => setAuditFormat(fmt)}
+                      className={`px-2 py-2 transition-colors ${auditFormat === fmt ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -368,6 +413,31 @@ const AuditReport: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <Modal isOpen={showColumnModal} onClose={() => setShowColumnModal(false)} title="Select Fields to Export">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
+            Select the columns you want to include in the {auditFormat} export.
+          </p>
+          <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+            {allAuditHeaders.map(header => (
+              <label key={header} className="flex items-center space-x-3 p-2 hover:bg-white dark:hover:bg-slate-800 rounded transition-colors cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={selectedColumns.includes(header)}
+                  onChange={() => toggleColumn(header)}
+                  className="rounded border-slate-300 text-primary-600 focus:ring-primary-600 dark:border-slate-600 dark:bg-slate-700 dark:checked:bg-primary-500 h-4 w-4"
+                />
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{header}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end pt-4 gap-3 border-t border-slate-100 dark:border-slate-800 mt-4">
+            <Button variant="ghost" onClick={() => setShowColumnModal(false)}>Cancel</Button>
+            <Button variant="primary" icon={Download} onClick={handleAuditCsvExport}>Export {auditFormat}</Button>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );

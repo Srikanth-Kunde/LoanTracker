@@ -1,4 +1,4 @@
-# Legacy Loan Tracker v1.4.1 (Production Ready)
+# Legacy Loan Tracker v1.4.2 (Production Hardened)
 Digitize and audit historical handwritten loan records starting from 2012 with absolute precision. This specialized tool focuses exclusively on **Special Loans** (Interest-only, with multiple top-ups and flexible repayments).
 
 > [!NOTE]
@@ -21,7 +21,12 @@ Digitize and audit historical handwritten loan records starting from 2012 with a
 *   **Closed Loan Correction Workflow:** Editing a historical loan amount can now surface any remaining principal gap and optionally record the balancing principal payment immediately.
 *   **Legacy Member ID Correction:** Member IDs can now be corrected from the Members edit screen while automatically remapping linked borrower and surety references.
 *   **Legacy Data Importer:** Paste multiple rows directly from Excel/Google Sheets to auto-generate member profiles, loans, top-ups, and repayments with a dry-run preview.
-*   **Dynamic Interest Rate Schedule:** Define historical or future rate overrides in Settings that apply automatically during data entry.
+*   **High-Fidelity Reporting (v1.4.2)**: Export ledgers as formatted XLSX with auto-sums, or professional PDF with landscape orientation and headers.
+*   **Role-Based Access Control (v1.4.2)**: Strict 3-tier permissions:
+    *   **Admin**: Full access to all database mutations, settings, and logs.
+    *   **Operator**: View and download only. No data entry or editing.
+    *   **Viewer**: Read-only access. No downloads, no actions.
+*   **Double-Confirmation Safeguards (v1.4.2)**: Mandatory secondary "Final Warning" dialogs for all delete, wipe, and loan-closure operations.
 *   **Safe Loan Closure Validation:** A loan can only be closed when the selected close date has zero outstanding principal and no later principal-affecting activity.
 *   **Audit Report Principal Breakdown:** The Audit Report now shows `Original Loan Disbursed` in the top cards, member balance table, and Full Audit CSV for cleaner reconciliation.
 *   **Audit Report Table Cleanup:** The member balance table now shows the original loan start date instead of a status badge so the visible columns stay calculation-focused.

@@ -75,10 +75,14 @@ export const Layout = () => {
   const navigation = [
     { name: 'Special Loans', href: '/', icon: Star },
     { name: 'Members', href: '/members', icon: Users },
-    { name: 'Import Data', href: '/import', icon: FileUp },
+    ...(role === UserRole.ADMIN ? [
+      { name: 'Import Data', href: '/import', icon: FileUp },
+    ] : []),
     { name: 'Audit Report', href: '/audit', icon: ClipboardList },
-    ...(role === UserRole.ADMIN ? [{ name: 'Audit Log History', href: '/audit-log', icon: History }] : []),
-    { name: 'Settings', href: '/settings', icon: Settings },
+    ...(role === UserRole.ADMIN ? [
+      { name: 'Audit Log History', href: '/audit-log', icon: History },
+      { name: 'Settings', href: '/settings', icon: Settings }
+    ] : []),
   ];
 
   const isActive = (path: string) => {

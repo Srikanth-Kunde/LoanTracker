@@ -459,7 +459,8 @@ const SpecialLoans: React.FC = () => {
 
     // Permissions
     const canCreateLoan = role === UserRole.ADMIN;
-    const canRepayLoan = role === UserRole.ADMIN || role === UserRole.OPERATOR;
+    const canRepayLoan = role === UserRole.ADMIN;
+    const canDownload = role === UserRole.ADMIN || role === UserRole.OPERATOR;
 
     // --- Logic & Memos ---
     const calculateEMI = (principal: number, ratePerMonth: number, months: number) => {
@@ -1319,6 +1320,7 @@ const SpecialLoans: React.FC = () => {
     const handlePreClose = async (loan: EnrichedLoan) => {
         const amount = loan.historicalOutstanding;
         if (confirm(`Are you sure you want to pre-close this loan? Full outstanding principal of ${formatCurrency(amount, settings.currency)} will be recorded as paid.`)) {
+            if (confirm(`FINAL CONFIRMATION: Are you sure you want to PRE-CLOSE this loan for ${loan.memberName}? This record cannot be undone easily.`)) {
             try {
                 await recordLoanRepayment({
                     loanId: loan.id,
@@ -1335,11 +1337,13 @@ const SpecialLoans: React.FC = () => {
                 logger.error("Error pre-closing loan", e);
                 alert("Error pre-closing loan: " + e.message);
             }
+          }
         }
     };
 
     const handleDeleteLoan = async (id: string) => {
         if (confirm("Are you sure you want to delete this loan? This will also remove all its repayment history.")) {
+            if (confirm("FINAL CONFIRMATION: This action is PERMANENT. All history for this loan will be lost forever. Proceed?")) {
             try {
                 await deleteLoan(id);
             } catch (error) {
@@ -1347,6 +1351,7 @@ const SpecialLoans: React.FC = () => {
                 logger.error("Error deleting loan", e);
                 alert("Error deleting loan: " + e.message);
             }
+          }
         }
     };
 
@@ -1354,13 +1359,20 @@ const SpecialLoans: React.FC = () => {
         const target = activeLoan || autoGenLoan;
         if (!target) return;
 
-        const interestCount = loanRepayments.filter(r => r.loanId === target.id && (r.interestPaid || 0) > 0).length;
+        // Count pure interest records (as per v1.4.0 preservation rules)
+        const interestCount = loanRepayments.filter(r => 
+            r.loanId === target.id && 
+            (r.interestPaid || 0) > 0 && 
+            (r.principalPaid || 0) === 0
+        ).length;
+
         if (interestCount === 0) {
             alert("No interest records found to wipe.");
             return;
         }
 
         if (confirm(`CAUTION: This will delete ALL ${interestCount} recorded interest payments for this loan. Principal repayments will be kept. Proceed?`)) {
+            if (confirm(`FINAL WARNING: You are about to wipe ${interestCount} records. This is irreversible. Click OK to confirm deletion.`)) {
             try {
                 await wipeLoanInterest(target.id, target.memberName);
                 log('WIPE_INTEREST', 'loan_repayments', target.id, { memberName: target.memberName });
@@ -1369,6 +1381,7 @@ const SpecialLoans: React.FC = () => {
                 logger.error("Error wiping interest", error);
                 alert("Failed to wipe interest records");
             }
+          }
         }
     };
 
@@ -1485,43 +1498,49 @@ const SpecialLoans: React.FC = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-2 items-center">
-                        {/* Report Download with format picker */}
-                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
-                            <Button variant="outline" icon={Download} onClick={downloadReport} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700">Report</Button>
-                            <div className="flex text-[10px] font-bold">
-                                {(['CSV', 'XLSX'] as const).map(fmt => (
-                                    <button key={fmt} onClick={() => setReportFormat(fmt)}
-                                        className={`px-2 py-1.5 transition-colors ${reportFormat === fmt ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
-                                        {fmt}
-                                    </button>
-                                ))}
+                        {canDownload && (
+                            <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
+                                <Button variant="outline" icon={Download} onClick={downloadReport} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700">Report</Button>
+                                <div className="flex text-[10px] font-bold">
+                                    {(['CSV', 'XLSX'] as const).map(fmt => (
+                                        <button key={fmt} onClick={() => setReportFormat(fmt)}
+                                            className={`px-2 py-1.5 transition-colors ${reportFormat === fmt ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
+                                            {fmt}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Bulk Download All Ledgers with format picker */}
-                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
-                            <Button variant="outline" icon={Download} onClick={downloadAllLedgers} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/10" title={`Download all ${loansInSelectedPeriod.length} ledger(s) as ${bulkDownloadFormat}`}>
-                                All Ledgers
-                            </Button>
-                            <div className="flex text-[10px] font-bold">
-                                {(['CSV', 'XLSX', 'PDF'] as const).map(fmt => (
-                                    <button key={fmt} onClick={() => setBulkDownloadFormat(fmt)}
-                                        className={`px-2 py-1.5 transition-colors ${bulkDownloadFormat === fmt ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
-                                        {fmt}
-                                    </button>
-                                ))}
+                        {canDownload && (
+                            <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
+                                <Button variant="outline" icon={Download} onClick={downloadAllLedgers} className="rounded-none border-0 border-r border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/10" title={`Download all ${loansInSelectedPeriod.length} ledger(s) as ${bulkDownloadFormat}`}>
+                                    All Ledgers
+                                </Button>
+                                <div className="flex text-[10px] font-bold">
+                                    {(['CSV', 'XLSX', 'PDF'] as const).map(fmt => (
+                                        <button key={fmt} onClick={() => setBulkDownloadFormat(fmt)}
+                                            className={`px-2 py-1.5 transition-colors ${bulkDownloadFormat === fmt ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}>
+                                            {fmt}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <Button variant="outline" icon={Calculator} onClick={() => setModals({ ...modals, calc: true })}>Calc</Button>
-                        <Button 
-                            variant="outline" 
-                            className="text-amber-600 border-amber-200 bg-amber-50/50 hover:bg-amber-100 dark:bg-amber-900/10" 
-                            icon={Zap} 
-                            onClick={() => setModals({ ...modals, globalZap: true })}
-                        >
-                            Zap Missing Interest
-                        </Button>
+                        
+                        {canRepayLoan && (
+                            <Button 
+                                variant="outline" 
+                                className="text-amber-600 border-amber-200 bg-amber-50/50 hover:bg-amber-100 dark:bg-amber-900/10" 
+                                icon={Zap} 
+                                onClick={() => setModals({ ...modals, globalZap: true })}
+                            >
+                                Zap Missing Interest
+                            </Button>
+                        )}
                         {canCreateLoan && (
                             <Button icon={Plus} onClick={() => setModals({ ...modals, create: true })}>New Special Loan</Button>
                         )}
@@ -2366,14 +2385,16 @@ const SpecialLoans: React.FC = () => {
                                                 </button>
                                             ))}
                                         </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-[10px] h-8 px-2 text-red-500 hover:text-red-600"
-                                            onClick={handleWipeInterest}
-                                        >
-                                            Wipe
-                                        </Button>
+                                        {role === UserRole.ADMIN && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-[10px] h-8 px-2 text-red-500 hover:text-red-600"
+                                                onClick={handleWipeInterest}
+                                            >
+                                                Wipe
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -2450,47 +2471,53 @@ const SpecialLoans: React.FC = () => {
                                                     </td>
                                                     <td className="px-4 py-3 text-center">
                                                         <div className="flex justify-center gap-1">
-                                                            {tx.entryType === 'DISBURSAL' ? (
-                                                                <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500" onClick={() => openEditModal(activeLoan)}><Edit size={12} /></Button>
-                                                            ) : (
+                                                            {role === UserRole.ADMIN && (
                                                                 <>
-                                                                    {tx.entryType === 'REPAYMENT' ? (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-6 w-6 text-blue-500"
-                                                                            onClick={() => openInterestEditModal(tx.id)}
-                                                                            title="Edit repayment"
-                                                                        >
-                                                                            <Edit size={12} />
-                                                                        </Button>
-                                                                    ) : tx.entryType === 'TOPUP' ? (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-6 w-6 text-violet-500"
-                                                                            onClick={() => handleEditTopup(tx)}
-                                                                            title="Edit Top-Up"
-                                                                        >
-                                                                            <Edit size={12} />
-                                                                        </Button>
-                                                                    ) : null}
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-6 w-6 text-red-500"
-                                                                        onClick={async () => {
-                                                                            if (confirm("Delete this transaction permanently?")) {
-                                                                                try {
-                                                                                    if (tx.entryType === 'TOPUP') await deleteLoanTopup(tx.id);
-                                                                                    else await deleteLoanRepayment(tx.id);
-                                                                                    log('DELETE_TRANSACTION', 'special_loans', activeLoan.id, { date: tx.date, type: tx.entryType, interestPeriod: tx.interestPeriod || null });
-                                                                                } catch (e) { alert("Failed to delete record"); }
-                                                                            }
-                                                                        }}
-                                                                    >
-                                                                        <Trash2 size={12} />
-                                                                    </Button>
+                                                                    {tx.entryType === 'DISBURSAL' ? (
+                                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500" onClick={() => openEditModal(activeLoan)}><Edit size={12} /></Button>
+                                                                    ) : (
+                                                                        <>
+                                                                            {tx.entryType === 'REPAYMENT' ? (
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-6 w-6 text-blue-500"
+                                                                                    onClick={() => openInterestEditModal(tx.id)}
+                                                                                    title="Edit repayment"
+                                                                                >
+                                                                                    <Edit size={12} />
+                                                                                </Button>
+                                                                            ) : tx.entryType === 'TOPUP' ? (
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-6 w-6 text-violet-500"
+                                                                                    onClick={() => handleEditTopup(tx)}
+                                                                                    title="Edit Top-Up"
+                                                                                >
+                                                                                    <Edit size={12} />
+                                                                                </Button>
+                                                                            ) : null}
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-6 w-6 text-red-500"
+                                                                                onClick={async () => {
+                                                                                    if (confirm("Delete this transaction permanently?")) {
+                                                                                        if (confirm("FINAL CONFIRMATION: Delete record? This cannot be undone.")) {
+                                                                                            try {
+                                                                                                if (tx.entryType === 'TOPUP') await deleteLoanTopup(tx.id);
+                                                                                                else await deleteLoanRepayment(tx.id);
+                                                                                                log('DELETE_TRANSACTION', 'special_loans', activeLoan.id, { date: tx.date, type: tx.entryType, interestPeriod: tx.interestPeriod || null });
+                                                                                            } catch (e) { alert("Failed to delete record"); }
+                                                                                        }
+                                                                                    }
+                                                                                }}
+                                                                            >
+                                                                                <Trash2 size={12} />
+                                                                            </Button>
+                                                                        </>
+                                                                    )}
                                                                 </>
                                                             )}
                                                         </div>

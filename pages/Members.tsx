@@ -52,7 +52,7 @@ const Members: React.FC = () => {
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
     // Permissions
-    const canManageMembers = role === UserRole.ADMIN || role === UserRole.OPERATOR;
+    const canManageMembers = role === UserRole.ADMIN;
 
     // Filtered members
     const filteredMembers = useMemo(() => {
@@ -196,6 +196,7 @@ const Members: React.FC = () => {
 
     const handleDelete = async (member: Member) => {
         if (!window.confirm(`Are you sure you want to delete ${member.name}? This may affect linked loans.`)) return;
+        if (!window.confirm(`Please confirm again to DELETE ${member.name}. This action is irreversible.`)) return;
         try {
             setPendingAction(`delete:${member.id}`);
             await deleteMember(member.id);

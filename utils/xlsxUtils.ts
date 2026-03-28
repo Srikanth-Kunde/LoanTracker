@@ -171,6 +171,70 @@ export const downloadAsStylishXLSX = async (
   triggerDownload(blob, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
 };
 
+/** Download generic 2D array table as XLSX with styling and proper numbers (non-Ledger specific) */
+export const downloadStylishGenericXLSX = async (
+  rows: (string | number | null | undefined)[][],
+  filename: string,
+  sheetName = 'Sheet1'
+): Promise<void> => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName.slice(0, 31));
+
+  if (rows.length === 0) return;
+
+  rows.forEach((row, i) => {
+    const wsRow = worksheet.addRow(row);
+    
+    // Assume row 0 is headers
+    if (i === 0) {
+      wsRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF444444' }
+        };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      });
+    } else {
+      wsRow.eachCell((cell, colNumber) => {
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+        // Auto-cast strings that are actually numbers to numbers if they seem numeric (and aren't dates)
+        // Wait, for Generic XLSX it's better if caller passes actual numbers
+        if (typeof cell.value === 'number') {
+          cell.alignment = { horizontal: 'right' };
+          cell.numFmt = '#,##0.00';
+        }
+      });
+    }
+  });
+
+  // Auto-fit columns
+  worksheet.columns.forEach(column => {
+    let maxLen = 0;
+    column.eachCell?.({ includeEmpty: true }, cell => {
+      const len = cell.value ? String(cell.value).length : 5;
+      if (len > maxLen) maxLen = len;
+    });
+    // Add small padding, limit to 40 logic
+    column.width = Math.min(Math.max(maxLen + 2, 10), 40);
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  triggerDownload(blob, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
+};
+
 /** Download 2D array as a Landscape PDF using jsPDF + AutoTable */
 export const downloadAsPDF = (
   rows: (string | number | null | undefined)[][],
@@ -328,6 +392,45 @@ export const downloadAsZip = async (
 };
 
 // ── Internal ──────────────────────────────────────────────────────────────────
+
+/** Download generic 2D array table as Landscape PDF */
+export const downloadGenericTableAsPDF = (
+  rows: (string | number | null | undefined)[][],
+  filename: string,
+  title: string
+): void => {
+  if (rows.length === 0) return;
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  doc.setFontSize(14);
+  doc.text(title, 140, 15, { align: 'center' });
+
+  const headers = rows[0];
+  const tableData = rows.slice(1);
+
+  autoTable(doc, {
+    startY: 25,
+    head: [headers],
+    body: tableData as any[][],
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [68, 68, 68], textColor: 255 },
+    columnStyles: {
+      0: { cellWidth: 20 },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && typeof data.cell.raw === 'number') {
+         data.cell.styles.halign = 'right';
+      }
+    }
+  });
+
+  doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+};
 
 const triggerDownload = (blob: Blob, filename: string): void => {
   const url = URL.createObjectURL(blob);

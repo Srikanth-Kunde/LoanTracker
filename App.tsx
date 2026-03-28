@@ -4,6 +4,7 @@ import { SettingsProvider } from './context/SettingsContext';
 import { MemberProvider } from './context/MemberContext';
 import { FinancialProvider } from './context/FinancialContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { UserRole } from './types';
 import { AuditLogProvider } from './context/AuditLogContext';
 import { LoginScreen } from './components/LoginScreen';
 import Layout from './components/Layout';
@@ -36,9 +37,9 @@ const AppRoutes: React.FC = () => {
             <Route path="special-loans" element={<SpecialLoans />} />
             <Route path="members" element={<Members />} />
             <Route path="audit" element={<AuditReport />} />
-            <Route path="audit-log" element={role === 'ADMIN' ? <AuditLogHistory /> : <Navigate to="/" replace />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="import" element={<ImportData />} />
+            <Route path="audit-log" element={role === UserRole.ADMIN ? <AuditLogHistory /> : <Navigate to="/" replace />} />
+            <Route path="settings" element={role === UserRole.ADMIN ? <SettingsPage /> : <Navigate to="/" replace />} />
+            <Route path="import" element={role === UserRole.ADMIN ? <ImportData /> : <Navigate to="/" replace />} />
 
           </Route>
         </Routes>
@@ -48,7 +49,7 @@ const AppRoutes: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  console.log("APP VERSION: 1.0.6 - AUTO-GEN FIX LOADED");
+  console.log("APP VERSION: 1.4.2 (Production Hardened)");
   return (
     <ErrorBoundary>
       <SettingsProvider>
